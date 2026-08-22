@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Xcode / XcodeGen -- generated project, regenerate with `xcodegen generate`
+# (see ios/README.md); avoids committing generated pbxproj + per-user cruft
+ios/Bankr.xcodeproj/
+ios/**/xcuserdata/
+ios/**/*.xcuserstate
+ios/DerivedData/
