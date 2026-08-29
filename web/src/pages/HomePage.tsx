@@ -16,6 +16,7 @@ import { GoalPaceTrack } from "../components/GoalPaceTrack";
 import { StatsBar } from "../components/StatsBar";
 import { NetWorthFlowModal } from "../components/NetWorthFlowModal";
 import { TransactionSearchModal } from "../components/TransactionSearchModal";
+import { SlotNumber } from "../components/SlotNumber";
 import { useSession } from "../lib/session";
 import { formatDate, formatMoney } from "../lib/format";
 import { AssistantText } from "../components/AssistantText";
@@ -101,7 +102,7 @@ export function HomePage() {
         <span className="font-display text-xl font-semibold text-ink">Bankr</span>
         <div className="flex items-center gap-4">
           <span className="font-tabular text-sm text-ink-soft">
-            {netWorth !== null ? formatMoney(netWorth) : "—"}
+            {netWorth !== null ? <SlotNumber value={formatMoney(netWorth)} /> : "—"}
             <span className="ml-1.5 font-body text-ink-faint">net worth</span>
           </span>
           <button

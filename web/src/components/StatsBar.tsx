@@ -1,5 +1,6 @@
 import type { PeriodRollup } from "../lib/api";
 import { formatMoney } from "../lib/format";
+import { SlotNumber } from "./SlotNumber";
 
 /**
  * Horizontal strip at the top of the message stream: the three numbers a
@@ -48,7 +49,7 @@ function StatTile({
         {sublabel && <span className="text-ink-faint/70"> · {sublabel}</span>}
       </div>
       <div className={`mt-1 truncate font-tabular text-sm font-semibold sm:text-lg ${valueColor}`}>
-        {value !== null && value !== undefined ? formatMoney(value) : <SkeletonLine />}
+        {value !== null && value !== undefined ? <SlotNumber value={formatMoney(value)} /> : <SkeletonLine />}
       </div>
     </>
   );
