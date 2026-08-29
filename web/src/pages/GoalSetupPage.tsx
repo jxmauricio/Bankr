@@ -69,7 +69,7 @@ export function GoalSetupPage({ onGoalSet }: { onGoalSet: () => void }) {
               <label htmlFor="amount" className="mb-1.5 block text-sm font-medium text-ink-soft">
                 Target amount
               </label>
-              <div className="flex items-center rounded-lg border border-border bg-white px-3 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft">
+              <div className="flex items-center rounded-lg border border-border bg-surface px-3 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft">
                 <span className="font-tabular text-ink-faint">$</span>
                 <input
                   id="amount"
@@ -93,7 +93,7 @@ export function GoalSetupPage({ onGoalSet }: { onGoalSet: () => void }) {
                 type="date"
                 value={targetDate}
                 onChange={(e) => setTargetDate(e.target.value)}
-                className="w-full rounded-lg border border-border bg-white px-3 py-2 font-tabular text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-tabular text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
               />
             </div>
 

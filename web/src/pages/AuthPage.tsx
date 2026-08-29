@@ -63,7 +63,7 @@ export function AuthPage() {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
               />
             </div>
             <div>
@@ -78,7 +78,7 @@ export function AuthPage() {
                 autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
               />
               {mode === "signup" && <p className="mt-1.5 text-xs text-ink-faint">At least 8 characters.</p>}
             </div>

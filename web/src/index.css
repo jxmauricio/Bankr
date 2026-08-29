@@ -6,19 +6,23 @@
   --font-body: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
 
-  --color-bg: #EDEFE7;
-  --color-surface: #FFFFFF;
-  --color-surface-dark: #16211D;
-  --color-ink: #1B2420;
-  --color-ink-soft: #5B6B62;
-  --color-ink-faint: #8C9990;
-  --color-accent: #2F6F5E;
-  --color-accent-strong: #1F4E41;
-  --color-accent-soft: #DCE7E1;
-  --color-gold: #C99A3E;
-  --color-gold-soft: #F3E6C8;
-  --color-danger: #B4553F;
-  --color-border: #D8DBCF;
+  --color-bg: #10131C;
+  --color-surface: #171B27;
+  --color-surface-dark: #0B0D13;
+  --color-ink: #E8EAF0;
+  --color-ink-soft: #8D93A8;
+  --color-ink-faint: #565D72;
+  --color-accent: #5B54F0;
+  --color-accent-strong: #7A73FF;
+  --color-accent-soft: #201F3D;
+  --color-gold: #E0AC4E;
+  --color-gold-soft: #2C2413;
+  --color-gold-strong: #F0C878;
+  --color-positive: #34C77B;
+  --color-positive-soft: #142A1E;
+  --color-danger: #E2574C;
+  --color-danger-soft: #2E1A18;
+  --color-border: #262B3A;
 }
 
 body {

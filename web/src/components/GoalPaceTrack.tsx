@@ -23,7 +23,7 @@ export function GoalPaceTrack({ progress }: { progress: GoalProgress }) {
         {onPace !== undefined && (
           <span
             className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-              onPace ? "bg-accent-soft text-accent-strong" : "bg-gold-soft text-[#8a6317]"
+              onPace ? "bg-positive-soft text-positive" : "bg-gold-soft text-gold-strong"
             }`}
           >
             {onPace ? "On pace" : "Behind pace"}

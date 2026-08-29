@@ -4,9 +4,9 @@ import { useSession } from "./lib/session";
 import { AuthPage } from "./pages/AuthPage";
 import { LinkBankPage } from "./pages/LinkBankPage";
 import { GoalSetupPage } from "./pages/GoalSetupPage";
-import { DashboardPage } from "./pages/DashboardPage";
+import { HomePage } from "./pages/HomePage";
 
-type OnboardingStep = "loading" | "link-bank" | "set-goal" | "dashboard" | "load-failed";
+type OnboardingStep = "loading" | "link-bank" | "set-goal" | "home" | "load-failed";
 
 export function App() {
   const { token, isAuthenticated } = useSession();
@@ -29,7 +29,7 @@ function PostSignInGate() {
       } else if (!goalProgress.type) {
         setStep("set-goal");
       } else {
-        setStep("dashboard");
+        setStep("home");
       }
     } catch {
       setStep("load-failed");
@@ -42,10 +42,10 @@ function PostSignInGate() {
   }, [token]);
 
   switch (step) {
-    case "dashboard":
-      return <DashboardPage />;
+    case "home":
+      return <HomePage />;
     case "set-goal":
-      return <GoalSetupPage onGoalSet={() => setStep("dashboard")} />;
+      return <GoalSetupPage onGoalSet={() => setStep("home")} />;
     case "link-bank":
       return <LinkBankPage onLinked={() => setStep("set-goal")} />;
     case "load-failed":
