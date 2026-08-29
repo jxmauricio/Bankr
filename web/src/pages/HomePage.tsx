@@ -11,9 +11,13 @@ import {
   type ItemizedTransactions,
   type PeriodRollup,
 } from "../lib/api";
+import { GoalSidebar } from "../components/GoalSidebar";
+import { GoalPaceTrack } from "../components/GoalPaceTrack";
+import { StatsBar } from "../components/StatsBar";
+import { NetWorthFlowModal } from "../components/NetWorthFlowModal";
+import { TransactionSearchModal } from "../components/TransactionSearchModal";
 import { useSession } from "../lib/session";
 import { formatDate, formatMoney } from "../lib/format";
-import { GoalPaceTrack } from "../components/GoalPaceTrack";
 import { AssistantText } from "../components/AssistantText";
 
 type Period = "week" | "month" | "year";
@@ -30,6 +34,7 @@ const makeId = () => `item-${nextId++}`;
 export function HomePage() {
   const { token, signOut } = useSession();
   const [netWorth, setNetWorth] = useState<number | null>(null);
+  const [monthRollup, setMonthRollup] = useState<PeriodRollup | null>(null);
   const [goalProgress, setGoalProgress] = useState<GoalProgress | null>(null);
   const [items, setItems] = useState<StreamItem[]>([
     {
@@ -42,11 +47,14 @@ export function HomePage() {
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showFlow, setShowFlow] = useState(false);
+  const [statTileGroup, setStatTileGroup] = useState<Topic | null>(null);
   const streamRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!token) return;
     fetchNetWorth(token).then((nw) => setNetWorth(nw.current));
+    fetchRollup(token, "month").then(setMonthRollup);
     fetchGoalProgress(token).then((progress) => setGoalProgress(progress.type ? progress : null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
@@ -106,53 +114,78 @@ export function HomePage() {
         </div>
       </header>
 
-      <div ref={streamRef} className="flex-1 space-y-4 overflow-y-auto px-6 py-6">
-        <div className="mx-auto flex max-w-2xl flex-col gap-4">
-          {goalProgress && <GoalPaceTrack progress={goalProgress} />}
-          {items.map((item) => (
-            <StreamEntry key={item.id} item={item} token={token} />
-          ))}
-          {isSending && (
-            <div className="flex justify-start">
-              <div className="rounded-2xl rounded-bl-sm border-l-2 border-gold bg-surface px-4 py-2.5 text-sm text-ink-soft">
-                Bankr is thinking…
-              </div>
+      {showFlow && token && (
+        <NetWorthFlowModal token={token} netWorth={netWorth} onClose={() => setShowFlow(false)} />
+      )}
+
+      {statTileGroup && token && (
+        <TransactionSearchModal token={token} group={statTileGroup} onClose={() => setStatTileGroup(null)} />
+      )}
+
+      <div className="flex flex-1 overflow-hidden">
+        <GoalSidebar goalProgress={goalProgress} />
+
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <div ref={streamRef} className="flex-1 space-y-4 overflow-y-auto px-6 py-6">
+            <div className="mx-auto flex max-w-2xl flex-col gap-4">
+              <StatsBar
+                netWorth={netWorth}
+                rollup={monthRollup}
+                onNetWorthClick={() => setShowFlow(true)}
+                onIncomeClick={() => setStatTileGroup("income")}
+                onSpendingClick={() => setStatTileGroup("spending")}
+              />
+              {goalProgress && (
+                <div className="lg:hidden">
+                  <GoalPaceTrack progress={goalProgress} />
+                </div>
+              )}
+              {items.map((item) => (
+                <StreamEntry key={item.id} item={item} token={token} />
+              ))}
+              {isSending && (
+                <div className="flex justify-start">
+                  <div className="rounded-2xl rounded-bl-sm border-l-2 border-gold bg-surface px-4 py-2.5 text-sm text-ink-soft">
+                    Bankr is thinking…
+                  </div>
+                </div>
+              )}
+              {error && (
+                <p role="alert" className="text-sm text-danger">
+                  {error}
+                </p>
+              )}
             </div>
-          )}
-          {error && (
-            <p role="alert" className="text-sm text-danger">
-              {error}
-            </p>
-          )}
+          </div>
+
+          <div className="mx-auto flex w-full max-w-2xl shrink-0 flex-wrap gap-2 px-6 pb-3">
+            <Chip label="Spending this month" onClick={() => showTopic("spending")} />
+            <Chip label="Income this month" onClick={() => showTopic("income")} />
+            <Chip label="Am I on pace for my goal?" onClick={() => ask("Am I on pace for my goal?")} />
+          </div>
+
+          <form
+            onSubmit={handleSubmit}
+            className="mx-auto flex w-full max-w-2xl shrink-0 items-center gap-2 border-t border-border px-6 py-4"
+          >
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Ask about your money"
+              aria-label="Ask about your money"
+              className="flex-1 rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-accent"
+            />
+            <button
+              type="submit"
+              disabled={isSending || !draft.trim()}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-transform hover:scale-105 disabled:opacity-40 disabled:hover:scale-100 cursor-pointer"
+              aria-label="Send"
+            >
+              <SendIcon />
+            </button>
+          </form>
         </div>
       </div>
-
-      <div className="mx-auto flex w-full max-w-2xl shrink-0 flex-wrap gap-2 px-6 pb-3">
-        <Chip label="Spending this month" onClick={() => showTopic("spending")} />
-        <Chip label="Income this month" onClick={() => showTopic("income")} />
-        <Chip label="Am I on pace for my goal?" onClick={() => ask("Am I on pace for my goal?")} />
-      </div>
-
-      <form
-        onSubmit={handleSubmit}
-        className="mx-auto flex w-full max-w-2xl shrink-0 items-center gap-2 border-t border-border px-6 py-4"
-      >
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Ask about your money"
-          aria-label="Ask about your money"
-          className="flex-1 rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-accent"
-        />
-        <button
-          type="submit"
-          disabled={isSending || !draft.trim()}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-transform hover:scale-105 disabled:opacity-40 disabled:hover:scale-100 cursor-pointer"
-          aria-label="Send"
-        >
-          <SendIcon />
-        </button>
-      </form>
     </div>
   );
 }

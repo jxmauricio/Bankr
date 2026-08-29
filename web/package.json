@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "d3-sankey": "^0.12.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-plaid-link": "^5.0.0",
@@ -17,6 +18,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@types/d3-sankey": "^0.12.5",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
