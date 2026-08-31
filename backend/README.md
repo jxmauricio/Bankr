@@ -84,10 +84,25 @@ pytest
 - `app/api/dashboard.py` — `GET /dashboard/{net-worth,spending,income,rollup,goal-progress}`
 - `app/api/goals.py` — `POST /goals`
 - `app/api/chat.py`, `app/services/chat_service.py` — `POST /chat`, persists
-  `ChatMessage` history per `conversation_id` around `claude_agent.run_agent_turn`
-- `app/agent/tools.py` — DB-backed tool implementations the agent can call
-  (also the source of truth `dashboard_service.py` and `goal_service.py` reuse for
-  net worth and goal pacing, so the dashboard and chat agent never disagree)
+  `ChatMessage` history per `conversation_id` around `claude_agent.run_agent_turn`.
+  The response also carries `sources` — a human-readable label per tool call
+  that backed the reply (e.g. "Net worth", "Searched “high yield savings
+  rates”"), shown in the web client as a small caption under the reply so
+  the user can see what it's grounded in. Persisted alongside the reply on
+  `ChatMessage.tool_calls`, but never fed back into the LLM-facing history —
+  see chat_service.py's docstring for why. `GET /chat/conversations` (list,
+  newest first, with a preview from the first message) and
+  `GET /chat/conversations/{id}` (full history, 404 if it's not this user's)
+  let the web client browse and reopen a past conversation — see
+  `ChatHistoryMenu.tsx` in the web app
+- `app/agent/tools.py` — tool implementations the agent can call. Most are
+  DB-backed (also the source of truth `dashboard_service.py` and
+  `goal_service.py` reuse for net worth and goal pacing, so the dashboard and
+  chat agent never disagree). Two aren't: `calculate` (a precise
+  AST-whitelisted arithmetic evaluator, so financial projections don't rely
+  on LLM mental math) and `web_search` (current rates/inflation/etc. via
+  `app/integrations/web_search.py`, gracefully unconfigured without
+  `BRAVE_SEARCH_API_KEY`)
 - `app/agent/agent_client.py` — vendor-agnostic `AgentClient` Protocol (`run_turn`
   for the tool-use loop, `complete` for one-shot phrasing) + `build_agent_client()`,
   selected by `AGENT_PROVIDER` (`openrouter` | `anthropic` | `openai_compatible`).
@@ -101,12 +116,17 @@ pytest
   `OpenAICompatibleAgentClient` (any other `/chat/completions`-shaped API —
   DeepSeek, Kimi/Moonshot, GPT-5-mini, ... directly). `OpenRouterAgentClient`
   is a thin subclass of the generic client; each keeps its own
-  vendor-specific message-threading entirely internal
+  vendor-specific message-threading entirely internal. `AGENT_EXTENDED_THINKING`
+  turns on reasoning before the reply for the two providers where it's wired
+  up (Claude's native `thinking` param on `AnthropicAgentClient`, OpenRouter's
+  unified `reasoning` param on `OpenRouterAgentClient` — a no-op there unless
+  `OPENROUTER_MODEL` itself supports reasoning)
 - `app/agent/claude_agent.py` — the tool-use loop itself: tool schema
   (`TOOL_DEFINITIONS`), guardrailed system prompt, dispatch to `tools.py`,
-  `run_agent_turn(db, user_id, history) -> str`. Despite the filename this
-  runs against whichever provider `AGENT_PROVIDER` selects, not only Claude
-  (kept the name since Claude is still the production default)
+  `run_agent_turn(db, user_id, history) -> (reply, sources)`. Despite the
+  filename this runs against whichever provider `AGENT_PROVIDER` selects,
+  not only Claude (kept the name since Claude is still the production
+  default)
 - `app/jobs/insights_job.py` — post-sync proactive insight detection + LLM phrasing
   (via the same `AgentClient.complete`)
 - `app/main.py` — also sets up `CORSMiddleware` for the web app's dev origin

@@ -34,7 +34,7 @@ readable by injected script).
 - `src/lib/session.tsx` — session token context, backed by `localStorage`
 - `src/lib/format.ts` — money/date formatting, goal type labels
 - `src/App.tsx` — signed-out → `AuthPage`; signed-in → onboarding gate that
-  routes through `LinkBankPage` → `GoalSetupPage` → `DashboardPage` based on
+  routes through `LinkBankPage` → `GoalSetupPage` → `HomePage` based on
   `GET /dashboard/net-worth` and `GET /dashboard/goal-progress`, same logic
   as the iOS app's `PostSignInGateView`
 - `src/pages/AuthPage.tsx` — combined sign up / sign in
@@ -43,15 +43,28 @@ readable by injected script).
   resulting `public_token` to `POST /linked-accounts` on success
 - `src/pages/GoalSetupPage.tsx` — goal type + target amount/date, posts to
   `POST /goals`
-- `src/pages/DashboardPage.tsx` — net worth, goal pace, week/month/year
-  rollup, itemized spending/income
-- `src/components/GoalPaceTrack.tsx` — the dashboard's signature element: a
-  single track plotting both actual progress (solid fill) and the pace
-  needed to hit the target date (a marker), so ahead/behind is visible at a
-  glance instead of buried in a percentage
-- `src/components/ChatPanel.tsx` — slide-over chat reachable from a
-  persistent floating "Ask Bankr" button on the dashboard (AI-agent-first,
-  not a buried tab), posts to `POST /chat`
+- `src/pages/HomePage.tsx` — the whole signed-in home: net worth/income/
+  spending tiles (`StatsBar`), goal pace, and an AI-agent-first chat stream
+  (not a buried tab) posting to `POST /chat`, with a conversation history
+  menu (`ChatHistoryMenu`, `GET /chat/conversations[/:id]`) and voice mode
+  (see below)
+- `src/components/GoalPaceTrack.tsx` — a single track plotting both actual
+  progress (solid fill) and the pace needed to hit the target date (a
+  marker), so ahead/behind is visible at a glance instead of buried in a
+  percentage
+- `src/lib/voice.ts`, `src/lib/useVoiceMode.ts` — voice mode: the mic button
+  in `HomePage.tsx`'s composer. Talk -> `SpeechRecognition` transcribes ->
+  auto-sends -> the reply is read aloud via `SpeechSynthesis` -> it starts
+  listening again for your next turn, until you tap the mic again (or tap it
+  mid-reply to interrupt and talk over it -- "barge-in"). Entirely
+  client-side (both are free, built into Chrome/Edge/Safari), so there's no
+  backend/API key involved and no audio ever leaves the browser. Firefox
+  doesn't implement `SpeechRecognition`; `isSpeechRecognitionSupported()` is
+  how the mic button detects that and shows a clear error instead of a dead
+  click. Verified live that a real permission prompt fires and a denial
+  degrades cleanly (idle state, clear error, no stuck "Listening…") --
+  actual transcription/playback needs a real mic, which automated browser
+  tooling doesn't have (same limitation as the Plaid Link iframe below)
 
 ## Run
 

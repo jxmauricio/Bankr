@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ApiError,
+  fetchConversation,
   fetchGoalProgress,
   fetchIncome,
   fetchNetWorth,
   fetchRollup,
   fetchSpending,
   sendChatMessage,
+  type ChatSource,
   type GoalProgress,
   type ItemizedTransactions,
   type PeriodRollup,
@@ -16,16 +18,24 @@ import { GoalPaceTrack } from "../components/GoalPaceTrack";
 import { StatsBar } from "../components/StatsBar";
 import { NetWorthFlowModal } from "../components/NetWorthFlowModal";
 import { TransactionSearchModal } from "../components/TransactionSearchModal";
+import { ChatHistoryMenu } from "../components/ChatHistoryMenu";
 import { SlotNumber } from "../components/SlotNumber";
 import { useSession } from "../lib/session";
+import { useVoiceMode } from "../lib/useVoiceMode";
 import { formatDate, formatMoney } from "../lib/format";
 import { AssistantText } from "../components/AssistantText";
+
+const GREETING = "Ask me anything about your money — what you've spent, what's coming in, or whether you're on pace for your goal.";
+// Not scoped to a user/token: a different account landing on a stale id
+// just 404s inside loadConversation and falls back to the greeting, same as
+// the id being gone for any other reason.
+const LAST_CONVERSATION_KEY = "bankr:last-conversation-id";
 
 type Period = "week" | "month" | "year";
 type Topic = "spending" | "income";
 
 type StreamItem =
-  | { kind: "assistant-text"; id: string; text: string }
+  | { kind: "assistant-text"; id: string; text: string; sources?: ChatSource[] }
   | { kind: "user-text"; id: string; text: string }
   | { kind: "topic-card"; id: string; topic: Topic; period: Period };
 
@@ -37,13 +47,7 @@ export function HomePage() {
   const [netWorth, setNetWorth] = useState<number | null>(null);
   const [monthRollup, setMonthRollup] = useState<PeriodRollup | null>(null);
   const [goalProgress, setGoalProgress] = useState<GoalProgress | null>(null);
-  const [items, setItems] = useState<StreamItem[]>([
-    {
-      kind: "assistant-text",
-      id: makeId(),
-      text: "Ask me anything about your money — what you've spent, what's coming in, or whether you're on pace for your goal.",
-    },
-  ]);
+  const [items, setItems] = useState<StreamItem[]>([{ kind: "assistant-text", id: makeId(), text: GREETING }]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -51,6 +55,11 @@ export function HomePage() {
   const [showFlow, setShowFlow] = useState(false);
   const [statTileGroup, setStatTileGroup] = useState<Topic | null>(null);
   const streamRef = useRef<HTMLDivElement>(null);
+  const { voiceMode, voiceState, toggle: toggleVoiceMode, speakReply } = useVoiceMode({
+    onFinalTranscript: (text) => ask(text),
+    onDraftChange: setDraft,
+    onError: setError,
+  });
 
   useEffect(() => {
     if (!token) return;
@@ -64,6 +73,13 @@ export function HomePage() {
     streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight, behavior: "smooth" });
   }, [items, isSending]);
 
+  // Keep the active conversation in sync with localStorage so a refresh (or
+  // reopening the tab) restores it instead of dropping back to the greeting.
+  useEffect(() => {
+    if (conversationId) localStorage.setItem(LAST_CONVERSATION_KEY, conversationId);
+    else localStorage.removeItem(LAST_CONVERSATION_KEY);
+  }, [conversationId]);
+
   function pushItem(item: StreamItem) {
     setItems((prev) => [...prev, item]);
   }
@@ -76,7 +92,8 @@ export function HomePage() {
     try {
       const response = await sendChatMessage(token, text, conversationId);
       setConversationId(response.conversation_id);
-      pushItem({ kind: "assistant-text", id: makeId(), text: response.reply });
+      pushItem({ kind: "assistant-text", id: makeId(), text: response.reply, sources: response.sources });
+      speakReply(response.reply);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Bankr couldn't respond. Try again.");
     } finally {
@@ -96,6 +113,43 @@ export function HomePage() {
     pushItem({ kind: "topic-card", id: makeId(), topic, period: "month" });
   }
 
+  async function loadConversation(id: string, { silent = false }: { silent?: boolean } = {}) {
+    if (!token) return;
+    if (!silent) setError(null);
+    try {
+      const messages = await fetchConversation(token, id);
+      setItems(
+        messages.map((m) =>
+          m.role === "user"
+            ? { kind: "user-text" as const, id: makeId(), text: m.content }
+            : { kind: "assistant-text" as const, id: makeId(), text: m.content, sources: m.sources },
+        ),
+      );
+      setConversationId(id);
+    } catch (err) {
+      // Stale/foreign id (e.g. a different account, or it's gone) --
+      // silently drop back to the greeting on the restore-on-refresh path
+      // instead of surfacing an error for something the user didn't ask for.
+      localStorage.removeItem(LAST_CONVERSATION_KEY);
+      if (!silent) setError(err instanceof ApiError ? err.message : "Couldn't load that conversation.");
+    }
+  }
+
+  // Restore the conversation that was active last time, if any, so a
+  // refresh (or reopening the tab) lands back where the user left off.
+  useEffect(() => {
+    if (!token) return;
+    const savedId = localStorage.getItem(LAST_CONVERSATION_KEY);
+    if (savedId) loadConversation(savedId, { silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  function startNewChat() {
+    setError(null);
+    setConversationId(null);
+    setItems([{ kind: "assistant-text", id: makeId(), text: GREETING }]);
+  }
+
   return (
     <div className="flex h-screen flex-col">
       <header className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
@@ -105,6 +159,7 @@ export function HomePage() {
             {netWorth !== null ? <SlotNumber value={formatMoney(netWorth)} /> : "—"}
             <span className="ml-1.5 font-body text-ink-faint">net worth</span>
           </span>
+          <ChatHistoryMenu token={token} onSelectConversation={loadConversation} onNewChat={startNewChat} />
           <button
             type="button"
             onClick={signOut}
@@ -146,8 +201,8 @@ export function HomePage() {
               ))}
               {isSending && (
                 <div className="flex justify-start">
-                  <div className="rounded-2xl rounded-bl-sm border-l-2 border-gold bg-surface px-4 py-2.5 text-sm text-ink-soft">
-                    Bankr is thinking…
+                  <div className="rounded-2xl rounded-bl-sm border-l-2 border-gold bg-surface px-4 py-3">
+                    <ThinkingIndicator />
                   </div>
                 </div>
               )}
@@ -169,10 +224,33 @@ export function HomePage() {
             onSubmit={handleSubmit}
             className="mx-auto flex w-full max-w-2xl shrink-0 items-center gap-2 border-t border-border px-6 py-4"
           >
+            <button
+              type="button"
+              onClick={toggleVoiceMode}
+              aria-label={voiceMode ? "Stop voice mode" : "Start voice mode"}
+              aria-pressed={voiceMode}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors cursor-pointer ${
+                voiceState === "listening"
+                  ? "bg-danger-soft text-danger animate-pulse"
+                  : voiceState === "speaking"
+                    ? "bg-gold-soft text-gold"
+                    : voiceMode
+                      ? "bg-accent-soft text-accent-strong"
+                      : "text-ink-soft hover:bg-bg hover:text-ink"
+              }`}
+            >
+              <MicIcon />
+            </button>
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Ask about your money"
+              placeholder={
+                voiceState === "listening"
+                  ? "Listening…"
+                  : voiceState === "speaking"
+                    ? "Bankr is speaking…"
+                    : "Ask about your money"
+              }
               aria-label="Ask about your money"
               className="flex-1 rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-accent"
             />
@@ -195,10 +273,19 @@ function StreamEntry({ item, token }: { item: StreamItem; token: string | null }
   switch (item.kind) {
     case "assistant-text":
       return (
-        <div className="flex justify-start">
+        <div className="flex flex-col items-start gap-1">
           <div className="max-w-[85%] rounded-2xl rounded-bl-sm border-l-2 border-gold bg-surface px-4 py-2.5 text-sm leading-relaxed text-ink">
             <AssistantText text={item.text} />
           </div>
+          {item.sources && item.sources.length > 0 && (
+            <div
+              className="flex items-center gap-1 px-1 text-[11px] text-ink-faint"
+              title="Grounded in your real account data via these lookups"
+            >
+              <SourceIcon />
+              <span>{item.sources.map((s) => s.label).join(" · ")}</span>
+            </div>
+          )}
         </div>
       );
     case "user-text":
@@ -310,6 +397,33 @@ function SendIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
       <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function MicIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ThinkingIndicator() {
+  return (
+    <div className="flex items-center gap-1.5" role="status" aria-label="Bankr is thinking">
+      <span className="h-1.5 w-1.5 animate-thinking rounded-full bg-gold [animation-delay:0ms]" />
+      <span className="h-1.5 w-1.5 animate-thinking rounded-full bg-gold [animation-delay:160ms]" />
+      <span className="h-1.5 w-1.5 animate-thinking rounded-full bg-gold [animation-delay:320ms]" />
+    </div>
+  );
+}
+
+function SourceIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0">
+      <path d="M20 6 9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

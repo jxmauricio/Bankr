@@ -47,6 +47,24 @@ class Settings(BaseSettings):
     agent_model: str = "deepseek-chat"
     agent_base_url: str = "https://api.deepseek.com"
 
+    # Extended/reasoning thinking before the model answers -- catches
+    # arithmetic/multi-step slips before they reach the user, at the cost of
+    # latency and tokens. Only wired up for "anthropic" (Claude's native
+    # thinking param) and "openrouter" (its unified `reasoning` param, which
+    # only does something if the selected OPENROUTER_MODEL itself supports
+    # reasoning) -- "openai_compatible" is a passthrough to an arbitrary
+    # endpoint, so it's left alone; point AGENT_MODEL at a reasoning model
+    # directly (e.g. deepseek-reasoner) if you want that there instead.
+    agent_extended_thinking: bool = False
+    agent_thinking_budget_tokens: int = 2048
+
+    # Web search tool the agent can call for anything time-sensitive (current
+    # rates, inflation, ...) it wasn't trained on -- see
+    # app/integrations/web_search.py. Optional: with no key set, calling the
+    # web_search tool returns a clear error result instead of live results,
+    # same "degrade gracefully" pattern as the agent providers above.
+    brave_search_api_key: str = ""
+
     apns_key_id: str = ""
     apns_team_id: str = ""
     apns_auth_key_path: str = ""

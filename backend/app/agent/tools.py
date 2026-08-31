@@ -1,12 +1,17 @@
-"""DB-backed implementations of every tool the Claude agent is allowed to call.
+"""Implementations of every tool the Claude agent is allowed to call.
 
-Deliberately narrow: each function takes a user_id and returns a small,
-already-aggregated JSON-serializable result. The model never sees raw SQL or
-a full transaction dump -- this keeps answers grounded, cheap, and auditable,
-and structurally prevents the agent from reaching outside banking/spending
-data (there is no investment or trade-execution tool to call).
+Most are DB-backed and deliberately narrow: each takes a user_id and returns
+a small, already-aggregated JSON-serializable result. The model never sees
+raw SQL or a full transaction dump -- this keeps answers grounded, cheap,
+and auditable, and structurally prevents the agent from reaching outside
+banking/spending data (there is no investment or trade-execution tool to
+call). calculate and web_search are the two exceptions -- pure/external
+helpers with no user data in scope, kept in this module anyway so
+claude_agent.py has one single dispatch surface to reason about.
 """
 
+import ast
+import operator
 from datetime import date, timedelta
 from statistics import mean, pstdev
 from uuid import UUID
@@ -15,6 +20,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.models import Category, Goal, LinkedAccount, NetWorthSnapshot, Transaction
+from app.integrations.web_search import WebSearchClient
 
 PERIOD_DAYS = {"week": 7, "month": 30, "year": 365}
 
@@ -157,4 +163,95 @@ def get_unusual_transactions(db: Session, user_id: UUID, stddev_threshold: float
             {"date": t.date.isoformat(), "amount": float(t.amount), "merchant_name": t.merchant_name}
             for t in unusual
         ]
+    }
+
+
+# ---------------------------------------------------------------------------
+# Calculator: precise arithmetic for projections (compound interest, loan
+# payoff timelines, percentage changes, ...) that the model would otherwise
+# have to compute by hand. Evaluated via an AST whitelist rather than
+# eval()/exec() -- only numeric literals, +-*/%**, parens, and a handful of
+# safe builtins are reachable, so there is no name/attribute/import surface
+# to escape the sandbox with, unlike a real code-execution tool.
+# ---------------------------------------------------------------------------
+
+_BINOPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+}
+_UNARYOPS = {ast.UAdd: operator.pos, ast.USub: operator.neg}
+_FUNCS = {"round": round, "abs": abs, "min": min, "max": max, "pow": pow}
+_MAX_POW_EXPONENT = 1000  # guards against a DoS-sized computation like 9**9**9
+
+
+class _UnsafeExpression(ValueError):
+    pass
+
+
+def _eval_node(node: ast.AST) -> float:
+    if isinstance(node, ast.Expression):
+        return _eval_node(node.body)
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
+            raise _UnsafeExpression(f"unsupported constant {node.value!r}")
+        return node.value
+    if isinstance(node, ast.BinOp):
+        op = _BINOPS.get(type(node.op))
+        if op is None:
+            raise _UnsafeExpression(f"unsupported operator {type(node.op).__name__}")
+        left = _eval_node(node.left)
+        right = _eval_node(node.right)
+        if isinstance(node.op, ast.Pow) and abs(right) > _MAX_POW_EXPONENT:
+            raise _UnsafeExpression("exponent too large")
+        return op(left, right)
+    if isinstance(node, ast.UnaryOp):
+        op = _UNARYOPS.get(type(node.op))
+        if op is None:
+            raise _UnsafeExpression(f"unsupported operator {type(node.op).__name__}")
+        return op(_eval_node(node.operand))
+    if isinstance(node, ast.Call):
+        if not isinstance(node.func, ast.Name) or node.func.id not in _FUNCS or node.keywords:
+            raise _UnsafeExpression("only round/abs/min/max/pow may be called, with no keyword args")
+        return _FUNCS[node.func.id](*(_eval_node(arg) for arg in node.args))
+    raise _UnsafeExpression(f"unsupported expression: {type(node).__name__}")
+
+
+def calculate(expression: str) -> dict:
+    """Evaluate a precise arithmetic expression, e.g. for compound interest
+    (1000 * (1 + 0.05/12) ** (12*5)) or a savings timeline
+    ((10000-2500) / 400). Numbers, + - * / % **, parentheses, and
+    round/abs/min/max/pow only -- no variables or other function calls."""
+    try:
+        result = _eval_node(ast.parse(expression, mode="eval"))
+    except _UnsafeExpression as e:
+        return {"expression": expression, "error": f"unsupported expression ({e})"}
+    except ZeroDivisionError:
+        return {"expression": expression, "error": "division by zero"}
+    except (SyntaxError, TypeError, ValueError, OverflowError) as e:
+        return {"expression": expression, "error": f"could not evaluate ({e})"}
+    return {"expression": expression, "result": result}
+
+
+def web_search(query: str, max_results: int = 5, *, client: WebSearchClient | None) -> dict:
+    """Look up current information the model wasn't trained on or that
+    changes over time (interest rates, inflation, general cost-of-living
+    context, ...). `client` is injected by claude_agent.py rather than
+    built here, so tests can swap in a fake without a real API key -- same
+    reason app/api/deps.py injects the bank aggregator instead of
+    constructing PlaidClient() inline."""
+    if client is None:
+        return {"query": query, "error": "Web search is not configured (no BRAVE_SEARCH_API_KEY set)."}
+    try:
+        results = client.search(query, max_results=max_results)
+    except Exception as e:
+        # A flaky search API/network blip shouldn't fail the whole chat turn.
+        return {"query": query, "error": f"Search failed: {e}"}
+    return {
+        "query": query,
+        "results": [{"title": r.title, "url": r.url, "snippet": r.snippet} for r in results],
     }

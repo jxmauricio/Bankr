@@ -23,6 +23,19 @@
   --color-danger: #E2574C;
   --color-danger-soft: #2E1A18;
   --color-border: #262B3A;
+
+  --animate-thinking: thinking 1.3s ease-in-out infinite;
+}
+
+@keyframes thinking {
+  0%, 60%, 100% {
+    transform: scale(0.6);
+    opacity: 0.35;
+  }
+  30% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 body {

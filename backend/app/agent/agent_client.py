@@ -53,9 +53,16 @@ def build_agent_client() -> AgentClient:
             model=settings.openrouter_model,
             site_url=settings.openrouter_site_url,
             app_name=settings.openrouter_app_name,
+            extended_thinking=settings.agent_extended_thinking,
+            thinking_budget_tokens=settings.agent_thinking_budget_tokens,
         )
     if settings.agent_provider == "openai_compatible":
         return OpenAICompatibleAgentClient(
             api_key=settings.agent_api_key, base_url=settings.agent_base_url, model=settings.agent_model
         )
-    return AnthropicAgentClient(api_key=settings.anthropic_api_key, model=settings.anthropic_model)
+    return AnthropicAgentClient(
+        api_key=settings.anthropic_api_key,
+        model=settings.anthropic_model,
+        extended_thinking=settings.agent_extended_thinking,
+        thinking_budget_tokens=settings.agent_thinking_budget_tokens,
+    )

@@ -87,6 +87,13 @@ of crashing.
 | `anthropic`         | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`                  | [console.anthropic.com](https://console.anthropic.com) — use this if you want to test against Claude specifically, not through a router. |
 | `openai_compatible` | `AGENT_API_KEY`, `AGENT_MODEL`, `AGENT_BASE_URL`        | Any `/chat/completions`-shaped API you already hold a key for (DeepSeek's own API, Kimi/Moonshot, etc.). |
 
+Two more chat-agent tokens, both optional:
+
+| Variable | What it's for | How to get it |
+| ---------- | ---------------- | -------------- |
+| `BRAVE_SEARCH_API_KEY` | Lets the agent call a `web_search` tool for current info (rates, inflation, ...). | [api.search.brave.com](https://api.search.brave.com) (free tier available). Without it, `web_search` returns a clear error result instead of live results. |
+| `AGENT_EXTENDED_THINKING` / `AGENT_THINKING_BUDGET_TOKENS` | Turns on reasoning before the reply, for `anthropic` and `openrouter` only. | No signup — just `true`/a token budget in `backend/.env`. Off by default (slower, more tokens per reply). |
+
 ### iOS-only (skip these if you're only running the web client)
 
 | Variable | What it's for |

@@ -163,9 +163,15 @@ export const fetchIncome = (token: string, period: string) =>
 
 // --- Chat ---
 
+export interface ChatSource {
+  tool: string;
+  label: string;
+}
+
 export interface ChatResponse {
   conversation_id: string;
   reply: string;
+  sources: ChatSource[];
 }
 
 export const sendChatMessage = (token: string, message: string, conversationId: string | null) =>
@@ -174,3 +180,23 @@ export const sendChatMessage = (token: string, message: string, conversationId: 
     token,
     body: { message, conversation_id: conversationId },
   });
+
+export interface ConversationSummary {
+  conversation_id: string;
+  preview: string;
+  last_message_at: string;
+  message_count: number;
+}
+
+export interface ConversationMessage {
+  role: string;
+  content: string;
+  sources: ChatSource[];
+  created_at: string;
+}
+
+export const fetchConversations = (token: string) =>
+  request<ConversationSummary[]>("/chat/conversations", { token });
+
+export const fetchConversation = (token: string, conversationId: string) =>
+  request<ConversationMessage[]>(`/chat/conversations/${conversationId}`, { token });

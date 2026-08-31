@@ -129,5 +129,9 @@ class ChatMessage(Base):
     conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     role: Mapped[str] = mapped_column(String)  # user | assistant | tool
     content: Mapped[str] = mapped_column(Text)
-    tool_calls: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # [{"tool": name, "label": ...}, ...] for an assistant message -- the
+    # tool calls that backed this reply, shown to the user as a
+    # trust/verification trail (see claude_agent.run_agent_turn). Always
+    # null on user-role messages.
+    tool_calls: Mapped[list[dict] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
