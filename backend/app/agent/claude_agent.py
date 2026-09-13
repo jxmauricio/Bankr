@@ -1,10 +1,11 @@
 """Bankr's conversational agent: tool-use loop over a swappable LLM backend.
 
 Grounding pattern: the model never receives raw transactions or a financial
-dump in its context. It calls narrow, read-only tools (app/agent/tools.py)
-that query Postgres and return small aggregated results. This keeps answers
-accurate, auditable (we log exactly which tool calls backed each answer),
-and cheap.
+dump in its context. It calls narrow tools (app/agent/tools.py) that query
+Postgres and return small aggregated results. This keeps answers accurate,
+auditable (we log exactly which tool calls backed each answer), and cheap.
+propose_goal is the one exception to "query only": it drafts a goal for the
+user to confirm in the chat UI, but still does not write a Goal row.
 
 Guardrails are enforced two ways, not just by prompting:
 1. The system prompt explicitly instructs the model to give insights and
@@ -32,8 +33,8 @@ from app.agent.agent_client import ToolSpec, build_agent_client
 from app.integrations.web_search import build_web_search_client
 
 SYSTEM_PROMPT = """You are Bankr's financial insights assistant. You help young \
-professionals understand their spending, income, and progress toward a single \
-savings/debt goal they've set.
+professionals understand their spending, income, and progress toward up to \
+five savings/debt goals they've set.
 
 Ground every claim in the tool results you receive -- never guess a number. \
 When useful, supplement with widely-accepted best-practice guidance (e.g. "a \
@@ -62,6 +63,16 @@ Call web_search for anything time-sensitive you can't know from training \
 alone -- current interest/savings rates, inflation, typical cost of living \
 in a place the user mentions. Don't call it for anything about the user \
 themselves; their data only ever comes from the other tools.
+
+When the user wants to set, change, or add a savings, debt-payoff, or \
+emergency-fund target -- including casually mentioning a dollar amount they \
+want to hit -- you MUST call propose_goal. That call is what makes the \
+confirm card appear; talking about a card without calling the tool leaves \
+the user with nothing to click. If they haven't given a target amount, ask \
+for one first, then call propose_goal. Do not claim the goal is already \
+created. New goals are added alongside existing ones (up to five), they do \
+not replace. If propose_goal says the user is at the limit, say so. If they \
+are only asking how existing goals are going, call get_goal_progress instead.
 
 Write in plain conversational prose, 2-4 sentences, like a text message from \
 a sharp friend -- never markdown. No headers, no bold/italic asterisks, no \
@@ -93,7 +104,7 @@ TOOL_DEFINITIONS = [
     ),
     ToolSpec(
         name="get_goal_progress",
-        description="Get the user's active financial goal and their progress toward it, including whether they're on pace.",
+        description="Get the user's active financial goals (up to 5) and progress toward each, including whether they're on pace.",
         parameters={"type": "object", "properties": {}},
     ),
     ToolSpec(
@@ -124,6 +135,32 @@ TOOL_DEFINITIONS = [
         },
     ),
     ToolSpec(
+        name="propose_goal",
+        description=(
+            "Draft a financial goal for the user to confirm in the app. Call this whenever they want to "
+            "set, change, or work toward a savings, debt-payoff, or emergency-fund target and have given "
+            "a dollar amount. Does not create the goal -- the user confirms on a card. Adds a new "
+            "active goal alongside existing ones (up to 5)."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": ["save_amount", "pay_off_debt", "build_emergency_fund"],
+                    "description": "save_amount for a savings target, pay_off_debt to pay down liabilities, "
+                    "build_emergency_fund for a 3-6 month cushion.",
+                },
+                "target_amount": {"type": "number", "description": "Positive dollar target."},
+                "target_date": {
+                    "type": "string",
+                    "description": "Optional target date as YYYY-MM-DD.",
+                },
+            },
+            "required": ["type", "target_amount"],
+        },
+    ),
+    ToolSpec(
         name="web_search",
         description=(
             "Search the web for current, time-sensitive information not available from the other tools -- interest "
@@ -149,6 +186,7 @@ _TOOL_DISPATCH = {
     "get_recent_transactions": tools.get_recent_transactions,
     "get_unusual_transactions": lambda db, user_id, **kwargs: tools.get_unusual_transactions(db, user_id),
     "calculate": lambda db, user_id, **kwargs: tools.calculate(**kwargs),
+    "propose_goal": tools.propose_goal,
     "web_search": lambda db, user_id, **kwargs: tools.web_search(client=_search_client, **kwargs),
 }
 
@@ -176,6 +214,15 @@ def _describe_tool_call(name: str, tool_input: dict) -> str:
         return f"Calculated {tool_input.get('expression', '')}"
     if name == "web_search":
         return f"Searched “{tool_input.get('query', '')}”"
+    if name == "propose_goal":
+        kind = tool_input.get("type") or tool_input.get("goal_type")
+        labels = {
+            "save_amount": "savings goal",
+            "pay_off_debt": "debt payoff goal",
+            "build_emergency_fund": "emergency fund",
+        }
+        article = "an" if kind == "build_emergency_fund" else "a"
+        return f"Proposed {article} {labels.get(kind, 'goal')}"
     return name
 
 
@@ -196,7 +243,13 @@ def run_agent_turn(db: Session, user_id: UUID, messages: list[dict]) -> tuple[st
 
     def call_tool(name: str, tool_input: dict) -> dict:
         result = _TOOL_DISPATCH[name](db, user_id, **tool_input)
-        sources.append({"tool": name, "label": _describe_tool_call(name, tool_input)})
+        entry: dict = {"tool": name, "label": _describe_tool_call(name, tool_input)}
+        if name == "propose_goal" and isinstance(result, dict) and result.get("proposal"):
+            # Ride along on the source so the chat API can surface a confirm
+            # card without a separate channel. Stripped from the user-facing
+            # sources trail in app/api/chat.py.
+            entry["proposal"] = result["proposal"]
+        sources.append(entry)
         return result
 
     reply = _client.run_turn(SYSTEM_PROMPT, TOOL_DEFINITIONS, messages, call_tool)

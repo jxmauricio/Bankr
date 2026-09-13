@@ -23,10 +23,21 @@ class ChatSource(BaseModel):
     label: str
 
 
+class GoalProposal(BaseModel):
+    type: str
+    target_amount: float
+    target_date: str | None = None
+    replaces_existing: bool = False
+    at_limit: bool = False
+    active_count: int = 0
+    slots_remaining: int = 5
+
+
 class ChatResponse(BaseModel):
     conversation_id: UUID
     reply: str
     sources: list[ChatSource] = []
+    goal_proposal: GoalProposal | None = None
 
 
 class ConversationSummary(BaseModel):
@@ -40,7 +51,20 @@ class ConversationMessage(BaseModel):
     role: str
     content: str
     sources: list[ChatSource] = []
+    goal_proposal: GoalProposal | None = None
     created_at: datetime
+
+
+def _public_sources(raw: list[dict] | None) -> list[dict]:
+    return [{"tool": entry["tool"], "label": entry["label"]} for entry in (raw or [])]
+
+
+def _goal_proposal(raw: list[dict] | None) -> dict | None:
+    for entry in reversed(raw or []):
+        proposal = entry.get("proposal")
+        if proposal:
+            return proposal
+    return None
 
 
 @router.post("", response_model=ChatResponse)
@@ -51,7 +75,12 @@ def chat(
 ) -> ChatResponse:
     conversation_id = body.conversation_id or uuid4()
     reply, sources = chat_service.send_message(db, user.id, conversation_id, body.message)
-    return ChatResponse(conversation_id=conversation_id, reply=reply, sources=sources)
+    return ChatResponse(
+        conversation_id=conversation_id,
+        reply=reply,
+        sources=_public_sources(sources),
+        goal_proposal=_goal_proposal(sources),
+    )
 
 
 @router.get("/conversations", response_model=list[ConversationSummary])
@@ -71,4 +100,13 @@ def get_conversation(
     messages = chat_service.get_conversation(db, user.id, conversation_id)
     if not messages:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    return messages
+    return [
+        {
+            "role": row["role"],
+            "content": row["content"],
+            "sources": _public_sources(row.get("sources")),
+            "goal_proposal": _goal_proposal(row.get("sources")),
+            "created_at": row["created_at"],
+        }
+        for row in messages
+    ]

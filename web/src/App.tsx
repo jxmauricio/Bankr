@@ -26,7 +26,7 @@ function PostSignInGate() {
       const [netWorth, goalProgress] = await Promise.all([fetchNetWorth(token), fetchGoalProgress(token)]);
       if (netWorth.current === null) {
         setStep("link-bank");
-      } else if (!goalProgress.type) {
+      } else if (!goalProgress.goals?.length) {
         setStep("set-goal");
       } else {
         setStep("home");

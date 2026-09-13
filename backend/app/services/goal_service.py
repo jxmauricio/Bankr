@@ -15,6 +15,11 @@ from sqlalchemy.orm import Session
 from app.db.models import Goal, NetWorthSnapshot
 
 GOAL_TYPES = {"save_amount", "pay_off_debt", "build_emergency_fund"}
+MAX_ACTIVE_GOALS = 5
+
+
+class GoalLimitReached(Exception):
+    """User already has MAX_ACTIVE_GOALS active goals."""
 
 
 def _latest_snapshot(db: Session, user_id: UUID) -> NetWorthSnapshot | None:
@@ -26,6 +31,15 @@ def _latest_snapshot(db: Session, user_id: UUID) -> NetWorthSnapshot | None:
     )
 
 
+def list_active_goals(db: Session, user_id: UUID) -> list[Goal]:
+    return (
+        db.query(Goal)
+        .filter(Goal.user_id == user_id, Goal.status == "active")
+        .order_by(Goal.created_at.asc())
+        .all()
+    )
+
+
 def create_goal(
     db: Session,
     user_id: UUID,
@@ -33,17 +47,14 @@ def create_goal(
     target_amount: float,
     target_date: date | None,
 ) -> Goal:
+    if len(list_active_goals(db, user_id)) >= MAX_ACTIVE_GOALS:
+        raise GoalLimitReached(f"You can have up to {MAX_ACTIVE_GOALS} active goals.")
+
     snapshot = _latest_snapshot(db, user_id)
     if goal_type == "pay_off_debt":
         starting_amount = float(snapshot.total_liabilities) if snapshot else 0.0
     else:
         starting_amount = float(snapshot.total_assets) if snapshot else 0.0
-
-    # Any previously active goal is superseded -- Bankr tracks a single goal
-    # per user for the MVP (see plan: "help work toward that goal").
-    db.query(Goal).filter(Goal.user_id == user_id, Goal.status == "active").update(
-        {"status": "abandoned"}
-    )
 
     goal = Goal(
         user_id=user_id,
@@ -61,14 +72,11 @@ def create_goal(
 
 
 def recompute_goal_progress(db: Session, user_id: UUID, snapshot: NetWorthSnapshot) -> None:
-    goal = db.query(Goal).filter(Goal.user_id == user_id, Goal.status == "active").one_or_none()
-    if goal is None:
-        return
+    for goal in list_active_goals(db, user_id):
+        if goal.type == "pay_off_debt":
+            goal.current_progress_amount = float(goal.starting_amount) - float(snapshot.total_liabilities)
+        else:
+            goal.current_progress_amount = float(snapshot.total_assets) - float(goal.starting_amount)
 
-    if goal.type == "pay_off_debt":
-        goal.current_progress_amount = float(goal.starting_amount) - float(snapshot.total_liabilities)
-    else:
-        goal.current_progress_amount = float(snapshot.total_assets) - float(goal.starting_amount)
-
-    if goal.target_amount and float(goal.current_progress_amount) >= float(goal.target_amount):
-        goal.status = "completed"
+        if goal.target_amount and float(goal.current_progress_amount) >= float(goal.target_amount):
+            goal.status = "completed"

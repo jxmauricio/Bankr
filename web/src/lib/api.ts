@@ -108,19 +108,25 @@ export const createGoal = (
 ) => request<GoalResponse>("/goals", { method: "POST", token, body: goal });
 
 export interface GoalProgress {
-  goal?: null;
-  message?: string;
-  type?: string;
-  target_amount?: number;
-  current_progress_amount?: number;
-  progress_fraction?: number;
-  target_date?: string | null;
+  id: string;
+  type: string;
+  target_amount: number;
+  current_progress_amount: number;
+  progress_fraction: number;
+  target_date: string | null;
   expected_progress_fraction?: number;
   on_pace?: boolean;
 }
 
+export interface GoalProgressResponse {
+  goals: GoalProgress[];
+  active_count: number;
+  max_goals: number;
+  message?: string;
+}
+
 export const fetchGoalProgress = (token: string) =>
-  request<GoalProgress>("/dashboard/goal-progress", { token });
+  request<GoalProgressResponse>("/dashboard/goal-progress", { token });
 
 // --- Dashboard ---
 
@@ -168,10 +174,21 @@ export interface ChatSource {
   label: string;
 }
 
+export interface GoalProposal {
+  type: string;
+  target_amount: number;
+  target_date: string | null;
+  replaces_existing: boolean;
+  at_limit?: boolean;
+  active_count?: number;
+  slots_remaining?: number;
+}
+
 export interface ChatResponse {
   conversation_id: string;
   reply: string;
   sources: ChatSource[];
+  goal_proposal: GoalProposal | null;
 }
 
 export const sendChatMessage = (token: string, message: string, conversationId: string | null) =>
@@ -192,6 +209,7 @@ export interface ConversationMessage {
   role: string;
   content: string;
   sources: ChatSource[];
+  goal_proposal: GoalProposal | null;
   created_at: string;
 }
 

@@ -10,11 +10,14 @@ import {
   sendChatMessage,
   type ChatSource,
   type GoalProgress,
+  type GoalProposal,
   type ItemizedTransactions,
   type PeriodRollup,
 } from "../lib/api";
+import { resolveGoalProposal } from "../lib/goalProposal";
 import { GoalSidebar } from "../components/GoalSidebar";
 import { GoalPaceTrack } from "../components/GoalPaceTrack";
+import { GoalProposalCard } from "../components/GoalProposalCard";
 import { StatsBar } from "../components/StatsBar";
 import { NetWorthFlowModal } from "../components/NetWorthFlowModal";
 import { TransactionSearchModal } from "../components/TransactionSearchModal";
@@ -35,7 +38,7 @@ type Period = "week" | "month" | "year";
 type Topic = "spending" | "income";
 
 type StreamItem =
-  | { kind: "assistant-text"; id: string; text: string; sources?: ChatSource[] }
+  | { kind: "assistant-text"; id: string; text: string; sources?: ChatSource[]; goalProposal?: GoalProposal | null }
   | { kind: "user-text"; id: string; text: string }
   | { kind: "topic-card"; id: string; topic: Topic; period: Period };
 
@@ -46,7 +49,7 @@ export function HomePage() {
   const { token, signOut } = useSession();
   const [netWorth, setNetWorth] = useState<number | null>(null);
   const [monthRollup, setMonthRollup] = useState<PeriodRollup | null>(null);
-  const [goalProgress, setGoalProgress] = useState<GoalProgress | null>(null);
+  const [goals, setGoals] = useState<GoalProgress[]>([]);
   const [items, setItems] = useState<StreamItem[]>([{ kind: "assistant-text", id: makeId(), text: GREETING }]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -65,9 +68,15 @@ export function HomePage() {
     if (!token) return;
     fetchNetWorth(token).then((nw) => setNetWorth(nw.current));
     fetchRollup(token, "month").then(setMonthRollup);
-    fetchGoalProgress(token).then((progress) => setGoalProgress(progress.type ? progress : null));
+    fetchGoalProgress(token).then((progress) => setGoals(progress.goals ?? []));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  async function refreshGoalProgress() {
+    if (!token) return;
+    const progress = await fetchGoalProgress(token);
+    setGoals(progress.goals ?? []);
+  }
 
   useEffect(() => {
     streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight, behavior: "smooth" });
@@ -92,7 +101,17 @@ export function HomePage() {
     try {
       const response = await sendChatMessage(token, text, conversationId);
       setConversationId(response.conversation_id);
-      pushItem({ kind: "assistant-text", id: makeId(), text: response.reply, sources: response.sources });
+      pushItem({
+        kind: "assistant-text",
+        id: makeId(),
+        text: response.reply,
+        sources: response.sources,
+        goalProposal: resolveGoalProposal({
+          userText: text,
+          assistantText: response.reply,
+          apiProposal: response.goal_proposal,
+        }),
+      });
       speakReply(response.reply);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Bankr couldn't respond. Try again.");
@@ -119,11 +138,23 @@ export function HomePage() {
     try {
       const messages = await fetchConversation(token, id);
       setItems(
-        messages.map((m) =>
-          m.role === "user"
-            ? { kind: "user-text" as const, id: makeId(), text: m.content }
-            : { kind: "assistant-text" as const, id: makeId(), text: m.content, sources: m.sources },
-        ),
+        messages.map((m, index) => {
+          if (m.role === "user") {
+            return { kind: "user-text" as const, id: makeId(), text: m.content };
+          }
+          const previous = messages[index - 1];
+          return {
+            kind: "assistant-text" as const,
+            id: makeId(),
+            text: m.content,
+            sources: m.sources,
+            goalProposal: resolveGoalProposal({
+              userText: previous?.role === "user" ? previous.content : "",
+              assistantText: m.content,
+              apiProposal: m.goal_proposal,
+            }),
+          };
+        }),
       );
       setConversationId(id);
     } catch (err) {
@@ -179,7 +210,7 @@ export function HomePage() {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        <GoalSidebar goalProgress={goalProgress} />
+        <GoalSidebar goals={goals} />
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <div ref={streamRef} className="flex-1 space-y-4 overflow-y-auto px-6 py-6">
@@ -191,13 +222,20 @@ export function HomePage() {
                 onIncomeClick={() => setStatTileGroup("income")}
                 onSpendingClick={() => setStatTileGroup("spending")}
               />
-              {goalProgress && (
-                <div className="lg:hidden">
-                  <GoalPaceTrack progress={goalProgress} />
+              {goals.length > 0 && (
+                <div className="flex flex-col gap-3 lg:hidden">
+                  {goals.map((goal) => (
+                    <GoalPaceTrack key={goal.id} progress={goal} />
+                  ))}
                 </div>
               )}
               {items.map((item) => (
-                <StreamEntry key={item.id} item={item} token={token} />
+                <StreamEntry
+                  key={item.id}
+                  item={item}
+                  token={token}
+                  onGoalCreated={refreshGoalProgress}
+                />
               ))}
               {isSending && (
                 <div className="flex justify-start">
@@ -269,11 +307,19 @@ export function HomePage() {
   );
 }
 
-function StreamEntry({ item, token }: { item: StreamItem; token: string | null }) {
+function StreamEntry({
+  item,
+  token,
+  onGoalCreated,
+}: {
+  item: StreamItem;
+  token: string | null;
+  onGoalCreated: () => void | Promise<void>;
+}) {
   switch (item.kind) {
     case "assistant-text":
       return (
-        <div className="flex flex-col items-start gap-1">
+        <div className="flex flex-col items-start gap-2">
           <div className="max-w-[85%] rounded-2xl rounded-bl-sm border-l-2 border-gold bg-surface px-4 py-2.5 text-sm leading-relaxed text-ink">
             <AssistantText text={item.text} />
           </div>
@@ -285,6 +331,13 @@ function StreamEntry({ item, token }: { item: StreamItem; token: string | null }
               <SourceIcon />
               <span>{item.sources.map((s) => s.label).join(" · ")}</span>
             </div>
+          )}
+          {item.goalProposal && (
+            <GoalProposalCard
+              token={token}
+              proposal={item.goalProposal}
+              onCreated={onGoalCreated}
+            />
           )}
         </div>
       );

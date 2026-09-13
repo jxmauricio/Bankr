@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Category, Goal, LinkedAccount, NetWorthSnapshot, Transaction
 from app.integrations.web_search import WebSearchClient
+from app.services.goal_service import GOAL_TYPES, MAX_ACTIVE_GOALS, list_active_goals
 
 PERIOD_DAYS = {"week": 7, "month": 30, "year": 365}
 
@@ -83,18 +84,10 @@ def get_income_by_period(db: Session, user_id: UUID, period: str = "month") -> d
     return {"period": period, "total_income": float(total or 0)}
 
 
-def get_goal_progress(db: Session, user_id: UUID) -> dict:
-    goal = (
-        db.query(Goal)
-        .filter(Goal.user_id == user_id, Goal.status == "active")
-        .order_by(Goal.created_at.desc())
-        .first()
-    )
-    if goal is None:
-        return {"goal": None, "message": "No active goal set."}
-
+def _progress_for(goal: Goal) -> dict:
     progress_fraction = float(goal.current_progress_amount) / float(goal.target_amount) if goal.target_amount else 0
     result = {
+        "id": str(goal.id),
         "type": goal.type,
         "target_amount": float(goal.target_amount),
         "current_progress_amount": float(goal.current_progress_amount),
@@ -112,6 +105,93 @@ def get_goal_progress(db: Session, user_id: UUID) -> dict:
         result["on_pace"] = progress_fraction >= expected_fraction
 
     return result
+
+
+def get_goal_progress(db: Session, user_id: UUID) -> dict:
+    goals = list_active_goals(db, user_id)
+    payloads = [_progress_for(goal) for goal in goals]
+    result: dict = {
+        "goals": payloads,
+        "active_count": len(payloads),
+        "max_goals": MAX_ACTIVE_GOALS,
+    }
+    if not payloads:
+        result["message"] = "No active goal set."
+    return result
+
+
+def _parse_goal_proposal(goal_type: str | None, target_amount, target_date: str | None) -> dict:
+    """Shared validation for propose_goal. Returns either {"error": ...} or
+    a clean {type, target_amount, target_date} dict the UI can POST to /goals."""
+    if goal_type not in GOAL_TYPES:
+        return {"error": f"type must be one of {sorted(GOAL_TYPES)}"}
+    try:
+        amount = float(target_amount)
+    except (TypeError, ValueError):
+        return {"error": "target_amount must be a number"}
+    if amount <= 0:
+        return {"error": "target_amount must be positive"}
+
+    parsed_date = None
+    if target_date:
+        try:
+            parsed_date = date.fromisoformat(str(target_date))
+        except ValueError:
+            return {"error": "target_date must be YYYY-MM-DD"}
+
+    return {
+        "type": goal_type,
+        "target_amount": amount,
+        "target_date": parsed_date.isoformat() if parsed_date else None,
+    }
+
+
+def propose_goal(
+    db: Session,
+    user_id: UUID,
+    type: str | None = None,
+    target_amount=None,
+    target_date: str | None = None,
+    goal_type: str | None = None,
+    **_extra,
+) -> dict:
+    """Draft a goal for the user to confirm in the chat UI.
+
+    Does not write -- Bankr only creates a Goal row after the user taps
+    Set goal on the card (POST /goals). Bankr tracks up to MAX_ACTIVE_GOALS
+    active goals; this tool reports remaining slots so the UI can add
+    another card on the left instead of replacing.
+    """
+    parsed = _parse_goal_proposal(type or goal_type, target_amount, target_date)
+    if "error" in parsed:
+        return parsed
+
+    existing = list_active_goals(db, user_id)
+    at_limit = len(existing) >= MAX_ACTIVE_GOALS
+    proposal = {
+        **parsed,
+        "replaces_existing": False,
+        "at_limit": at_limit,
+        "active_count": len(existing),
+        "slots_remaining": max(MAX_ACTIVE_GOALS - len(existing), 0),
+    }
+    if at_limit:
+        return {
+            "status": "at_limit",
+            "proposal": proposal,
+            "message": (
+                f"The user already has {MAX_ACTIVE_GOALS} active goals, the maximum. "
+                "Do not tell them to confirm a new one."
+            ),
+        }
+    return {
+        "status": "proposed",
+        "proposal": proposal,
+        "message": (
+            "Drafted a goal for the user to confirm in the app. "
+            "Do not claim it is already created."
+        ),
+    }
 
 
 def get_recent_transactions(db: Session, user_id: UUID, limit: int = 20) -> dict:

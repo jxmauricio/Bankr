@@ -35,8 +35,9 @@ def detect_candidates(db: Session, user_id: UUID) -> list[InsightCandidate]:
     candidates: list[InsightCandidate] = []
 
     goal_progress = tools.get_goal_progress(db, user_id)
-    if goal_progress.get("goal") is not False and goal_progress.get("on_pace") is False:
-        candidates.append(InsightCandidate(type="goal_drift", data=goal_progress))
+    for goal in goal_progress.get("goals", []):
+        if goal.get("on_pace") is False:
+            candidates.append(InsightCandidate(type="goal_drift", data=goal))
 
     unusual = tools.get_unusual_transactions(db, user_id)
     for txn in unusual.get("unusual_transactions", []):

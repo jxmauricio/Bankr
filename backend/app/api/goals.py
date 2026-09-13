@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.db.base import get_db
 from app.db.models import User
-from app.services.goal_service import GOAL_TYPES, create_goal
+from app.services.goal_service import GOAL_TYPES, MAX_ACTIVE_GOALS, GoalLimitReached, create_goal
 
 router = APIRouter(prefix="/goals", tags=["goals"])
 
@@ -39,7 +39,13 @@ def set_goal(
     if body.target_amount <= 0:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "target_amount must be positive")
 
-    goal = create_goal(db, user.id, body.type, body.target_amount, body.target_date)
+    try:
+        goal = create_goal(db, user.id, body.type, body.target_amount, body.target_date)
+    except GoalLimitReached:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"You can have up to {MAX_ACTIVE_GOALS} active goals.",
+        )
     return GoalResponse(
         id=str(goal.id),
         type=goal.type,

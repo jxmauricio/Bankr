@@ -58,8 +58,22 @@ def test_create_goal_then_read_progress(client):
     assert create_response.json()["starting_amount"] == 2500.0
 
     progress = client.get("/dashboard/goal-progress").json()
-    assert progress["type"] == "save_amount"
-    assert progress["current_progress_amount"] == 0.0  # no new sync since goal creation
+    assert progress["goals"][0]["type"] == "save_amount"
+    assert progress["goals"][0]["current_progress_amount"] == 0.0  # no new sync since goal creation
+
+
+def test_create_goal_keeps_existing_and_rejects_a_sixth(client):
+    _with_fake_aggregator(client)
+    client.post("/linked-accounts", json={"public_token": "public-fake-token"})
+
+    for i in range(5):
+        response = client.post("/goals", json={"type": "save_amount", "target_amount": 1000.0 + i})
+        assert response.status_code == 200
+
+    sixth = client.post("/goals", json={"type": "save_amount", "target_amount": 50.0})
+    assert sixth.status_code == 422
+    progress = client.get("/dashboard/goal-progress").json()
+    assert progress["active_count"] == 5
 
 
 def test_create_goal_rejects_invalid_type(client):
