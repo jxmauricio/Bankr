@@ -153,10 +153,6 @@ export function HomePage() {
     await ask(text);
   }
 
-  function showTopic(topic: Topic) {
-    pushItem({ kind: "topic-card", id: makeId(), topic, period: "month" });
-  }
-
   async function loadConversation(id: string, { silent = false }: { silent?: boolean } = {}) {
     if (!token) return;
     if (!silent) setError(null);
@@ -287,13 +283,6 @@ export function HomePage() {
                 </p>
               )}
             </div>
-          </div>
-
-          <div className="mx-auto flex w-full max-w-2xl shrink-0 flex-wrap gap-2 px-6 pb-3">
-            <Chip label="Spending this month" onClick={() => showTopic("spending")} />
-            <Chip label="What am I spending the most on?" onClick={() => ask("Break down my spending this month by category. What am I spending the most on?")} />
-            <Chip label="Income this month" onClick={() => showTopic("income")} />
-            <Chip label="Am I on pace for my goal?" onClick={() => ask("Am I on pace for my goal?")} />
           </div>
 
           <form
@@ -483,18 +472,6 @@ function TopicCard({
         </div>
       )}
     </div>
-  );
-}
-
-function Chip({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-full border border-border px-3.5 py-1.5 text-sm text-ink-soft transition-colors hover:border-accent hover:bg-accent-soft hover:text-ink cursor-pointer"
-    >
-      {label}
-    </button>
   );
 }
 
