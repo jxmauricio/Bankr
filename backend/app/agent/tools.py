@@ -13,75 +13,179 @@ claude_agent.py has one single dispatch surface to reason about.
 import ast
 import operator
 from datetime import date, timedelta
+from functools import wraps
 from statistics import mean, pstdev
 from uuid import UUID
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.models import Category, Goal, LinkedAccount, NetWorthSnapshot, Transaction
 from app.integrations.web_search import WebSearchClient
+from app.services import money_query as mq
 from app.services.goal_service import GOAL_TYPES, MAX_ACTIVE_GOALS, list_active_goals
+from app.services.sync_service import LIABILITY_ACCOUNT_TYPES
 
-PERIOD_DAYS = {"week": 7, "month": 30, "year": 365}
+
+def _grounded(fn):
+    """Money tools: turn a bad window/category into an error result the
+    model can recover from (it gets the valid options back), and stamp
+    every result with how fresh the underlying data is."""
+
+    @wraps(fn)
+    def wrapper(db: Session, user_id: UUID, *args, **kwargs) -> dict:
+        try:
+            result = fn(db, user_id, *args, **kwargs)
+        except mq.QueryError as e:
+            return {"error": str(e), **e.extra}
+        result["data_as_of"] = mq.data_freshness(db, user_id)
+        return result
+
+    return wrapper
 
 
+def _window(db: Session, user_id: UUID, window=None, start=None, end=None) -> mq.Window:
+    return mq.resolve_window(mq.today_for_user(db, user_id), window, start, end)
+
+
+def _category(db: Session, category: str | None) -> mq.ResolvedCategory | None:
+    return mq.resolve_category(db, category) if category else None
+
+
+@_grounded
 def get_net_worth(db: Session, user_id: UUID) -> dict:
-    snapshot = (
-        db.query(NetWorthSnapshot)
-        .filter(NetWorthSnapshot.user_id == user_id)
-        .order_by(NetWorthSnapshot.date.desc())
-        .first()
-    )
-    if snapshot is None:
-        return {"net_worth": None, "as_of": None, "message": "No net worth snapshot yet."}
-    return {
-        "net_worth": float(snapshot.net_worth),
-        "total_assets": float(snapshot.total_assets),
-        "total_liabilities": float(snapshot.total_liabilities),
-        "as_of": snapshot.date.isoformat(),
+    """Net worth as the visible sum of every linked account's balance, so
+    the user can see exactly which accounts it's made of."""
+    accounts = db.query(LinkedAccount).filter(LinkedAccount.user_id == user_id).all()
+    if not accounts:
+        return {"net_worth": None, "message": "No linked accounts yet."}
+
+    if all(a.current_balance is None for a in accounts):
+        # Accounts synced before per-account balances were stored.
+        snapshot = (
+            db.query(NetWorthSnapshot)
+            .filter(NetWorthSnapshot.user_id == user_id)
+            .order_by(NetWorthSnapshot.date.desc())
+            .first()
+        )
+        if snapshot is None:
+            return {"net_worth": None, "message": "No balances synced yet."}
+        return {
+            "net_worth": float(snapshot.net_worth),
+            "total_assets": float(snapshot.total_assets),
+            "total_liabilities": float(snapshot.total_liabilities),
+            "message": "Per-account balances aren't available until the next sync.",
+        }
+
+    included, excluded = [], []
+    total_assets = total_liabilities = 0.0
+    for a in sorted(accounts, key=lambda a: (a.institution_name, a.account_type, a.mask or "")):
+        is_liability = a.account_type in LIABILITY_ACCOUNT_TYPES
+        entry = {
+            "institution": a.institution_name,
+            "name": a.name,
+            "mask": a.mask,
+            "type": a.account_type,
+            "kind": "liability" if is_liability else "asset",
+            "balance": round(float(a.current_balance or 0), 2),
+        }
+        if a.status != "active":
+            excluded.append({**entry, "reason": f"account is {a.status}; reconnect to include it"})
+            continue
+        included.append(entry)
+        if is_liability:
+            total_liabilities += entry["balance"]
+        else:
+            total_assets += entry["balance"]
+
+    result = {
+        "net_worth": round(total_assets - total_liabilities, 2),
+        "total_assets": round(total_assets, 2),
+        "total_liabilities": round(total_liabilities, 2),
+        "accounts": included,
     }
+    if excluded:
+        result["excluded_accounts"] = excluded
+    return result
 
 
-def get_spending_by_category(db: Session, user_id: UUID, period: str = "month") -> dict:
-    """Returns positive amounts (money spent), even though expense
-    transactions are stored as negative (money out) internally.
-
-    Only sums outflows (amount < 0). Without that filter, a refund tagged
-    under an expense category (e.g. an airline refund under Transportation)
-    can net a category positive, and abs() of that net would misreport a
-    net *gain* as spending -- confirmed against real Plaid sandbox data."""
-    since = date.today() - timedelta(days=PERIOD_DAYS.get(period, 30))
-    rows = (
-        db.query(Category.name, func.sum(Transaction.amount))
-        .join(Transaction, Transaction.bankr_category_id == Category.id)
-        .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
-        .filter(
-            LinkedAccount.user_id == user_id,
-            Category.type == "expense",
-            Transaction.amount < 0,
-            Transaction.date >= since,
-        )
-        .group_by(Category.name)
-        .all()
+@_grounded
+def get_spending(
+    db: Session,
+    user_id: UUID,
+    window: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    category: str | None = None,
+    group_by: str | None = None,
+    top_n: int | None = None,
+    **_extra,
+) -> dict:
+    return mq.spend_query(
+        db, user_id, _window(db, user_id, window, start, end), _category(db, category), group_by, top_n
     )
-    return {"period": period, "by_category": {name: abs(float(total)) for name, total in rows}}
 
 
-def get_income_by_period(db: Session, user_id: UUID, period: str = "month") -> dict:
-    since = date.today() - timedelta(days=PERIOD_DAYS.get(period, 30))
-    total = (
-        db.query(func.sum(Transaction.amount))
-        .join(Category, Transaction.bankr_category_id == Category.id)
-        .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
-        .filter(
-            LinkedAccount.user_id == user_id,
-            Category.type == "income",
-            Transaction.date >= since,
+@_grounded
+def compare_spending(
+    db: Session,
+    user_id: UUID,
+    current_window: str = "this_month",
+    previous_window: str | None = None,
+    category: str | None = None,
+    current_start: str | None = None,
+    current_end: str | None = None,
+    previous_start: str | None = None,
+    previous_end: str | None = None,
+    **_extra,
+) -> dict:
+    """previous_window defaults to the period before a this_* window
+    (this_month -> last_month)."""
+    if previous_window is None and not previous_start:
+        previous_window = {"this_week": "last_week", "this_month": "last_month", "this_year": "last_year"}.get(
+            current_window
         )
-        .scalar()
+        if previous_window is None:
+            raise mq.QueryError("give previous_window (or previous_start/previous_end) to compare against")
+    return mq.compare_spend(
+        db,
+        user_id,
+        _window(db, user_id, current_window, current_start, current_end),
+        _window(db, user_id, previous_window, previous_start, previous_end),
+        _category(db, category),
     )
-    return {"period": period, "total_income": float(total or 0)}
+
+
+@_grounded
+def get_cash_flow(
+    db: Session, user_id: UUID, window: str | None = None, start: str | None = None, end: str | None = None, **_extra
+) -> dict:
+    return mq.cash_flow(db, user_id, _window(db, user_id, window, start, end))
+
+
+@_grounded
+def find_transactions(
+    db: Session,
+    user_id: UUID,
+    window: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    category: str | None = None,
+    merchant: str | None = None,
+    min_amount: float | None = None,
+    max_amount: float | None = None,
+    limit: int = 50,
+    **_extra,
+) -> dict:
+    return mq.find_transactions(
+        db,
+        user_id,
+        _window(db, user_id, window, start, end),
+        _category(db, category),
+        merchant,
+        min_amount,
+        max_amount,
+        limit,
+    )
 
 
 def _progress_for(goal: Goal) -> dict:
@@ -219,12 +323,22 @@ def get_recent_transactions(db: Session, user_id: UUID, limit: int = 20) -> dict
 
 
 def get_unusual_transactions(db: Session, user_id: UUID, stddev_threshold: float = 2.5) -> dict:
-    """Flag recent transactions that are outliers vs. the user's typical transaction size."""
+    """Flag recent charges that are outliers vs. the user's typical charge.
+
+    Baseline is spending outflows only -- paychecks, rent-sized transfers
+    and card payments would otherwise inflate the spread so much that no
+    ordinary purchase could ever look unusual."""
     since = date.today() - timedelta(days=90)
     rows = (
         db.query(Transaction)
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
-        .filter(LinkedAccount.user_id == user_id, Transaction.date >= since)
+        .join(Category, Transaction.bankr_category_id == Category.id)
+        .filter(
+            LinkedAccount.user_id == user_id,
+            Category.type == "expense",
+            Transaction.amount < 0,
+            Transaction.date >= since,
+        )
         .all()
     )
     amounts = [float(t.amount) for t in rows]

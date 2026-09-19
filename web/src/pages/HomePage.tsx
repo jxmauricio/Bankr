@@ -7,12 +7,14 @@ import {
   fetchNetWorth,
   fetchRollup,
   fetchSpending,
+  resyncAccounts,
   sendChatMessage,
   type ChatSource,
   type GoalProgress,
   type GoalProposal,
   type ItemizedTransactions,
   type PeriodRollup,
+  type SourceQuery,
 } from "../lib/api";
 import { resolveGoalProposal } from "../lib/goalProposal";
 import { GoalSidebar } from "../components/GoalSidebar";
@@ -27,6 +29,7 @@ import { useSession } from "../lib/session";
 import { useVoiceMode } from "../lib/useVoiceMode";
 import { formatDate, formatMoney } from "../lib/format";
 import { AssistantText } from "../components/AssistantText";
+import { RowAmount } from "../components/TransactionSearch";
 
 const GREETING = "Ask me anything about your money — what you've spent, what's coming in, or whether you're on pace for your goal.";
 // Not scoped to a user/token: a different account landing on a stale id
@@ -57,6 +60,8 @@ export function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [showFlow, setShowFlow] = useState(false);
   const [statTileGroup, setStatTileGroup] = useState<Topic | null>(null);
+  const [sourceQuery, setSourceQuery] = useState<SourceQuery | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const streamRef = useRef<HTMLDivElement>(null);
   const { voiceMode, voiceState, toggle: toggleVoiceMode, speakReply } = useVoiceMode({
     onFinalTranscript: (text) => ask(text),
@@ -64,13 +69,33 @@ export function HomePage() {
     onError: setError,
   });
 
+  function loadStandingState() {
+    if (!token) return Promise.resolve();
+    return Promise.all([
+      fetchNetWorth(token).then((nw) => setNetWorth(nw.current)),
+      fetchRollup(token, "month").then(setMonthRollup),
+      fetchGoalProgress(token).then((progress) => setGoals(progress.goals ?? [])),
+    ]);
+  }
+
   useEffect(() => {
-    if (!token) return;
-    fetchNetWorth(token).then((nw) => setNetWorth(nw.current));
-    fetchRollup(token, "month").then(setMonthRollup);
-    fetchGoalProgress(token).then((progress) => setGoals(progress.goals ?? []));
+    loadStandingState();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  async function refreshFromBank() {
+    if (!token || isRefreshing) return;
+    setIsRefreshing(true);
+    setError(null);
+    try {
+      await resyncAccounts(token);
+      await loadStandingState();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't refresh from your bank. Try again.");
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
 
   async function refreshGoalProgress() {
     if (!token) return;
@@ -209,6 +234,15 @@ export function HomePage() {
         <TransactionSearchModal token={token} group={statTileGroup} onClose={() => setStatTileGroup(null)} />
       )}
 
+      {sourceQuery && token && (
+        <TransactionSearchModal
+          token={token}
+          group="spending"
+          query={sourceQuery}
+          onClose={() => setSourceQuery(null)}
+        />
+      )}
+
       <div className="flex flex-1 overflow-hidden">
         <GoalSidebar goals={goals} />
 
@@ -221,6 +255,8 @@ export function HomePage() {
                 onNetWorthClick={() => setShowFlow(true)}
                 onIncomeClick={() => setStatTileGroup("income")}
                 onSpendingClick={() => setStatTileGroup("spending")}
+                onRefresh={refreshFromBank}
+                isRefreshing={isRefreshing}
               />
               {goals.length > 0 && (
                 <div className="flex flex-col gap-3 lg:hidden">
@@ -235,6 +271,7 @@ export function HomePage() {
                   item={item}
                   token={token}
                   onGoalCreated={refreshGoalProgress}
+                  onOpenSource={setSourceQuery}
                 />
               ))}
               {isSending && (
@@ -254,6 +291,7 @@ export function HomePage() {
 
           <div className="mx-auto flex w-full max-w-2xl shrink-0 flex-wrap gap-2 px-6 pb-3">
             <Chip label="Spending this month" onClick={() => showTopic("spending")} />
+            <Chip label="What am I spending the most on?" onClick={() => ask("Break down my spending this month by category. What am I spending the most on?")} />
             <Chip label="Income this month" onClick={() => showTopic("income")} />
             <Chip label="Am I on pace for my goal?" onClick={() => ask("Am I on pace for my goal?")} />
           </div>
@@ -311,10 +349,12 @@ function StreamEntry({
   item,
   token,
   onGoalCreated,
+  onOpenSource,
 }: {
   item: StreamItem;
   token: string | null;
   onGoalCreated: () => void | Promise<void>;
+  onOpenSource: (query: SourceQuery) => void;
 }) {
   switch (item.kind) {
     case "assistant-text":
@@ -325,11 +365,27 @@ function StreamEntry({
           </div>
           {item.sources && item.sources.length > 0 && (
             <div
-              className="flex items-center gap-1 px-1 text-[11px] text-ink-faint"
+              className="flex flex-wrap items-center gap-x-1 gap-y-0.5 px-1 text-[11px] text-ink-faint"
               title="Grounded in your real account data via these lookups"
             >
               <SourceIcon />
-              <span>{item.sources.map((s) => s.label).join(" · ")}</span>
+              {item.sources.map((source, i) => (
+                <span key={i} className="flex items-center gap-1">
+                  {i > 0 && <span aria-hidden>·</span>}
+                  {source.query ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenSource(source.query!)}
+                      title="See the transactions behind this number"
+                      className="underline decoration-dotted underline-offset-2 transition-colors hover:text-accent-strong cursor-pointer"
+                    >
+                      {source.label}
+                    </button>
+                  ) : (
+                    <span>{source.label}</span>
+                  )}
+                </span>
+              ))}
             </div>
           )}
           {item.goalProposal && (
@@ -379,7 +435,7 @@ function TopicCard({
     <div className="rounded-xl border border-border bg-surface p-5">
       <div className="flex items-baseline justify-between">
         <h3 className="text-sm font-medium capitalize text-ink-soft">
-          {topic} · {period}
+          {topic} · {rollup?.label ?? period}
         </h3>
         <div className="flex rounded-full border border-border bg-bg p-0.5 text-xs">
           {(["week", "month", "year"] as const).map((p) => (
@@ -415,7 +471,7 @@ function TopicCard({
                     {entry.is_pending && " · Pending"}
                   </div>
                 </div>
-                <span className="font-tabular shrink-0 pl-3 text-ink">{formatMoney(Math.abs(entry.amount))}</span>
+                <RowAmount amount={entry.amount} group={topic} />
               </li>
             ))}
           </ul>

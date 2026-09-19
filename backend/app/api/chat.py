@@ -18,9 +18,20 @@ class ChatRequest(BaseModel):
     conversation_id: UUID | None = None
 
 
+class SourceQuery(BaseModel):
+    """The exact transaction filter behind a figure, so the client can show
+    the rows that add up to it (see claude_agent._source_query)."""
+
+    start: str
+    end: str
+    category: str | None = None
+    merchant: str | None = None
+
+
 class ChatSource(BaseModel):
     tool: str
     label: str
+    query: SourceQuery | None = None
 
 
 class GoalProposal(BaseModel):
@@ -56,7 +67,13 @@ class ConversationMessage(BaseModel):
 
 
 def _public_sources(raw: list[dict] | None) -> list[dict]:
-    return [{"tool": entry["tool"], "label": entry["label"]} for entry in (raw or [])]
+    public = []
+    for entry in raw or []:
+        source = {"tool": entry["tool"], "label": entry["label"]}
+        if entry.get("query"):
+            source["query"] = entry["query"]
+        public.append(source)
+    return public
 
 
 def _goal_proposal(raw: list[dict] | None) -> dict | None:

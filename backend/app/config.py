@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     session_jwt_secret: str
     session_jwt_algorithm: str = "HS256"
     session_jwt_ttl_seconds: int = 2592000
+    # Lifetime of tokens minted by POST /auth/mcp-token for external MCP
+    # clients. Long by default (1 year) since they're pasted into a client
+    # config once; re-mint to rotate.
+    mcp_token_ttl_seconds: int = 31536000
 
     # Fernet key (Fernet.generate_key()) used to encrypt aggregator access
     # tokens at rest. Dev-only placeholder -- swap for a secrets-manager-backed
@@ -23,7 +27,15 @@ class Settings(BaseSettings):
     plaid_client_id: str = ""
     plaid_secret: str = ""
     plaid_env: str = "sandbox"  # sandbox | production
-    plaid_webhook_secret: str = ""
+    # No PLAID_WEBHOOK_SECRET setting: unlike most webhook senders, Plaid
+    # doesn't sign with a static shared secret. It signs with a JWT whose
+    # public key is fetched live via webhook_verification_key_get using
+    # plaid_client_id/plaid_secret above -- see
+    # PlaidClient.verify_webhook_signature.
+    # Public URL for POST /webhooks/plaid, attached to every newly-linked
+    # Item. Blank is a valid, fully-functional choice (sync still runs via
+    # the Refresh button and on link) -- see backend/README.md "Plaid webhooks".
+    plaid_webhook_url: str = ""
 
     # Which backend app/agent/claude_agent.py's tool-use loop talks to (see
     # app/agent/agent_client.py). "openrouter" is the default -- routes to
@@ -64,6 +76,10 @@ class Settings(BaseSettings):
     # web_search tool returns a clear error result instead of live results,
     # same "degrade gracefully" pattern as the agent providers above.
     brave_search_api_key: str = ""
+
+    # Where "today" / "this month" / "last week" are anchored for a user
+    # whose client hasn't reported a timezone yet (see User.timezone).
+    default_timezone: str = "America/New_York"
 
     apns_key_id: str = ""
     apns_team_id: str = ""

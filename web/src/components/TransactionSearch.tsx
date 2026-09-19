@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ItemizedItem } from "../lib/api";
-import { formatDate, formatMoney } from "../lib/format";
+import { describeRowAmount, formatDate } from "../lib/format";
 
 /**
  * Search box + filtered transaction list, shared by the sankey diagram's
@@ -38,13 +38,19 @@ export function TransactionSearch({ items, group }: { items: ItemizedItem[]; gro
                 <div className="text-xs text-ink-faint">
                   {formatDate(item.date)} {item.category && `· ${item.category}`}
                   {item.is_pending && " · Pending"}
+                  {describeRowAmount(item.amount, group).isCredit && " · Refund"}
                 </div>
               </div>
-              <span className="font-tabular shrink-0 pl-3 text-ink">{formatMoney(Math.abs(item.amount))}</span>
+              <RowAmount amount={item.amount} group={group} />
             </li>
           ))}
         </ul>
       )}
     </div>
   );
+}
+
+export function RowAmount({ amount, group }: { amount: number; group: "income" | "spending" }) {
+  const { text, isCredit } = describeRowAmount(amount, group);
+  return <span className={`font-tabular shrink-0 pl-3 ${isCredit ? "text-positive" : "text-ink"}`}>{text}</span>;
 }

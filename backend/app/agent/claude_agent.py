@@ -30,7 +30,9 @@ from sqlalchemy.orm import Session
 
 from app.agent import tools
 from app.agent.agent_client import ToolSpec, build_agent_client
+from app.db.seed_categories import DEFAULT_CATEGORIES
 from app.integrations.web_search import build_web_search_client
+from app.services import money_query as mq
 
 SYSTEM_PROMPT = """You are Bankr's financial insights assistant. You help young \
 professionals understand their spending, income, and progress toward up to \
@@ -74,32 +76,113 @@ created. New goals are added alongside existing ones (up to five), they do \
 not replace. If propose_goal says the user is at the limit, say so. If they \
 are only asking how existing goals are going, call get_goal_progress instead.
 
+Money answers must be exact and checkable, because the user should never \
+need to open their bank's app to verify one:
+- Never work out dates yourself. Pass a named window (this_month, \
+last_month, last_week, ...) or explicit start/end dates to the tool, and \
+state the resolved dates it returns in your answer ("Sep 7–13"), so the \
+user knows exactly what period the number covers.
+- Pick the most specific category that matches what they said. Gas for the \
+car is "Gas", not "Transportation" and never "Utilities". Eating out is \
+"Dining". For "what am I spending on", use get_spending with \
+group_by="category".
+- For "this month vs last month", use compare_spending. When the result \
+includes previous_to_same_point, the current month isn't over yet: lead \
+with that like-for-like comparison and mention the full last month too.
+- If transaction_count is 0, say you found no transactions in that window \
+rather than implying they spent nothing. If pending_amount is non-zero, \
+say how much of the total is still pending. If refunds are non-zero, \
+mention that the total is net of them.
+- If a tool returns an error with did_you_mean or valid options, retry with \
+one of those instead of giving up or guessing.
+
 Write in plain conversational prose, 2-4 sentences, like a text message from \
 a sharp friend -- never markdown. No headers, no bold/italic asterisks, no \
 bullet or numbered lists, no emoji. Lead with the answer, not a preamble \
 ("Let me check..."). Weave numbers into the sentence itself instead of \
 listing them out one per line."""
 
+_SPEND_CATEGORIES = ", ".join(name for name, type_, _ in DEFAULT_CATEGORIES if type_ == "expense")
+_WINDOW_PROPS = {
+    "window": {
+        "type": "string",
+        "enum": list(mq.NAMED_WINDOWS),
+        "description": "Named date window, resolved in the user's timezone. Weeks run Monday-Sunday. "
+        "Default this_month.",
+    },
+    "start": {"type": "string", "description": "Explicit start date YYYY-MM-DD (overrides window)."},
+    "end": {"type": "string", "description": "Explicit end date YYYY-MM-DD, inclusive. Defaults to today."},
+}
+_CATEGORY_PROP = {
+    "type": "string",
+    "description": f"Spending category: one of {_SPEND_CATEGORIES}. Everyday words also work "
+    "(\"eating out\", \"fuel\"). A parent category includes its subcategories (Dining includes Coffee). "
+    "Omit for all spending.",
+}
+
 TOOL_DEFINITIONS = [
     ToolSpec(
         name="get_net_worth",
-        description="Get the user's most recent net worth snapshot (total assets, liabilities, net worth).",
+        description="Get the user's net worth right now: total assets, total liabilities, and the balance of "
+        "every linked account that makes it up.",
         parameters={"type": "object", "properties": {}},
     ),
     ToolSpec(
-        name="get_spending_by_category",
-        description="Get the user's spending broken down by category for a given period.",
+        name="get_cash_flow",
+        description="Income, spending, and the gap between them (net) for a date window. Transfers between "
+        "the user's own accounts and credit-card payments count as neither.",
+        parameters={"type": "object", "properties": _WINDOW_PROPS},
+    ),
+    ToolSpec(
+        name="get_spending",
+        description="How much the user spent in a date window, optionally for one category, optionally broken "
+        "down by category, subcategory, or merchant. Totals are net of refunds and include pending charges "
+        "(reported separately).",
         parameters={
             "type": "object",
-            "properties": {"period": {"type": "string", "enum": ["week", "month", "year"]}},
+            "properties": {
+                **_WINDOW_PROPS,
+                "category": _CATEGORY_PROP,
+                "group_by": {"type": "string", "enum": ["category", "subcategory", "merchant"]},
+                "top_n": {"type": "integer", "description": "With group_by: keep the N biggest groups, roll up the rest."},
+            },
         },
     ),
     ToolSpec(
-        name="get_income_by_period",
-        description="Get the user's total income for a given period.",
+        name="compare_spending",
+        description="Compare spending between two date windows, optionally for one category, e.g. groceries "
+        "this month vs last month. Returns both totals plus the exact difference and percent change.",
         parameters={
             "type": "object",
-            "properties": {"period": {"type": "string", "enum": ["week", "month", "year"]}},
+            "properties": {
+                "category": _CATEGORY_PROP,
+                "current_window": {"type": "string", "enum": list(mq.NAMED_WINDOWS), "description": "Default this_month."},
+                "previous_window": {
+                    "type": "string",
+                    "enum": list(mq.NAMED_WINDOWS),
+                    "description": "Defaults to the period before current_window (this_month -> last_month).",
+                },
+                "current_start": {"type": "string"},
+                "current_end": {"type": "string"},
+                "previous_start": {"type": "string"},
+                "previous_end": {"type": "string"},
+            },
+        },
+    ),
+    ToolSpec(
+        name="find_transactions",
+        description="List the individual spending transactions behind a figure (negative = money out, "
+        "positive = refund), filtered by window, category, merchant name, and/or charge size.",
+        parameters={
+            "type": "object",
+            "properties": {
+                **_WINDOW_PROPS,
+                "category": _CATEGORY_PROP,
+                "merchant": {"type": "string", "description": "Case-insensitive substring of the merchant name."},
+                "min_amount": {"type": "number", "description": "Minimum charge size in dollars."},
+                "max_amount": {"type": "number", "description": "Maximum charge size in dollars."},
+                "limit": {"type": "integer", "description": "Default 50."},
+            },
         },
     ),
     ToolSpec(
@@ -180,8 +263,10 @@ TOOL_DEFINITIONS = [
 
 _TOOL_DISPATCH = {
     "get_net_worth": lambda db, user_id, **kwargs: tools.get_net_worth(db, user_id),
-    "get_spending_by_category": tools.get_spending_by_category,
-    "get_income_by_period": tools.get_income_by_period,
+    "get_cash_flow": tools.get_cash_flow,
+    "get_spending": tools.get_spending,
+    "compare_spending": tools.compare_spending,
+    "find_transactions": tools.find_transactions,
     "get_goal_progress": lambda db, user_id, **kwargs: tools.get_goal_progress(db, user_id),
     "get_recent_transactions": tools.get_recent_transactions,
     "get_unusual_transactions": lambda db, user_id, **kwargs: tools.get_unusual_transactions(db, user_id),
@@ -196,20 +281,44 @@ _TOOL_DISPATCH = {
 # says what they looked at); calculate/web_search fold in the actual input
 # since "Calculated" alone doesn't tell you what was calculated.
 _STATIC_TOOL_LABELS = {
-    "get_net_worth": "Net worth",
     "get_goal_progress": "Goal progress",
     "get_recent_transactions": "Recent transactions",
     "get_unusual_transactions": "Unusual transactions",
 }
 
 
-def _describe_tool_call(name: str, tool_input: dict) -> str:
+def _count(n: int) -> str:
+    return f"{n} transaction{'' if n == 1 else 's'}"
+
+
+def _describe_tool_call(name: str, tool_input: dict, result: dict | None = None) -> str:
+    """Labels for money tools are built from the *result* -- the resolved
+    dates and transaction count -- so the chip under a reply says exactly
+    what the number covers ("Dining · Sep 7–13, 2026 · 5 transactions")."""
+    result = result if isinstance(result, dict) and "error" not in result else None
     if name in _STATIC_TOOL_LABELS:
         return _STATIC_TOOL_LABELS[name]
-    if name == "get_spending_by_category":
-        return f"Spending · {tool_input.get('period', 'month')}"
-    if name == "get_income_by_period":
-        return f"Income · {tool_input.get('period', 'month')}"
+    if name == "get_net_worth":
+        if result and result.get("accounts") is not None:
+            n = len(result["accounts"])
+            return f"Net worth · {n} account{'' if n == 1 else 's'}"
+        return "Net worth"
+    if name in ("get_spending", "find_transactions"):
+        what = (result or {}).get("category") or tool_input.get("category")
+        what = what or ("Transactions" if name == "find_transactions" else "Spending")
+        if name == "find_transactions" and tool_input.get("merchant"):
+            what = f"{what} · “{tool_input['merchant']}”"
+        if result is None:
+            return what
+        return f"{what} · {result['label']} · {_count(result['transaction_count'])}"
+    if name == "get_cash_flow":
+        return f"Income vs spending · {result['label']}" if result else "Income vs spending"
+    if name == "compare_spending":
+        what = (result or {}).get("category") or "Spending"
+        if result is None:
+            return f"{what} comparison"
+        previous = result.get("previous_to_same_point") or result["previous"]
+        return f"{what} · {result['current']['label']} vs {previous['label']}"
     if name == "calculate":
         return f"Calculated {tool_input.get('expression', '')}"
     if name == "web_search":
@@ -224,6 +333,29 @@ def _describe_tool_call(name: str, tool_input: dict) -> str:
         article = "an" if kind == "build_emergency_fund" else "a"
         return f"Proposed {article} {labels.get(kind, 'goal')}"
     return name
+
+
+def _source_query(name: str, tool_input: dict, result: dict) -> dict | None:
+    """The transaction filter a source chip opens, so the user can see the
+    exact rows behind a number. Only for tools whose figure is a sum of
+    spending transactions."""
+    if not isinstance(result, dict) or "error" in result:
+        return None
+    if name == "compare_spending":
+        result = result["current"]
+    elif name not in ("get_spending", "find_transactions"):
+        return None
+    return {
+        "start": result["start"],
+        "end": result["end"],
+        "category": result.get("category"),
+        "merchant": tool_input.get("merchant") if name == "find_transactions" else None,
+    }
+
+
+def _date_context(db: Session, user_id: UUID) -> str:
+    today = mq.today_for_user(db, user_id)
+    return f"\n\nToday is {today:%A}, {today:%B} {today.day}, {today.year} in the user's timezone."
 
 
 _client = build_agent_client()
@@ -243,7 +375,10 @@ def run_agent_turn(db: Session, user_id: UUID, messages: list[dict]) -> tuple[st
 
     def call_tool(name: str, tool_input: dict) -> dict:
         result = _TOOL_DISPATCH[name](db, user_id, **tool_input)
-        entry: dict = {"tool": name, "label": _describe_tool_call(name, tool_input)}
+        entry: dict = {"tool": name, "label": _describe_tool_call(name, tool_input, result)}
+        query = _source_query(name, tool_input, result)
+        if query:
+            entry["query"] = query
         if name == "propose_goal" and isinstance(result, dict) and result.get("proposal"):
             # Ride along on the source so the chat API can surface a confirm
             # card without a separate channel. Stripped from the user-facing
@@ -252,5 +387,6 @@ def run_agent_turn(db: Session, user_id: UUID, messages: list[dict]) -> tuple[st
         sources.append(entry)
         return result
 
-    reply = _client.run_turn(SYSTEM_PROMPT, TOOL_DEFINITIONS, messages, call_tool)
+    system = SYSTEM_PROMPT + _date_context(db, user_id)
+    reply = _client.run_turn(system, TOOL_DEFINITIONS, messages, call_tool)
     return reply, sources
