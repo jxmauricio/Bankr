@@ -81,7 +81,7 @@ def test_get_conversation_returns_full_history_with_sources(client, monkeypatch)
     assert messages[0]["content"] == "what's my net worth?"
     assert messages[0]["sources"] == []
     assert messages[1]["content"] == "Your net worth is $2,100."
-    assert messages[1]["sources"] == [{"tool": "get_net_worth", "label": "Net worth"}]
+    assert messages[1]["sources"] == [{"tool": "get_net_worth", "label": "Net worth", "query": None}]
 
 
 def test_get_conversation_404s_for_an_unknown_or_foreign_conversation(client):

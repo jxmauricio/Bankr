@@ -1,4 +1,3 @@
-import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -10,22 +9,11 @@ from app.auth import get_current_user
 from app.db.base import get_db
 from app.db.models import LinkedAccount, User
 from app.integrations.bank_aggregator import BankAggregatorClient
-from app.jobs.insights_job import run_insights_job
+from app.jobs.insights_job import run_insights_job_safely
 from app.services.crypto import decrypt_token
 from app.services.sync_service import sync_user_accounts
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/linked-accounts", tags=["accounts"])
-
-
-def _trigger_insights(db: Session, user_id: UUID) -> None:
-    # Best-effort: a failure phrasing insights (e.g. no OPENROUTER_API_KEY
-    # configured yet) shouldn't fail the sync response the client is waiting on.
-    try:
-        run_insights_job(db, user_id)
-    except Exception:
-        logger.exception("insights job failed for user %s", user_id)
 
 
 class LinkTokenResponse(BaseModel):
@@ -65,7 +53,7 @@ def link_account(
 ) -> LinkAccountResponse:
     access_token = aggregator.exchange_public_token(body.public_token)
     result = sync_user_accounts(db, user.id, access_token, aggregator=aggregator)
-    _trigger_insights(db, user.id)
+    run_insights_job_safely(db, user.id)
     return LinkAccountResponse(
         linked_account_count=len(result.linked_accounts),
         transactions_synced=result.transactions_synced,
@@ -95,7 +83,7 @@ def resync_all_accounts(
     if latest_result is None:
         return LinkAccountResponse(linked_account_count=0, transactions_synced=0, net_worth=0.0)
 
-    _trigger_insights(db, user.id)
+    run_insights_job_safely(db, user.id)
     return LinkAccountResponse(
         linked_account_count=len(linked_accounts),
         transactions_synced=total_transactions,

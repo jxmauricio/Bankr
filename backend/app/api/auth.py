@@ -3,7 +3,9 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
 from app.auth import (
+    get_current_user,
     hash_password,
+    issue_mcp_token,
     issue_session_token,
     verify_apple_identity_token,
     verify_password,
@@ -72,3 +74,13 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> SessionResponse:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Incorrect email or password")
 
     return SessionResponse(session_token=issue_session_token(user.id))
+
+
+class McpTokenResponse(BaseModel):
+    mcp_token: str
+
+
+@router.post("/mcp-token", response_model=McpTokenResponse)
+def create_mcp_token(user: User = Depends(get_current_user)) -> McpTokenResponse:
+    """Mint a token for connecting an external MCP client to /mcp."""
+    return McpTokenResponse(mcp_token=issue_mcp_token(user.id))

@@ -1,6 +1,6 @@
 import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { sankey, type SankeyNode } from "d3-sankey";
-import { fetchIncome, fetchSpending, type ItemizedItem } from "../lib/api";
+import { fetchIncome, fetchNetWorth, fetchSpending, type ItemizedItem, type NetWorthHistory } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { TransactionSearch } from "./TransactionSearch";
 
@@ -48,13 +48,18 @@ interface CategorySlice {
   amount: number;
 }
 
-function aggregateByCategory(items: ItemizedItem[]): CategorySlice[] {
+function aggregateByCategory(items: ItemizedItem[], group: "income" | "spending"): CategorySlice[] {
+  // Sign-aware: spending rows are negative, so a refund (positive) nets a
+  // category down instead of being added to it. Floored at zero like the
+  // backend's totals (app/services/money_query.py spend_query).
   const totals = new Map<string, number>();
   for (const item of items) {
     const key = item.category ?? "Uncategorized";
-    totals.set(key, (totals.get(key) ?? 0) + Math.abs(item.amount));
+    const amount = group === "spending" ? -item.amount : item.amount;
+    totals.set(key, (totals.get(key) ?? 0) + amount);
   }
   return [...totals.entries()]
+    .filter(([, amount]) => amount > 0)
     .map(([name, amount]) => ({ name, amount }))
     .sort((a, b) => b.amount - a.amount);
 }
@@ -192,8 +197,10 @@ export function NetWorthFlowModal({
   const [incomeItems, setIncomeItems] = useState<ItemizedItem[] | null>(null);
   const [spendingItems, setSpendingItems] = useState<ItemizedItem[] | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<FlowGroup | null>(null);
+  const [breakdown, setBreakdown] = useState<NetWorthHistory | null>(null);
 
   useEffect(() => {
+    fetchNetWorth(token).then(setBreakdown);
     fetchIncome(token, "month").then((r) => setIncomeItems(r.items));
     fetchSpending(token, "month").then((r) => setSpendingItems(r.items));
   }, [token]);
@@ -207,8 +214,8 @@ export function NetWorthFlowModal({
   }, [onClose]);
 
   const loading = incomeItems === null || spendingItems === null;
-  const income = incomeItems ? aggregateByCategory(incomeItems) : null;
-  const spending = spendingItems ? aggregateByCategory(spendingItems) : null;
+  const income = incomeItems ? aggregateByCategory(incomeItems, "income") : null;
+  const spending = spendingItems ? aggregateByCategory(spendingItems, "spending") : null;
   const totalIncome = income?.reduce((s, c) => s + c.amount, 0) ?? 0;
   const totalSpending = spending?.reduce((s, c) => s + c.amount, 0) ?? 0;
   const grandTotal = totalIncome + totalSpending;
@@ -232,11 +239,10 @@ export function NetWorthFlowModal({
       >
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="font-display text-lg font-semibold text-ink">This month's flow</h2>
-            <p className="mt-1 text-sm text-ink-faint">
-              Net worth {netWorth !== null ? formatMoney(netWorth) : "—"} · illustrative, not a literal
-              period-over-period reconciliation
-            </p>
+            <h2 className="font-display text-lg font-semibold text-ink">
+              Net worth {netWorth !== null ? formatMoney(netWorth) : ""}
+            </h2>
+            <p className="mt-1 text-sm text-ink-faint">Every linked account, added up.</p>
           </div>
           <button
             type="button"
@@ -246,6 +252,18 @@ export function NetWorthFlowModal({
           >
             <CloseIcon />
           </button>
+        </div>
+
+        <AccountBreakdown breakdown={breakdown} />
+
+        <div className="mt-8 flex items-start justify-between">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-ink">This month's flow</h2>
+            <p className="mt-1 text-sm text-ink-faint">
+              Net worth {netWorth !== null ? formatMoney(netWorth) : "—"} · illustrative, not a literal
+              period-over-period reconciliation
+            </p>
+          </div>
         </div>
 
         {loading ? (
@@ -469,5 +487,52 @@ function CloseIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
     </svg>
+  );
+}
+
+/** The accounts net worth is made of, so the headline figure visibly adds
+ * up -- assets minus what's owed on cards and loans. */
+function AccountBreakdown({ breakdown }: { breakdown: NetWorthHistory | null }) {
+  if (breakdown === null) {
+    return <div className="mt-4 h-24 animate-pulse rounded-xl bg-bg" />;
+  }
+  if (breakdown.accounts.length === 0) {
+    return <p className="mt-4 text-sm text-ink-faint">No account balances synced yet.</p>;
+  }
+  const accountName = (a: NetWorthHistory["accounts"][number]) =>
+    `${a.institution} ${a.name ?? a.type}${a.mask ? ` ••${a.mask}` : ""}`;
+
+  return (
+    <div className="mt-4 rounded-xl border border-border">
+      <ul className="divide-y divide-border text-sm">
+        {breakdown.accounts.map((a, i) => (
+          <li key={i} className="flex items-center justify-between px-4 py-2.5">
+            <div className="min-w-0">
+              <div className="truncate text-ink">{accountName(a)}</div>
+              <div className="text-xs capitalize text-ink-faint">
+                {a.type} · {a.kind === "liability" ? "owed" : "asset"}
+              </div>
+            </div>
+            <span className={`font-tabular shrink-0 pl-3 ${a.kind === "liability" ? "text-danger" : "text-ink"}`}>
+              {a.kind === "liability" ? "−" : ""}
+              {formatMoney(a.balance)}
+            </span>
+          </li>
+        ))}
+        {breakdown.excluded_accounts.map((a, i) => (
+          <li key={`x${i}`} className="flex items-center justify-between px-4 py-2.5 opacity-60">
+            <div className="min-w-0">
+              <div className="truncate text-ink">{accountName(a)}</div>
+              <div className="text-xs text-ink-faint">Not included · {a.reason}</div>
+            </div>
+            <span className="font-tabular shrink-0 pl-3 text-ink-faint">{formatMoney(a.balance)}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex items-center justify-between border-t border-border bg-bg px-4 py-2.5 text-sm font-semibold">
+        <span className="text-ink">Net worth</span>
+        <span className="font-tabular text-ink">{breakdown.current !== null ? formatMoney(breakdown.current) : "—"}</span>
+      </div>
+    </div>
   );
 }

@@ -28,3 +28,11 @@ export const GOAL_TYPE_LABELS: Record<string, string> = {
   pay_off_debt: "Pay off debt",
   build_emergency_fund: "Emergency fund",
 };
+
+/** One row of a spending or income list. Spending rows are stored as
+ * negative (money out); a positive spending row is a refund, and must read
+ * as money back -- the list has to visibly add up to the net total above it. */
+export function describeRowAmount(amount: number, group: "income" | "spending"): { text: string; isCredit: boolean } {
+  if (group === "spending" && amount > 0) return { text: `+${formatMoney(amount)}`, isCredit: true };
+  return { text: formatMoney(Math.abs(amount)), isCredit: false };
+}

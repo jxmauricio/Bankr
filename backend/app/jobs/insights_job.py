@@ -11,6 +11,7 @@ This keeps behavior testable (the rules are plain Python you can unit test)
 and keeps LLM cost/latency bounded to actual events instead of every sync.
 """
 
+import logging
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -19,6 +20,8 @@ from sqlalchemy.orm import Session
 from app.agent import tools
 from app.agent.agent_client import build_agent_client
 from app.db.models import InsightLog
+
+logger = logging.getLogger(__name__)
 
 OVERSPEND_THRESHOLD = 1.3  # this month's category spend vs. trailing 3-month average
 
@@ -43,9 +46,9 @@ def detect_candidates(db: Session, user_id: UUID) -> list[InsightCandidate]:
     for txn in unusual.get("unusual_transactions", []):
         candidates.append(InsightCandidate(type="unusual_transaction", data=txn))
 
-    this_month = tools.get_spending_by_category(db, user_id, period="month")
+    this_month = tools.get_spending(db, user_id, window="this_month", group_by="category")
     # NOTE: a real overspend check needs a trailing multi-month baseline per
-    # category; get_spending_by_category only covers a single period today.
+    # category (compare_spending against previous months' same-point totals).
     # Wire in a baseline query here before enabling this in production --
     # left as a structural placeholder so the detection stage has a slot.
     _ = this_month
@@ -79,3 +82,14 @@ def run_insights_job(db: Session, user_id: UUID) -> list[InsightLog]:
         logs.append(log)
     db.commit()
     return logs
+
+
+def run_insights_job_safely(db: Session, user_id: UUID) -> None:
+    """run_insights_job, swallowing any failure (e.g. no agent provider
+    configured yet) so it never fails whatever triggered it -- a sync
+    response the client is waiting on, or a webhook Plaid expects a prompt
+    2xx from. Shared by app/api/accounts.py and app/services/webhook_service.py."""
+    try:
+        run_insights_job(db, user_id)
+    except Exception:
+        logger.exception("insights job failed for user %s", user_id)

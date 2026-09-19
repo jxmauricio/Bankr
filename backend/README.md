@@ -71,6 +71,7 @@ pytest
   `issue_session_token`, so `get_current_user` doesn't care which one ran
 - `app/integrations/bank_aggregator.py` — aggregator-agnostic adapter interface
 - `app/integrations/plaid_client.py` — Plaid implementation of that interface
+- `app/mcp_server.py` — MCP server mounted at `/mcp` (see "Use Bankr from your own Claude")
 - `app/api/deps.py` — `get_aggregator` dependency (swap for a fake in tests via `app.dependency_overrides`)
 - `app/services/crypto.py` — Fernet encryption for aggregator access tokens at rest
 - `app/services/category_mapper.py` — raw aggregator category → Bankr `Category`
@@ -140,6 +141,60 @@ brand-new goal would instantly look "behind pace" (see `get_goal_progress`
 in `app/agent/tools.py`). Neither has been exercised against a real LLM API
 yet.
 
+## Use Bankr from your own Claude (MCP)
+
+The backend doubles as a remote [MCP](https://modelcontextprotocol.io) server
+at `POST /mcp` (Streamable HTTP), so you can query your Bankr data from Claude
+Code or any MCP client that supports custom headers, without the in-app chat.
+
+1. Get a token (long-lived, MCP-only; re-mint to rotate). With a normal
+   session token from `/auth/login`:
+
+   ```bash
+   curl -X POST http://localhost:8000/auth/mcp-token -H "Authorization: Bearer $SESSION_TOKEN"
+   ```
+
+2. Connect:
+
+   ```bash
+   claude mcp add --transport http bankr http://localhost:8000/mcp \
+     --header "Authorization: Bearer $MCP_TOKEN"
+   ```
+
+Tools exposed are the read-only subset of the in-app agent's:
+`get_net_worth`, `get_cash_flow`, `get_spending`, `compare_spending`,
+`find_transactions`, `get_goal_progress`, `get_recent_transactions`,
+`get_unusual_transactions`.
+`propose_goal` (needs the in-app confirm card), `calculate` and `web_search`
+(the client has its own) are intentionally left out. An MCP token is rejected
+by every other endpoint and a session token is rejected by `/mcp`. Lifetime
+is `MCP_TOKEN_TTL_SECONDS` (default 1 year). Server code: `app/mcp_server.py`.
+
+Claude.ai / Claude Desktop "custom connectors" require OAuth rather than a
+static bearer header, so they can't connect yet.
+
+## How money figures are defined
+
+Every spending/income number -- dashboard tiles, chat answers, MCP tools --
+comes from `app/services/money_query.py`, so they can't disagree:
+
+- **Windows are calendar periods resolved server-side** in the user's
+  timezone (sent by the web client as `X-Timezone`): `this_month` is since
+  the 1st, weeks run Monday–Sunday. The model never computes dates; every
+  result echoes the exact `start`/`end` it covers.
+- **Spending** = outflows in expense categories minus refunds in the same
+  top-level category, floored at zero per category. **Transfers** (own-account
+  moves, credit-card payments, and any loan payment on the card/loan side)
+  are their own category type and count as neither income nor spending.
+- Pending charges are included and reported separately (`pending_amount`).
+
+Correctness is pinned by `tests/golden_ledger.py`: a hand-authored ledger
+with hand-computed answers to the MVP questions, including every trap
+(card payments, refunds, car gas vs. the gas bill, week/month boundaries).
+If you change categorization, run `recategorize_all_transactions` from
+`app/services/category_backfill.py` -- raw Plaid categories are stored, so
+no re-fetch is needed.
+
 ## Agent provider
 
 `AGENT_PROVIDER=openrouter` (the default) routes the tool-use loop through
@@ -166,6 +221,42 @@ Two other providers remain available, no code changes needed — just flip
   `AGENT_API_KEY`/`AGENT_MODEL`/`AGENT_BASE_URL`, bypassing OpenRouter
   entirely if you'd rather hold vendor keys yourself.
 
+## Plaid webhooks
+
+`POST /webhooks/plaid` (`app/api/webhooks.py`) makes sync push-driven
+instead of only running when a client calls `/linked-accounts` or
+`/linked-accounts/sync`. It's a plain unauthenticated route -- the caller
+is Plaid, not a Bankr user -- secured instead by verifying Plaid's own
+signature over the raw request body:
+
+- `PlaidClient.verify_webhook_signature` implements Plaid's documented
+  algorithm exactly (plaid.com/docs/api/webhooks/webhook-verification):
+  read `kid`/`alg` from the unverified JWT header (`alg` must be ES256),
+  fetch (and cache) that key via `webhook_verification_key_get`, verify the
+  signature, reject anything with an `iat` older than 5 minutes, and check
+  a SHA-256 of the raw body against the JWT's `request_body_sha256` claim.
+  No separate webhook secret to configure -- see `.env.example`.
+- `app/services/webhook_service.py` then dispatches by webhook type/code:
+  `TRANSACTIONS` / `SYNC_UPDATES_AVAILABLE` (and the other data-ready
+  codes) re-run `sync_user_accounts`, the same function the Refresh button
+  and initial link use; `ITEM` / `ERROR` with `ITEM_LOGIN_REQUIRED` marks
+  every account under that Item `status="error"` (surfaced via
+  `get_net_worth`'s `excluded_accounts`); `ITEM` / `LOGIN_REPAIRED`
+  reactivates and re-syncs. Anything else is logged and ignored, not
+  treated as an error.
+- Webhooks are routed to a user's rows by `LinkedAccount.item_id`, Plaid's
+  id for the whole bank login. It's captured from `exchange_public_token`
+  on a fresh link, or backfilled via one `item_get` call the first time an
+  older-than-this-feature login is synced -- see `sync_user_accounts`.
+
+**Testing locally**: Plaid can't reach `localhost`, so either register a
+tunnel (ngrok, etc.) as the Item's webhook URL, or fire one directly against
+your own endpoint with sandbox's `/sandbox/item/fire_webhook`
+(`webhook_code: "SYNC_UPDATES_AVAILABLE"` after a
+`/sandbox/transactions/create` or `/transactions/refresh` on a
+`user_transactions_dynamic` item) -- either way `POST /webhooks/plaid`
+still verifies the real signature Plaid attaches.
+
 ## Not yet wired up
 
 1. A real `OPENROUTER_API_KEY` (or a key for one of the other two providers
@@ -176,10 +267,6 @@ Two other providers remain available, no code changes needed — just flip
    `InsightLog.delivered_via` is always `"in_app"`) — was iOS-specific to
    begin with and is lower priority now that iOS is shelved; the web app has
    no push story yet either.
-3. A periodic/webhook-driven sync trigger — today sync only happens when the
-   client calls `/linked-accounts` or `/linked-accounts/sync`. Plaid webhook
-   signature verification (`PlaidClient.verify_webhook_signature`) is also
-   still a stub — Plaid signs webhooks with a JWT, not a simple HMAC.
 
 Real Plaid credentials **are** wired up and verified end-to-end against the
 live Sandbox API (see `../ios/README.md` for the original verification

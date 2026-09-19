@@ -27,6 +27,10 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, unique=True, index=True)
     apple_sub: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    # IANA name (e.g. "America/New_York"), reported by the client. Decides
+    # where "this month" / "last week" start and end -- a UTC server
+    # otherwise puts a 9pm Pacific purchase on the 1st into the wrong month.
+    timezone: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     linked_accounts: Mapped[list["LinkedAccount"]] = relationship(back_populates="user")
@@ -41,11 +45,30 @@ class LinkedAccount(Base):
     aggregator: Mapped[str] = mapped_column(String, default="plaid")
     aggregator_account_id: Mapped[str] = mapped_column(String, index=True)
     institution_name: Mapped[str] = mapped_column(String)
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    mask: Mapped[str | None] = mapped_column(String, nullable=True)  # last 4 digits
     account_type: Mapped[str] = mapped_column(String)  # checking | savings | credit | loan | investment
+    # Stored per account (not just summed into NetWorthSnapshot) so net worth
+    # can be shown as the visible sum of its parts. For credit/loan this is
+    # the amount owed, as a positive number.
+    current_balance: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    balance_as_of: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Encrypted at rest; never returned to the client. See app/integrations/plaid_client.py.
     access_token_ref: Mapped[str] = mapped_column(Text)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String, default="active")  # active | disconnected | error
+    # Aggregator's incremental-sync cursor. It belongs to the whole bank
+    # login (every account under one access token shares it), so
+    # sync_service.py writes the same value to each of those accounts.
+    sync_cursor: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Plaid's Item id -- the whole bank login, shared by every account under
+    # it, same as sync_cursor. This is how an inbound webhook (which only
+    # carries an item_id, never an access token) finds its way back to a
+    # user's rows; see app/services/webhook_service.py. Nullable because
+    # accounts linked before this column existed don't have one yet -- it
+    # gets backfilled the next time that login is synced (see
+    # app/api/accounts.py resync_all_accounts).
+    item_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="linked_accounts")
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="linked_account")
@@ -56,7 +79,7 @@ class Category(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     name: Mapped[str] = mapped_column(String)
-    type: Mapped[str] = mapped_column(String)  # income | expense
+    type: Mapped[str] = mapped_column(String)  # income | expense | transfer
     parent_category_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("categories.id"), nullable=True
     )
@@ -75,6 +98,7 @@ class Transaction(Base):
     raw_aggregator_category: Mapped[str | None] = mapped_column(String, nullable=True)
     bankr_category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
     is_pending: Mapped[bool] = mapped_column(Boolean, default=False)
+    pending_transaction_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     linked_account: Mapped["LinkedAccount"] = relationship(back_populates="transactions")

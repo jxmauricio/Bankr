@@ -40,6 +40,10 @@ async function request<T>(
 
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
+  // The backend anchors "this month" / "last week" to this zone, so a
+  // late-evening purchase lands in the user's month, not the server's.
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (timeZone) headers["X-Timezone"] = timeZone;
   if (body !== undefined) headers["Content-Type"] = "application/json";
 
   const response = await fetch(url, {
@@ -82,6 +86,9 @@ export interface LinkAccountResponse {
 
 export const fetchLinkToken = (token: string) =>
   request<LinkTokenResponse>("/linked-accounts/link-token", { method: "POST", token });
+
+export const resyncAccounts = (token: string) =>
+  request<LinkAccountResponse>("/linked-accounts/sync", { method: "POST", token });
 
 export const linkAccount = (token: string, publicToken: string) =>
   request<LinkAccountResponse>("/linked-accounts", {
@@ -130,8 +137,23 @@ export const fetchGoalProgress = (token: string) =>
 
 // --- Dashboard ---
 
+export interface AccountBalance {
+  institution: string;
+  name: string | null;
+  mask: string | null;
+  type: string;
+  kind: "asset" | "liability";
+  balance: number;
+  reason?: string;
+}
+
 export interface NetWorthHistory {
   current: number | null;
+  total_assets: number | null;
+  total_liabilities: number | null;
+  accounts: AccountBalance[];
+  excluded_accounts: AccountBalance[];
+  as_of: string | null;
   history: { date: string; net_worth: number }[];
 }
 
@@ -139,9 +161,14 @@ export const fetchNetWorth = (token: string) => request<NetWorthHistory>("/dashb
 
 export interface PeriodRollup {
   period: string;
+  start: string;
+  end: string;
+  label: string;
   income: number;
   spending: number;
   gain: number;
+  pending_spending: number;
+  as_of: string | null;
 }
 
 export const fetchRollup = (token: string, period: string) =>
@@ -156,13 +183,31 @@ export interface ItemizedItem {
 }
 
 export interface ItemizedTransactions {
-  period: string;
+  period: string | null;
+  start: string;
+  end: string;
+  label: string;
+  category: string | null;
   total: number;
+  transaction_count: number;
   items: ItemizedItem[];
+  as_of: string | null;
 }
 
-export const fetchSpending = (token: string, period: string) =>
-  request<ItemizedTransactions>("/dashboard/spending", { token, query: { period } });
+/** The exact filter behind a chat answer's figure (ChatSource.query). */
+export interface SourceQuery {
+  start: string;
+  end: string;
+  category: string | null;
+  merchant: string | null;
+}
+
+export const fetchSpending = (token: string, period: string | SourceQuery) => {
+  const query: Record<string, string> = {};
+  if (typeof period === "string") query.period = period;
+  else for (const [key, value] of Object.entries(period)) if (value) query[key] = value;
+  return request<ItemizedTransactions>("/dashboard/spending", { token, query });
+};
 
 export const fetchIncome = (token: string, period: string) =>
   request<ItemizedTransactions>("/dashboard/income", { token, query: { period } });
@@ -172,6 +217,7 @@ export const fetchIncome = (token: string, period: string) =>
 export interface ChatSource {
   tool: string;
   label: string;
+  query?: SourceQuery | null;
 }
 
 export interface GoalProposal {

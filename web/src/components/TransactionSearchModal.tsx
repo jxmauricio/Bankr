@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { fetchIncome, fetchSpending, type ItemizedItem } from "../lib/api";
+import { fetchIncome, fetchSpending, type ItemizedTransactions, type SourceQuery } from "../lib/api";
+import { formatMoney } from "../lib/format";
 import { TransactionSearch } from "./TransactionSearch";
 
 type Period = "week" | "month" | "year";
@@ -8,23 +9,32 @@ type Period = "week" | "month" | "year";
  * Standalone modal opened from the home page's Income/Spending stat tiles —
  * distinct from NetWorthFlowModal's inline search panel, which only opens
  * from clicking those groups inside the sankey diagram.
+ *
+ * With `query` (a chat answer's source chip), it instead lists exactly the
+ * transactions behind that answer's figure, so the user can check the
+ * number here rather than in their bank's app.
  */
 export function TransactionSearchModal({
   token,
   group,
+  query,
   onClose,
 }: {
   token: string;
   group: "income" | "spending";
+  query?: SourceQuery;
   onClose: () => void;
 }) {
   const [period, setPeriod] = useState<Period>("month");
-  const [items, setItems] = useState<ItemizedItem[] | null>(null);
+  const [result, setResult] = useState<ItemizedTransactions | null>(null);
 
   useEffect(() => {
-    const fetchItems = group === "income" ? fetchIncome : fetchSpending;
-    fetchItems(token, period).then((r) => setItems(r.items));
-  }, [token, group, period]);
+    setResult(null);
+    if (query) fetchSpending(token, query).then(setResult);
+    else (group === "income" ? fetchIncome : fetchSpending)(token, period).then(setResult);
+  }, [token, group, period, query]);
+
+  const title = query ? (query.category ?? (query.merchant ? `“${query.merchant}”` : "Spending")) : `${group} transactions`;
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -49,7 +59,19 @@ export function TransactionSearchModal({
       >
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="font-display text-lg font-semibold capitalize text-ink">{group} transactions</h2>
+            <h2 className="font-display text-lg font-semibold capitalize text-ink">{title}</h2>
+            {query ? (
+              <p className="mt-1 text-sm text-ink-faint">
+                {result ? (
+                  <>
+                    {result.label} · {result.transaction_count} transaction{result.transaction_count === 1 ? "" : "s"} ·{" "}
+                    <span className="font-tabular text-ink">{formatMoney(result.total)}</span> net
+                  </>
+                ) : (
+                  "Loading…"
+                )}
+              </p>
+            ) : (
             <div className="mt-2 inline-flex rounded-full border border-border bg-bg p-0.5 text-xs">
               {(["week", "month", "year"] as const).map((p) => (
                 <button
@@ -64,6 +86,7 @@ export function TransactionSearchModal({
                 </button>
               ))}
             </div>
+            )}
           </div>
           <button
             type="button"
@@ -76,10 +99,10 @@ export function TransactionSearchModal({
         </div>
 
         <div className="mt-4">
-          {items === null ? (
+          {result === null ? (
             <div className="flex h-32 items-center justify-center text-sm text-ink-faint">Loading…</div>
           ) : (
-            <TransactionSearch items={items} group={group} />
+            <TransactionSearch items={result.items} group={group} />
           )}
         </div>
       </div>
