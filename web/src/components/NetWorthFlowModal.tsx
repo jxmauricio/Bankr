@@ -5,6 +5,14 @@ import { formatMoney } from "../lib/format";
 import { TransactionSearch } from "./TransactionSearch";
 
 type FlowGroup = "income" | "spending";
+type ChartView = "flow" | "pie" | "bars";
+
+const CHART_VIEWS: { id: ChartView; label: string }[] = [
+  { id: "flow", label: "Flow" },
+  { id: "pie", label: "Pie" },
+  { id: "bars", label: "Bars" },
+];
+const PIE_SLICE_CAP = 7;
 
 /**
  * Fixed category -> color slot order, matching seed_categories.py's
@@ -26,6 +34,18 @@ const CATEGORY_ORDER = [
   "Health",
   "Transfer",
   "Other",
+  "Restaurants",
+  "Fast Food",
+  "Coffee",
+  "Alcohol & Bars",
+  "Gas",
+  "Rideshare & Taxi",
+  "Public Transit",
+  "Parking & Tolls",
+  "Auto Maintenance",
+  "Travel",
+  "Loan Payments",
+  "Fees",
 ];
 const CATEGORY_PALETTE = [
   "#3987e5",
@@ -46,6 +66,7 @@ function colorForCategory(name: string): string {
 interface CategorySlice {
   name: string;
   amount: number;
+  members?: string[];
 }
 
 function aggregateByCategory(items: ItemizedItem[], group: "income" | "spending"): CategorySlice[] {
@@ -62,6 +83,27 @@ function aggregateByCategory(items: ItemizedItem[], group: "income" | "spending"
     .filter(([, amount]) => amount > 0)
     .map(([name, amount]) => ({ name, amount }))
     .sort((a, b) => b.amount - a.amount);
+}
+
+/** Pie charts get noisy past ~7 slices; fold the tail into Other. */
+function pieSlicesForChart(slices: CategorySlice[]): CategorySlice[] {
+  if (slices.length <= PIE_SLICE_CAP) return slices;
+  const head = slices.slice(0, PIE_SLICE_CAP - 1);
+  const tail = slices.slice(PIE_SLICE_CAP - 1);
+  return [
+    ...head,
+    {
+      name: "Other",
+      amount: tail.reduce((sum, slice) => sum + slice.amount, 0),
+      members: tail.map((slice) => slice.name),
+    },
+  ];
+}
+
+function itemsForSlice(items: ItemizedItem[], slice: CategorySlice | null): ItemizedItem[] {
+  if (!slice) return items;
+  const names = new Set(slice.members ?? [slice.name]);
+  return items.filter((item) => names.has(item.category ?? "Uncategorized"));
 }
 
 const HEIGHT = 320;
@@ -197,6 +239,8 @@ export function NetWorthFlowModal({
   const [incomeItems, setIncomeItems] = useState<ItemizedItem[] | null>(null);
   const [spendingItems, setSpendingItems] = useState<ItemizedItem[] | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<FlowGroup | null>(null);
+  const [selectedSlice, setSelectedSlice] = useState<CategorySlice | null>(null);
+  const [chartView, setChartView] = useState<ChartView>("flow");
   const [breakdown, setBreakdown] = useState<NetWorthHistory | null>(null);
 
   useEffect(() => {
@@ -221,7 +265,19 @@ export function NetWorthFlowModal({
   const grandTotal = totalIncome + totalSpending;
 
   function toggleGroup(group: FlowGroup) {
+    setSelectedSlice(null);
     setSelectedGroup((prev) => (prev === group ? null : group));
+  }
+
+  function toggleSlice(slice: CategorySlice) {
+    setSelectedGroup(null);
+    setSelectedSlice((prev) => (prev?.name === slice.name ? null : slice));
+  }
+
+  function changeView(view: ChartView) {
+    setChartView(view);
+    setSelectedGroup(null);
+    setSelectedSlice(null);
   }
 
   return (
@@ -256,39 +312,68 @@ export function NetWorthFlowModal({
 
         <AccountBreakdown breakdown={breakdown} />
 
-        <div className="mt-8 flex items-start justify-between">
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="font-display text-lg font-semibold text-ink">This month's flow</h2>
+            <h2 className="font-display text-lg font-semibold text-ink">
+              {chartView === "flow" ? "This month's flow" : "This month's spending"}
+            </h2>
             <p className="mt-1 text-sm text-ink-faint">
-              Net worth {netWorth !== null ? formatMoney(netWorth) : "—"} · illustrative, not a literal
-              period-over-period reconciliation
+              {chartView === "flow"
+                ? `Net worth ${netWorth !== null ? formatMoney(netWorth) : "—"} · illustrative, not a literal period-over-period reconciliation`
+                : chartView === "pie"
+                  ? "Share of spending by category. Click a slice to see the charges."
+                  : "Biggest categories first. Click a bar to see the charges."}
             </p>
           </div>
+          <ChartViewToggle value={chartView} onChange={changeView} />
         </div>
 
         {loading ? (
           <div className="mt-8 flex h-64 items-center justify-center text-sm text-ink-faint">Loading…</div>
-        ) : grandTotal === 0 ? (
+        ) : chartView === "flow" ? (
+          grandTotal === 0 ? (
+            <div className="mt-8 flex h-64 items-center justify-center text-sm text-ink-faint">
+              No income or spending recorded this month yet.
+            </div>
+          ) : (
+            <>
+              <FlowSvg
+                income={income!}
+                spending={spending!}
+                totalIncome={totalIncome}
+                totalSpending={totalSpending}
+                selectedGroup={selectedGroup}
+                onSelectGroup={toggleGroup}
+              />
+              <FlowLegend income={income!} spending={spending!} totalIncome={totalIncome} totalSpending={totalSpending} />
+              {selectedGroup && (
+                <ItemSearchPanel
+                  key={selectedGroup}
+                  group={selectedGroup}
+                  items={(selectedGroup === "income" ? incomeItems : spendingItems) ?? []}
+                  onClose={() => setSelectedGroup(null)}
+                />
+              )}
+            </>
+          )
+        ) : totalSpending === 0 ? (
           <div className="mt-8 flex h-64 items-center justify-center text-sm text-ink-faint">
-            No income or spending recorded this month yet.
+            No spending recorded this month yet.
           </div>
         ) : (
           <>
-            <FlowSvg
-              income={income!}
-              spending={spending!}
-              totalIncome={totalIncome}
-              totalSpending={totalSpending}
-              selectedGroup={selectedGroup}
-              onSelectGroup={toggleGroup}
-            />
-            <FlowLegend income={income!} spending={spending!} totalIncome={totalIncome} totalSpending={totalSpending} />
-            {selectedGroup && (
+            {chartView === "pie" ? (
+              <SpendingPie slices={spending!} total={totalSpending} selected={selectedSlice} onSelect={toggleSlice} />
+            ) : (
+              <SpendingBars slices={spending!} total={totalSpending} selected={selectedSlice} onSelect={toggleSlice} />
+            )}
+            {selectedSlice && (
               <ItemSearchPanel
-                key={selectedGroup}
-                group={selectedGroup}
-                items={(selectedGroup === "income" ? incomeItems : spendingItems) ?? []}
-                onClose={() => setSelectedGroup(null)}
+                key={selectedSlice.name}
+                group="spending"
+                category={selectedSlice.name}
+                items={itemsForSlice(spendingItems ?? [], selectedSlice)}
+                onClose={() => setSelectedSlice(null)}
               />
             )}
           </>
@@ -300,6 +385,226 @@ export function NetWorthFlowModal({
 
 function isFlowGroup(id: string): id is FlowGroup {
   return id === "income" || id === "spending";
+}
+
+function ChartViewToggle({ value, onChange }: { value: ChartView; onChange: (view: ChartView) => void }) {
+  return (
+    <div className="inline-flex shrink-0 rounded-full border border-border bg-bg p-0.5 text-xs" role="tablist" aria-label="Spending chart">
+      {CHART_VIEWS.map((view) => (
+        <button
+          key={view.id}
+          type="button"
+          role="tab"
+          aria-selected={value === view.id}
+          onClick={() => onChange(view.id)}
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 transition-colors cursor-pointer ${
+            value === view.id ? "bg-accent text-white" : "text-ink-soft hover:text-ink"
+          }`}
+        >
+          <ChartViewIcon view={view.id} />
+          {view.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ChartViewIcon({ view }: { view: ChartView }) {
+  if (view === "pie") {
+    return (
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+        <path d="M8 1.5a6.5 6.5 0 1 0 6.5 6.5H8V1.5Z" opacity="0.55" />
+        <path d="M8 1.5A6.5 6.5 0 0 1 14.5 8H8V1.5Z" />
+      </svg>
+    );
+  }
+  if (view === "bars") {
+    return (
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+        <rect x="1.5" y="10" width="13" height="2.2" rx="0.6" />
+        <rect x="1.5" y="6.4" width="9.5" height="2.2" rx="0.6" opacity="0.75" />
+        <rect x="1.5" y="2.8" width="6" height="2.2" rx="0.6" opacity="0.5" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
+      <path d="M2 3.5h2.2v9H2zM6.9 6h2.2v6.5H6.9zM11.8 4.5H14v8h-2.2z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+const PIE_SIZE = 280;
+const PIE_CX = PIE_SIZE / 2;
+const PIE_CY = PIE_SIZE / 2;
+const PIE_OUTER = 108;
+const PIE_INNER = 64;
+
+function polar(cx: number, cy: number, r: number, angle: number): [number, number] {
+  return [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
+}
+
+function donutPath(cx: number, cy: number, inner: number, outer: number, start: number, end: number): string {
+  const span = end - start;
+  if (span >= Math.PI * 2 - 1e-6) {
+    return [
+      `M ${cx + outer} ${cy}`,
+      `A ${outer} ${outer} 0 1 1 ${cx - outer} ${cy}`,
+      `A ${outer} ${outer} 0 1 1 ${cx + outer} ${cy}`,
+      `M ${cx + inner} ${cy}`,
+      `A ${inner} ${inner} 0 1 0 ${cx - inner} ${cy}`,
+      `A ${inner} ${inner} 0 1 0 ${cx + inner} ${cy}`,
+    ].join(" ");
+  }
+  const large = span > Math.PI ? 1 : 0;
+  const [x0, y0] = polar(cx, cy, outer, start);
+  const [x1, y1] = polar(cx, cy, outer, end);
+  const [x2, y2] = polar(cx, cy, inner, end);
+  const [x3, y3] = polar(cx, cy, inner, start);
+  return `M${x0},${y0} A${outer},${outer} 0 ${large} 1 ${x1},${y1} L${x2},${y2} A${inner},${inner} 0 ${large} 0 ${x3},${y3} Z`;
+}
+
+function SpendingPie({
+  slices,
+  total,
+  selected,
+  onSelect,
+}: {
+  slices: CategorySlice[];
+  total: number;
+  selected: CategorySlice | null;
+  onSelect: (slice: CategorySlice) => void;
+}) {
+  const [hovered, setHovered] = useState<string | null>(null);
+  const chartSlices = pieSlicesForChart(slices);
+  let angle = -Math.PI / 2;
+  const arcs = chartSlices.map((slice) => {
+    const start = angle;
+    angle += (slice.amount / total) * Math.PI * 2;
+    return { slice, start, end: angle };
+  });
+  const focus = chartSlices.find((s) => s.name === (hovered ?? selected?.name)) ?? null;
+  const holeLabel = focus?.name ?? "Spending";
+  const holeAmount = focus?.amount ?? total;
+  const holeShare = ((holeAmount / total) * 100).toFixed(0);
+
+  return (
+    <div className="mt-4 flex flex-col items-center gap-6 lg:flex-row lg:items-start lg:justify-center">
+      <svg viewBox={`0 0 ${PIE_SIZE} ${PIE_SIZE}`} className="h-64 w-64 shrink-0" role="img" aria-label="Spending by category">
+        {arcs.map(({ slice, start, end }) => {
+          const isFocus = !hovered && !selected ? true : slice.name === (hovered ?? selected?.name);
+          return (
+            <path
+              key={slice.name}
+              d={donutPath(PIE_CX, PIE_CY, PIE_INNER, PIE_OUTER, start, end)}
+              fill={colorForCategory(slice.name)}
+              opacity={isFocus ? 1 : 0.35}
+              stroke={selected?.name === slice.name ? "#ffffff" : "var(--color-surface)"}
+              strokeWidth={selected?.name === slice.name ? 2 : 1.5}
+              className="cursor-pointer outline-none"
+              role="button"
+              tabIndex={0}
+              aria-label={`${slice.name} ${formatMoney(slice.amount)}, ${((slice.amount / total) * 100).toFixed(0)} percent`}
+              aria-pressed={selected?.name === slice.name}
+              onClick={() => onSelect(slice)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(slice);
+                }
+              }}
+              onMouseEnter={() => setHovered(slice.name)}
+              onMouseLeave={() => setHovered(null)}
+            >
+              <title>
+                {slice.name}: {formatMoney(slice.amount)} ({((slice.amount / total) * 100).toFixed(0)}%)
+              </title>
+            </path>
+          );
+        })}
+        <text x={PIE_CX} y={PIE_CY - 10} textAnchor="middle" className="fill-ink-soft text-[11px]">
+          {holeLabel}
+        </text>
+        <text x={PIE_CX} y={PIE_CY + 10} textAnchor="middle" className="fill-ink font-tabular text-sm font-semibold">
+          {formatMoney(holeAmount)}
+        </text>
+        {focus && (
+          <text x={PIE_CX} y={PIE_CY + 26} textAnchor="middle" className="fill-ink-faint font-tabular text-[10px]">
+            {holeShare}%
+          </text>
+        )}
+      </svg>
+      <ul className="w-full max-w-xs space-y-1.5 pt-2">
+        {chartSlices.map((slice) => (
+          <li key={slice.name}>
+            <button
+              type="button"
+              onClick={() => onSelect(slice)}
+              onMouseEnter={() => setHovered(slice.name)}
+              onMouseLeave={() => setHovered(null)}
+              className={`flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-xs transition-colors cursor-pointer ${
+                selected?.name === slice.name ? "bg-accent-soft" : "hover:bg-bg"
+              }`}
+            >
+              <span className="flex min-w-0 items-center gap-2 text-ink">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: colorForCategory(slice.name) }} />
+                <span className="truncate">{slice.name}</span>
+              </span>
+              <span className="shrink-0 font-tabular text-ink-soft">
+                {((slice.amount / total) * 100).toFixed(0)}% · {formatMoney(slice.amount)}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function SpendingBars({
+  slices,
+  total,
+  selected,
+  onSelect,
+}: {
+  slices: CategorySlice[];
+  total: number;
+  selected: CategorySlice | null;
+  onSelect: (slice: CategorySlice) => void;
+}) {
+  const max = slices[0]?.amount ?? 1;
+  return (
+    <ul className="mt-5 space-y-2">
+      {slices.map((slice) => {
+        const isSelected = selected?.name === slice.name;
+        return (
+          <li key={slice.name}>
+            <button
+              type="button"
+              onClick={() => onSelect(slice)}
+              aria-pressed={isSelected}
+              className={`w-full rounded-lg px-2 py-1.5 text-left transition-colors cursor-pointer ${
+                isSelected ? "bg-accent-soft" : "hover:bg-bg"
+              }`}
+            >
+              <div className="flex items-baseline justify-between gap-3 text-xs">
+                <span className="truncate text-ink">{slice.name}</span>
+                <span className="shrink-0 font-tabular text-ink-soft">
+                  {formatMoney(slice.amount)} · {((slice.amount / total) * 100).toFixed(0)}%
+                </span>
+              </div>
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-bg">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${Math.max((slice.amount / max) * 100, 2)}%`, backgroundColor: colorForCategory(slice.name) }}
+                />
+              </div>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 function FlowSvg({
@@ -456,16 +761,19 @@ function FlowLegend({
 function ItemSearchPanel({
   group,
   items,
+  category,
   onClose,
 }: {
   group: FlowGroup;
   items: ItemizedItem[];
+  category?: string;
   onClose: () => void;
 }) {
+  const title = category ?? (group === "income" ? "Income" : "Spending");
   return (
     <div className="mt-4 rounded-xl border border-border bg-bg p-4">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-medium text-ink">{group === "income" ? "Income" : "Spending"} transactions</h3>
+        <h3 className="text-sm font-medium text-ink">{title} transactions</h3>
         <button
           type="button"
           onClick={onClose}

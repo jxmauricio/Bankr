@@ -10,7 +10,7 @@ from tests.fake_aggregator import FakeAggregatorClient
 
 def test_no_insights_when_nothing_is_detected(db, user):
     sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
-    create_goal(db, user.id, "save_amount", target_amount=1000.0, target_date=date.today() + timedelta(days=365))
+    create_goal(db, user.id, "save", target_amount=1000.0, target_date=date.today() + timedelta(days=365))
 
     logs = insights_job.run_insights_job(db, user.id)
 
@@ -20,7 +20,7 @@ def test_no_insights_when_nothing_is_detected(db, user):
 
 def test_goal_drift_gets_detected_and_phrased(db, user, monkeypatch):
     sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
-    create_goal(db, user.id, "save_amount", target_amount=1000.0, target_date=date.today() + timedelta(days=30))
+    create_goal(db, user.id, "save", target_amount=1000.0, target_date=date.today() + timedelta(days=30))
 
     # Backdate the goal so get_goal_progress computes real elapsed pace
     # (a freshly created goal always looks "on pace" at day zero).

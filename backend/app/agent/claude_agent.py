@@ -36,7 +36,7 @@ from app.services import money_query as mq
 
 SYSTEM_PROMPT = """You are Bankr's financial insights assistant. You help young \
 professionals understand their spending, income, and progress toward up to \
-five savings/debt goals they've set.
+five savings and spending-tracker goals they've set.
 
 Ground every claim in the tool results you receive -- never guess a number. \
 When useful, supplement with widely-accepted best-practice guidance (e.g. "a \
@@ -66,15 +66,34 @@ alone -- current interest/savings rates, inflation, typical cost of living \
 in a place the user mentions. Don't call it for anything about the user \
 themselves; their data only ever comes from the other tools.
 
-When the user wants to set, change, or add a savings, debt-payoff, or \
-emergency-fund target -- including casually mentioning a dollar amount they \
-want to hit -- you MUST call propose_goal. That call is what makes the \
-confirm card appear; talking about a card without calling the tool leaves \
-the user with nothing to click. If they haven't given a target amount, ask \
-for one first, then call propose_goal. Do not claim the goal is already \
-created. New goals are added alongside existing ones (up to five), they do \
-not replace. If propose_goal says the user is at the limit, say so. If they \
-are only asking how existing goals are going, call get_goal_progress instead.
+There are only two kinds of goals: save (putting money toward a named \
+dollar target) and track_spending (watching a category over a window). \
+Paying off debt, a savings goal, and an emergency fund are titles for a \
+save goal, not different types. Always pass type save or track_spending, \
+and put what they called it in name.
+
+When the user wants to set, change, or add a savings target -- including \
+paying off debt, building an emergency fund, or casually mentioning a \
+dollar amount they want to hit -- you MUST call propose_goal with type \
+save. That call is what makes the confirm card appear; talking about a \
+card without calling the tool leaves the user with nothing to click. Put \
+what they're saving toward in name (e.g. "Emergency fund", "Paying off \
+debt", "Trip"). If they haven't named it, use "Savings". If they haven't \
+given a target amount, ask for one first, then call propose_goal. Do not \
+claim the goal is already created. New goals are added alongside existing \
+ones (up to five), they do not replace. If propose_goal says the user is \
+at the limit, say so. If they are only asking how existing goals are \
+going, call get_goal_progress instead.
+
+When the user wants to track, watch, budget, or cap spending in a category \
+-- "I'm spending too much on eating out", "track groceries this month", \
+"keep an eye on coffee" -- you MUST call propose_goal with type \
+track_spending. Pick the most specific category (Dining for eating out, \
+Coffee for coffee shops) and a window (this_month if they didn't name one). \
+They can name the tracker; default name to the category. A dollar amount \
+is an optional cap, not required. The confirm card asks them to pick the \
+category and time window; still call the tool so the card appears. A \
+one-off "how much did I spend on X" is get_spending, not a tracker.
 
 Money answers must be exact and checkable, because the user should never \
 need to open their bank's app to verify one:
@@ -187,7 +206,7 @@ TOOL_DEFINITIONS = [
     ),
     ToolSpec(
         name="get_goal_progress",
-        description="Get the user's active financial goals (up to 5) and progress toward each, including whether they're on pace.",
+        description="Get the user's active financial goals (up to 5) and progress toward each, including savings pace and spending-tracker totals.",
         parameters={"type": "object", "properties": {}},
     ),
     ToolSpec(
@@ -221,26 +240,48 @@ TOOL_DEFINITIONS = [
         name="propose_goal",
         description=(
             "Draft a financial goal for the user to confirm in the app. Call this whenever they want to "
-            "set, change, or work toward a savings, debt-payoff, or emergency-fund target and have given "
-            "a dollar amount. Does not create the goal -- the user confirms on a card. Adds a new "
-            "active goal alongside existing ones (up to 5)."
+            "set or work toward a named savings target (a trip, an emergency fund, paying off debt) or "
+            "to track itemized spending in a category over a time window. Only two types: save and "
+            "track_spending. Paying off debt / savings / emergency fund belong in name, not type. "
+            "Does not create the goal -- the user confirms on a card. Adds a new active goal "
+            "alongside existing ones (up to 5)."
         ),
         parameters={
             "type": "object",
             "properties": {
                 "type": {
                     "type": "string",
-                    "enum": ["save_amount", "pay_off_debt", "build_emergency_fund"],
-                    "description": "save_amount for a savings target, pay_off_debt to pay down liabilities, "
-                    "build_emergency_fund for a 3-6 month cushion.",
+                    "enum": ["save", "track_spending"],
+                    "description": "save for a named dollar target, track_spending to watch a category "
+                    "(eating out, groceries) over a rolling window.",
                 },
-                "target_amount": {"type": "number", "description": "Positive dollar target."},
+                "name": {
+                    "type": "string",
+                    "description": "User-facing title. For save: what they're saving toward "
+                    '("Emergency fund", "Paying off debt", "Trip to Japan"). For track_spending: '
+                    "defaults to the category if omitted.",
+                },
+                "target_amount": {
+                    "type": "number",
+                    "description": "Positive dollar target for save goals. Optional spending cap "
+                    "for track_spending (omit or 0 to just track).",
+                },
                 "target_date": {
                     "type": "string",
-                    "description": "Optional target date as YYYY-MM-DD.",
+                    "description": "Optional target date as YYYY-MM-DD. Ignored for track_spending.",
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Required for track_spending. Canonical or everyday name "
+                    '(Dining, "eating out", Groceries).',
+                },
+                "window": {
+                    "type": "string",
+                    "enum": ["this_week", "this_month", "this_year", "last_7_days", "last_30_days", "last_90_days"],
+                    "description": "Rolling window for track_spending. Default this_month.",
                 },
             },
-            "required": ["type", "target_amount"],
+            "required": ["type"],
         },
     ),
     ToolSpec(
@@ -325,13 +366,9 @@ def _describe_tool_call(name: str, tool_input: dict, result: dict | None = None)
         return f"Searched “{tool_input.get('query', '')}”"
     if name == "propose_goal":
         kind = tool_input.get("type") or tool_input.get("goal_type")
-        labels = {
-            "save_amount": "savings goal",
-            "pay_off_debt": "debt payoff goal",
-            "build_emergency_fund": "emergency fund",
-        }
-        article = "an" if kind == "build_emergency_fund" else "a"
-        return f"Proposed {article} {labels.get(kind, 'goal')}"
+        if kind == "track_spending":
+            return "Proposed a spending tracker"
+        return "Proposed a savings goal"
     return name
 
 

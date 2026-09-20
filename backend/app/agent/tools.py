@@ -22,7 +22,18 @@ from sqlalchemy.orm import Session
 from app.db.models import Category, Goal, LinkedAccount, NetWorthSnapshot, Transaction
 from app.integrations.web_search import WebSearchClient
 from app.services import money_query as mq
-from app.services.goal_service import GOAL_TYPES, MAX_ACTIVE_GOALS, list_active_goals
+from app.services.goal_service import (
+    DEFAULT_TRACKING_WINDOW,
+    MAX_ACTIVE_GOALS,
+    SAVE,
+    TRACK_SPENDING,
+    TRACKING_WINDOW_LABELS,
+    TRACKING_WINDOWS,
+    GoalValidationError,
+    list_active_goals,
+    normalize_goal_kind,
+    spend_for_tracker,
+)
 from app.services.sync_service import LIABILITY_ACCOUNT_TYPES
 
 
@@ -188,15 +199,21 @@ def find_transactions(
     )
 
 
-def _progress_for(goal: Goal) -> dict:
+def _progress_for(db: Session, user_id: UUID, goal: Goal) -> dict:
+    if goal.type == TRACK_SPENDING:
+        return _tracker_progress(db, user_id, goal)
+
     progress_fraction = float(goal.current_progress_amount) / float(goal.target_amount) if goal.target_amount else 0
     result = {
         "id": str(goal.id),
         "type": goal.type,
+        "name": goal.name or "Savings",
         "target_amount": float(goal.target_amount),
         "current_progress_amount": float(goal.current_progress_amount),
         "progress_fraction": round(progress_fraction, 4),
         "target_date": goal.target_date.isoformat() if goal.target_date else None,
+        "category": None,
+        "window": None,
     }
 
     if goal.target_date:
@@ -211,9 +228,55 @@ def _progress_for(goal: Goal) -> dict:
     return result
 
 
+def _tracker_progress(db: Session, user_id: UUID, goal: Goal) -> dict:
+    spent = float(goal.current_progress_amount)
+    spend: dict = {}
+    if goal.category and goal.window:
+        try:
+            spend = spend_for_tracker(db, user_id, goal.category, goal.window)
+            spent = float(spend["total_spent"])
+        except mq.QueryError:
+            pass
+
+    budget = float(goal.target_amount) if goal.target_amount and float(goal.target_amount) > 0 else None
+    over_budget = bool(budget is not None and spent > budget)
+    remaining = round(budget - spent, 2) if budget is not None else None
+    expected = mq.calendar_elapsed_fraction(goal.window, mq.today_for_user(db, user_id)) if goal.window else None
+    spent_fraction = (spent / budget) if budget else None
+    # Spending "on pace" means you haven't used more than the even share of
+    # the cap for this point in the window -- the inverse of a savings goal.
+    on_pace = None
+    if budget is not None and expected is not None:
+        on_pace = (spent_fraction or 0) <= expected
+
+    result = {
+        "id": str(goal.id),
+        "type": goal.type,
+        "name": goal.name or goal.category or "Spending",
+        "category": goal.category,
+        "window": goal.window,
+        "window_label": TRACKING_WINDOW_LABELS.get(goal.window or "", goal.window),
+        "window_start": spend.get("start"),
+        "window_end": spend.get("end"),
+        "label": spend.get("label"),
+        "target_amount": budget or 0.0,
+        "current_progress_amount": spent,
+        "progress_fraction": round(spent_fraction, 4) if spent_fraction is not None else None,
+        "remaining_amount": remaining,
+        "target_date": None,
+        "transaction_count": spend.get("transaction_count", 0),
+        "over_budget": over_budget,
+    }
+    if expected is not None:
+        result["expected_progress_fraction"] = round(expected, 4)
+    if on_pace is not None:
+        result["on_pace"] = on_pace
+    return result
+
+
 def get_goal_progress(db: Session, user_id: UUID) -> dict:
     goals = list_active_goals(db, user_id)
-    payloads = [_progress_for(goal) for goal in goals]
+    payloads = [_progress_for(db, user_id, goal) for goal in goals]
     result: dict = {
         "goals": payloads,
         "active_count": len(payloads),
@@ -224,11 +287,29 @@ def get_goal_progress(db: Session, user_id: UUID) -> dict:
     return result
 
 
-def _parse_goal_proposal(goal_type: str | None, target_amount, target_date: str | None) -> dict:
+def _parse_goal_proposal(
+    db: Session,
+    goal_type: str | None,
+    target_amount,
+    target_date: str | None,
+    category: str | None = None,
+    window: str | None = None,
+    name: str | None = None,
+) -> dict:
     """Shared validation for propose_goal. Returns either {"error": ...} or
-    a clean {type, target_amount, target_date} dict the UI can POST to /goals."""
-    if goal_type not in GOAL_TYPES:
-        return {"error": f"type must be one of {sorted(GOAL_TYPES)}"}
+    a clean dict the UI can POST to /goals."""
+    try:
+        kind, title = normalize_goal_kind(goal_type, name, category)
+    except GoalValidationError as e:
+        return {"error": str(e)}
+
+    if kind == TRACK_SPENDING:
+        parsed = _parse_spending_tracker_proposal(db, target_amount, category, window)
+        if "error" in parsed:
+            return parsed
+        parsed["name"] = (name or "").strip() or parsed.get("category") or title or "Spending"
+        return parsed
+
     try:
         amount = float(target_amount)
     except (TypeError, ValueError):
@@ -244,9 +325,42 @@ def _parse_goal_proposal(goal_type: str | None, target_amount, target_date: str 
             return {"error": "target_date must be YYYY-MM-DD"}
 
     return {
-        "type": goal_type,
+        "type": SAVE,
+        "name": title,
         "target_amount": amount,
         "target_date": parsed_date.isoformat() if parsed_date else None,
+        "category": None,
+        "window": None,
+    }
+
+
+def _parse_spending_tracker_proposal(db: Session, target_amount, category: str | None, window: str | None) -> dict:
+    canonical = None
+    if category and str(category).strip():
+        try:
+            canonical = mq.resolve_category(db, category).name
+        except mq.QueryError as e:
+            return {"error": str(e), **e.extra}
+
+    window_name = window or DEFAULT_TRACKING_WINDOW
+    if window_name not in TRACKING_WINDOWS:
+        return {"error": f"window must be one of {list(TRACKING_WINDOWS)}"}
+
+    amount = 0.0
+    if target_amount not in (None, ""):
+        try:
+            amount = float(target_amount)
+        except (TypeError, ValueError):
+            return {"error": "target_amount must be a number"}
+        if amount < 0:
+            return {"error": "target_amount must be zero or positive"}
+
+    return {
+        "type": TRACK_SPENDING,
+        "target_amount": amount,
+        "target_date": None,
+        "category": canonical,
+        "window": window_name,
     }
 
 
@@ -257,6 +371,9 @@ def propose_goal(
     target_amount=None,
     target_date: str | None = None,
     goal_type: str | None = None,
+    category: str | None = None,
+    window: str | None = None,
+    name: str | None = None,
     **_extra,
 ) -> dict:
     """Draft a goal for the user to confirm in the chat UI.
@@ -266,7 +383,15 @@ def propose_goal(
     active goals; this tool reports remaining slots so the UI can add
     another card on the left instead of replacing.
     """
-    parsed = _parse_goal_proposal(type or goal_type, target_amount, target_date)
+    parsed = _parse_goal_proposal(
+        db,
+        type or goal_type,
+        target_amount,
+        target_date,
+        category=category,
+        window=window,
+        name=name,
+    )
     if "error" in parsed:
         return parsed
 

@@ -102,27 +102,50 @@ export const linkAccount = (token: string, publicToken: string) =>
 export interface GoalResponse {
   id: string;
   type: string;
+  name?: string | null;
   target_amount: number;
   target_date: string | null;
   starting_amount: number;
   current_progress_amount: number;
   status: string;
+  category?: string | null;
+  window?: string | null;
 }
 
 export const createGoal = (
   token: string,
-  goal: { type: string; target_amount: number; target_date: string | null }
+  goal: {
+    type: string;
+    name?: string | null;
+    target_amount: number;
+    target_date?: string | null;
+    category?: string | null;
+    window?: string | null;
+  }
 ) => request<GoalResponse>("/goals", { method: "POST", token, body: goal });
+
+export const deleteGoal = (token: string, goalId: string) =>
+  request<void>(`/goals/${goalId}`, { method: "DELETE", token });
 
 export interface GoalProgress {
   id: string;
   type: string;
+  name?: string | null;
   target_amount: number;
   current_progress_amount: number;
-  progress_fraction: number;
+  progress_fraction: number | null;
   target_date: string | null;
   expected_progress_fraction?: number;
   on_pace?: boolean;
+  category?: string | null;
+  window?: string | null;
+  window_label?: string | null;
+  window_start?: string | null;
+  window_end?: string | null;
+  label?: string | null;
+  transaction_count?: number;
+  over_budget?: boolean;
+  remaining_amount?: number | null;
 }
 
 export interface GoalProgressResponse {
@@ -222,8 +245,11 @@ export interface ChatSource {
 
 export interface GoalProposal {
   type: string;
+  name?: string | null;
   target_amount: number;
   target_date: string | null;
+  category?: string | null;
+  window?: string | null;
   replaces_existing: boolean;
   at_limit?: boolean;
   active_count?: number;

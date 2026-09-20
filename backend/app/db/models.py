@@ -110,13 +110,18 @@ class Goal(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
-    type: Mapped[str] = mapped_column(String)  # save_amount | pay_off_debt | build_emergency_fund
+    type: Mapped[str] = mapped_column(String)  # save | track_spending
     target_amount: Mapped[float] = mapped_column(Numeric(12, 2))
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     starting_amount: Mapped[float] = mapped_column(Numeric(12, 2))
     current_progress_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
     status: Mapped[str] = mapped_column(String, default="active")  # active | completed | abandoned
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    # track_spending only: canonical Bankr category ("Dining") and a rolling
+    # named window ("this_month"). Savings goals leave these null.
+    category: Mapped[str | None] = mapped_column(String, nullable=True)
+    window: Mapped[str | None] = mapped_column(String, nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="goals")
 

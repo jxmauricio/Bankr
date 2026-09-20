@@ -36,8 +36,11 @@ class ChatSource(BaseModel):
 
 class GoalProposal(BaseModel):
     type: str
-    target_amount: float
+    name: str | None = None
+    target_amount: float = 0
     target_date: str | None = None
+    category: str | None = None
+    window: str | None = None
     replaces_existing: bool = False
     at_limit: bool = False
     active_count: int = 0

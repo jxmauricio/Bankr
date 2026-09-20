@@ -98,7 +98,7 @@ def test_chat_propose_goal_returns_a_confirmable_proposal_without_writing(client
     from app.db.models import Goal
     from app.services.goal_service import create_goal
 
-    create_goal(db, user.id, "save_amount", 1000.0, None)
+    create_goal(db, user.id, "save", 1000.0, None)
     monkeypatch.setattr(
         claude_agent,
         "_client",
@@ -109,7 +109,7 @@ def test_chat_propose_goal_returns_a_confirmable_proposal_without_writing(client
                     tool_calls=[
                         (
                             "propose_goal",
-                            {"type": "save_amount", "target_amount": 5000, "target_date": "2027-12-31"},
+                            {"type": "save", "name": "Savings", "target_amount": 5000, "target_date": "2027-12-31"},
                         )
                     ],
                 ),
@@ -122,7 +122,8 @@ def test_chat_propose_goal_returns_a_confirmable_proposal_without_writing(client
     assert response.status_code == 200
     body = response.json()
     assert body["sources"] == [{"tool": "propose_goal", "label": "Proposed a savings goal", "query": None}]
-    assert body["goal_proposal"]["type"] == "save_amount"
+    assert body["goal_proposal"]["type"] == "save"
+    assert body["goal_proposal"]["name"] == "Savings"
     assert body["goal_proposal"]["target_amount"] == 5000.0
     assert body["goal_proposal"]["target_date"] == "2027-12-31"
     assert body["goal_proposal"]["replaces_existing"] is False
@@ -136,3 +137,36 @@ def test_chat_propose_goal_returns_a_confirmable_proposal_without_writing(client
     history = client.get(f"/chat/conversations/{body['conversation_id']}").json()
     assert history[1]["goal_proposal"]["target_amount"] == 5000.0
     assert history[1]["sources"] == [{"tool": "propose_goal", "label": "Proposed a savings goal", "query": None}]
+
+
+def test_chat_propose_spending_tracker_returns_category_and_window(client, db, user, monkeypatch):
+    from app.db.models import Goal
+
+    monkeypatch.setattr(
+        claude_agent,
+        "_client",
+        FakeAgentClient(
+            turns=[
+                ScriptedTurn(
+                    final_text="I can track dining this month if you confirm the card.",
+                    tool_calls=[
+                        (
+                            "propose_goal",
+                            {"type": "track_spending", "category": "eating out", "window": "this_month"},
+                        )
+                    ],
+                ),
+            ]
+        ),
+    )
+
+    response = client.post("/chat", json={"message": "I'm spending too much on eating out"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sources"] == [{"tool": "propose_goal", "label": "Proposed a spending tracker", "query": None}]
+    assert body["goal_proposal"]["type"] == "track_spending"
+    assert body["goal_proposal"]["category"] == "Dining"
+    assert body["goal_proposal"]["window"] == "this_month"
+    assert body["goal_proposal"]["target_amount"] == 0.0
+    assert db.query(Goal).filter(Goal.user_id == user.id).count() == 0

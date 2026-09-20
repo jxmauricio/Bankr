@@ -20,11 +20,11 @@ import { resolveGoalProposal } from "../lib/goalProposal";
 import { GoalSidebar } from "../components/GoalSidebar";
 import { GoalPaceTrack } from "../components/GoalPaceTrack";
 import { GoalProposalCard } from "../components/GoalProposalCard";
+import { CreateGoalModal, NewGoalButton } from "../components/CreateGoalModal";
 import { StatsBar } from "../components/StatsBar";
 import { NetWorthFlowModal } from "../components/NetWorthFlowModal";
 import { TransactionSearchModal } from "../components/TransactionSearchModal";
 import { ChatHistoryMenu } from "../components/ChatHistoryMenu";
-import { SlotNumber } from "../components/SlotNumber";
 import { useSession } from "../lib/session";
 import { useVoiceMode } from "../lib/useVoiceMode";
 import { formatDate, formatMoney } from "../lib/format";
@@ -53,6 +53,7 @@ export function HomePage() {
   const [netWorth, setNetWorth] = useState<number | null>(null);
   const [monthRollup, setMonthRollup] = useState<PeriodRollup | null>(null);
   const [goals, setGoals] = useState<GoalProgress[]>([]);
+  const [creatingGoal, setCreatingGoal] = useState(false);
   const [items, setItems] = useState<StreamItem[]>([{ kind: "assistant-text", id: makeId(), text: GREETING }]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -207,10 +208,6 @@ export function HomePage() {
       <header className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
         <span className="font-display text-xl font-semibold text-ink">Bankr</span>
         <div className="flex items-center gap-4">
-          <span className="font-tabular text-sm text-ink-soft">
-            {netWorth !== null ? <SlotNumber value={formatMoney(netWorth)} /> : "—"}
-            <span className="ml-1.5 font-body text-ink-faint">net worth</span>
-          </span>
           <ChatHistoryMenu token={token} onSelectConversation={loadConversation} onNewChat={startNewChat} />
           <button
             type="button"
@@ -239,8 +236,22 @@ export function HomePage() {
         />
       )}
 
+      {creatingGoal && token && (
+        <CreateGoalModal
+          token={token}
+          atLimit={goals.length >= 5}
+          onClose={() => setCreatingGoal(false)}
+          onCreated={refreshGoalProgress}
+        />
+      )}
+
       <div className="flex flex-1 overflow-hidden">
-        <GoalSidebar goals={goals} />
+        <GoalSidebar
+          goals={goals}
+          token={token}
+          onGoalDeleted={refreshGoalProgress}
+          onCreateGoal={() => setCreatingGoal(true)}
+        />
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <div ref={streamRef} className="flex-1 space-y-4 overflow-y-auto px-6 py-6">
@@ -254,13 +265,17 @@ export function HomePage() {
                 onRefresh={refreshFromBank}
                 isRefreshing={isRefreshing}
               />
-              {goals.length > 0 && (
-                <div className="flex flex-col gap-3 lg:hidden">
-                  {goals.map((goal) => (
-                    <GoalPaceTrack key={goal.id} progress={goal} />
-                  ))}
-                </div>
-              )}
+              <div className="flex flex-col gap-3 lg:hidden">
+                {goals.map((goal) => (
+                  <GoalPaceTrack
+                    key={goal.id}
+                    progress={goal}
+                    token={token}
+                    onDeleted={refreshGoalProgress}
+                  />
+                ))}
+                <NewGoalButton onClick={() => setCreatingGoal(true)} />
+              </div>
               {items.map((item) => (
                 <StreamEntry
                   key={item.id}

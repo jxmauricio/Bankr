@@ -237,6 +237,29 @@ def resolve_window(
     raise QueryError(f"unknown window {window!r}", valid_windows=list(NAMED_WINDOWS))
 
 
+def calendar_elapsed_fraction(window_name: str, today: date) -> float | None:
+    """How far through an in-progress calendar window we are, including today.
+
+    this_month on the 20th of a 31-day month is 20/31. Rolling windows
+    (last_7_days, ...) have already fully elapsed, so this returns None --
+    there is no "too early in the period" to plot.
+    """
+    if window_name == "this_week":
+        start = today - timedelta(days=today.weekday())
+        end = start + timedelta(days=6)
+    elif window_name == "this_month":
+        start = _month_start(today)
+        end = _month_end(today)
+    elif window_name == "this_year":
+        start = date(today.year, 1, 1)
+        end = date(today.year, 12, 31)
+    else:
+        return None
+    total = max((end - start).days + 1, 1)
+    elapsed = min(max((today - start).days + 1, 0), total)
+    return elapsed / total
+
+
 def same_point_in(previous: Window, current: Window) -> Window:
     """`previous` cut off at the same elapsed point as the in-progress
     `current` -- Sep 1–19 pairs with Aug 1–19, not all of August."""

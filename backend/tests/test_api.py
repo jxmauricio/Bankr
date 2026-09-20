@@ -61,13 +61,16 @@ def test_create_goal_then_read_progress(client):
 
     create_response = client.post(
         "/goals",
-        json={"type": "save_amount", "target_amount": 1000.0, "target_date": "2027-01-01"},
+        json={"type": "save", "target_amount": 1000.0, "target_date": "2027-01-01", "name": "Emergency fund"},
     )
     assert create_response.status_code == 200
     assert create_response.json()["starting_amount"] == 2500.0
+    assert create_response.json()["type"] == "save"
+    assert create_response.json()["name"] == "Emergency fund"
 
     progress = client.get("/dashboard/goal-progress").json()
-    assert progress["goals"][0]["type"] == "save_amount"
+    assert progress["goals"][0]["type"] == "save"
+    assert progress["goals"][0]["name"] == "Emergency fund"
     assert progress["goals"][0]["current_progress_amount"] == 0.0  # no new sync since goal creation
 
 
@@ -76,13 +79,31 @@ def test_create_goal_keeps_existing_and_rejects_a_sixth(client):
     client.post("/linked-accounts", json={"public_token": "public-fake-token"})
 
     for i in range(5):
-        response = client.post("/goals", json={"type": "save_amount", "target_amount": 1000.0 + i})
+        response = client.post("/goals", json={"type": "save", "target_amount": 1000.0 + i})
         assert response.status_code == 200
 
-    sixth = client.post("/goals", json={"type": "save_amount", "target_amount": 50.0})
+    sixth = client.post("/goals", json={"type": "save", "target_amount": 50.0})
     assert sixth.status_code == 422
     progress = client.get("/dashboard/goal-progress").json()
     assert progress["active_count"] == 5
+
+
+def test_delete_goal_removes_it_from_progress(client):
+    _with_fake_aggregator(client)
+    client.post("/linked-accounts", json={"public_token": "public-fake-token"})
+
+    first = client.post("/goals", json={"type": "save", "target_amount": 1000.0}).json()
+    second = client.post("/goals", json={"type": "save", "target_amount": 2000.0}).json()
+
+    deleted = client.delete(f"/goals/{first['id']}")
+    assert deleted.status_code == 204
+
+    progress = client.get("/dashboard/goal-progress").json()
+    assert progress["active_count"] == 1
+    assert progress["goals"][0]["id"] == second["id"]
+
+    missing = client.delete(f"/goals/{first['id']}")
+    assert missing.status_code == 404
 
 
 def test_create_goal_rejects_invalid_type(client):
@@ -91,7 +112,40 @@ def test_create_goal_rejects_invalid_type(client):
 
 
 def test_create_goal_rejects_nonpositive_target(client):
-    response = client.post("/goals", json={"type": "save_amount", "target_amount": 0})
+    response = client.post("/goals", json={"type": "save", "target_amount": 0})
+    assert response.status_code == 422
+
+
+def test_create_spending_tracker_then_read_progress(client, monkeypatch):
+    from datetime import datetime, timezone
+
+    from app.services import money_query
+
+    monkeypatch.setattr(money_query, "_now", lambda: datetime(2026, 8, 20, 16, tzinfo=timezone.utc))
+    _with_fake_aggregator(client)
+    client.post("/linked-accounts", json={"public_token": "public-fake-token"})
+
+    create_response = client.post(
+        "/goals",
+        json={"type": "track_spending", "category": "eating out", "window": "this_month", "name": "Eating out"},
+    )
+    assert create_response.status_code == 200
+    body = create_response.json()
+    assert body["type"] == "track_spending"
+    assert body["name"] == "Eating out"
+    assert body["category"] == "Dining"
+    assert body["window"] == "this_month"
+    assert body["target_amount"] == 0.0
+    assert body["current_progress_amount"] == 45.0
+
+    progress = client.get("/dashboard/goal-progress").json()
+    assert progress["goals"][0]["category"] == "Dining"
+    assert progress["goals"][0]["current_progress_amount"] == 45.0
+    assert progress["goals"][0]["window_label"] == "This month"
+
+
+def test_create_spending_tracker_rejects_missing_category(client):
+    response = client.post("/goals", json={"type": "track_spending", "window": "this_month"})
     assert response.status_code == 422
 
 

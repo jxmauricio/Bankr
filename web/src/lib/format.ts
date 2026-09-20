@@ -23,11 +23,54 @@ export function formatRelativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export const GOAL_TYPE_LABELS: Record<string, string> = {
-  save_amount: "Savings goal",
-  pay_off_debt: "Pay off debt",
-  build_emergency_fund: "Emergency fund",
+export const GOAL_KINDS = ["save", "track_spending"] as const;
+
+export const GOAL_KIND_LABELS: Record<string, string> = {
+  save: "Savings goal",
+  track_spending: "Spending tracker",
 };
+
+export const GOAL_KIND_HINTS: Record<string, string> = {
+  save: "Put money toward something — a trip, a cushion, paying off debt.",
+  track_spending: "Watch a category over a week, month, or other window — optionally with a cap.",
+};
+
+/** Title chips for a savings goal. These are names, not types. */
+export const SAVE_NAME_SUGGESTIONS = ["Paying off debt", "Savings goals", "Emergency fund"] as const;
+
+export const SPEND_CATEGORIES = [
+  "Groceries",
+  "Dining",
+  "Restaurants",
+  "Fast Food",
+  "Coffee",
+  "Alcohol & Bars",
+  "Transportation",
+  "Gas",
+  "Rideshare & Taxi",
+  "Public Transit",
+  "Parking & Tolls",
+  "Auto Maintenance",
+  "Travel",
+  "Rent & Housing",
+  "Utilities",
+  "Subscriptions",
+  "Entertainment",
+  "Shopping",
+  "Health",
+  "Loan Payments",
+  "Fees",
+  "Other",
+] as const;
+
+export const TRACKING_WINDOWS: { id: string; label: string }[] = [
+  { id: "this_week", label: "This week" },
+  { id: "this_month", label: "This month" },
+  { id: "this_year", label: "This year" },
+  { id: "last_7_days", label: "Last 7 days" },
+  { id: "last_30_days", label: "Last 30 days" },
+  { id: "last_90_days", label: "Last 90 days" },
+];
 
 /** One row of a spending or income list. Spending rows are stored as
  * negative (money out); a positive spending row is a refund, and must read
