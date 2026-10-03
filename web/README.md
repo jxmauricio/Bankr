@@ -102,10 +102,9 @@ mobile viewport (375×812) — layout reflows cleanly, no overlap.
 
 ## Not yet wired up
 
-1. A real `OPENROUTER_API_KEY` on the backend — see `../backend/README.md`.
-2. Moving the session token from `localStorage` to an httpOnly cookie (see
+1. Moving the session token from `localStorage` to an httpOnly cookie (see
    Auth above).
-3. `react-router-dom` is installed but unused (see Stack above).
-4. No responsive nav / mobile chat-panel-as-full-screen treatment — the chat
+2. `react-router-dom` is installed but unused (see Stack above).
+3. No responsive nav / mobile chat-panel-as-full-screen treatment — the chat
    panel is a fixed `max-w-md` slide-over on all viewports, which works down
    to mobile widths but hasn't been given mobile-specific polish.

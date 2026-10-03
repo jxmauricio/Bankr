@@ -259,11 +259,7 @@ still verifies the real signature Plaid attaches.
 
 ## Not yet wired up
 
-1. A real `OPENROUTER_API_KEY` (or a key for one of the other two providers
-   above) to exercise `claude_agent.py` and `insights_job.py` against a live
-   LLM (currently mock-verified only — `/chat` degrades to a clear in-UI
-   error without one, verified live in the web app).
-2. `app/integrations/apns.py` for push delivery of insights (currently
+1. `app/integrations/apns.py` for push delivery of insights (currently
    `InsightLog.delivered_via` is always `"in_app"`) — was iOS-specific to
    begin with and is lower priority now that iOS is shelved; the web app has
    no push story yet either.
