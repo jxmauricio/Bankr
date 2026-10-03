@@ -95,7 +95,11 @@ pytest
   newest first, with a preview from the first message) and
   `GET /chat/conversations/{id}` (full history, 404 if it's not this user's)
   let the web client browse and reopen a past conversation — see
-  `ChatHistoryMenu.tsx` in the web app
+  `ChatHistoryMenu.tsx` in the web app. `POST /chat/stream` runs the same turn
+  as Server-Sent Events (`status` progress lines before each tool call, then
+  `done` with the same body as `POST /chat`, or `error`); the web and iOS
+  clients use it. It needs a host that doesn't buffer responses (Render
+  doesn't; behind nginx, `X-Accel-Buffering: no` is already sent)
 - `app/agent/tools.py` — tool implementations the agent can call. Most are
   DB-backed (also the source of truth `dashboard_service.py` and
   `goal_service.py` reuse for net worth and goal pacing, so the dashboard and

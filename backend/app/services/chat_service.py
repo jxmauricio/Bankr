@@ -14,6 +14,7 @@ reply are a separate, lightweight thing we do keep (ChatMessage.tool_calls),
 purely for the user-facing "sources" trail -- never fed back into history.
 """
 
+from typing import Callable
 from uuid import UUID
 
 from sqlalchemy import func
@@ -48,15 +49,22 @@ def _conversation_history(db: Session, user_id: UUID, conversation_id: UUID) -> 
     return [{"role": row.role, "content": row.content} for row in rows]
 
 
-def send_message(db: Session, user_id: UUID, conversation_id: UUID, message_text: str) -> tuple[str, list[dict]]:
-    """Returns (reply text, sources) -- see run_agent_turn for what sources is."""
+def send_message(
+    db: Session,
+    user_id: UUID,
+    conversation_id: UUID,
+    message_text: str,
+    on_status: Callable[[str], None] | None = None,
+) -> tuple[str, list[dict]]:
+    """Returns (reply text, sources) -- see run_agent_turn for what sources
+    is and what on_status receives."""
     history = _conversation_history(db, user_id, conversation_id)
     history.append({"role": "user", "content": message_text})
 
     db.add(ChatMessage(user_id=user_id, conversation_id=conversation_id, role="user", content=message_text))
     db.commit()
 
-    assistant_text, sources = run_agent_turn(db, user_id, history)
+    assistant_text, sources = run_agent_turn(db, user_id, history, on_status)
 
     db.add(
         ChatMessage(

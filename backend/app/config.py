@@ -95,9 +95,10 @@ class Settings(BaseSettings):
 
     # Web search tool the agent can call for anything time-sensitive (current
     # rates, inflation, ...) it wasn't trained on -- see
-    # app/integrations/web_search.py. Optional: with no key set, calling the
-    # web_search tool returns a clear error result instead of live results,
-    # same "degrade gracefully" pattern as the agent providers above.
+    # app/integrations/web_search.py. Optional: uses Brave when this key is
+    # set, otherwise OpenRouter's web plugin if the agent runs on OpenRouter.
+    # With neither, calling the web_search tool returns a clear error result
+    # instead of live results, same "degrade gracefully" pattern as above.
     brave_search_api_key: str = ""
 
     # Where "today" / "this month" / "last week" are anchored for a user

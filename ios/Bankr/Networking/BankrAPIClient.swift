@@ -221,19 +221,54 @@ struct BankrAPIClient {
         let reply: String
     }
 
-    func sendChatMessage(
-        _ message: String, conversationId: String?, sessionToken: String
+    /// Sends a chat turn over Server-Sent Events (POST /chat/stream):
+    /// `onStatus` receives a progress line ("Looking up Dining
+    /// spending…") before each tool runs, and the call returns the final reply.
+    func streamChatMessage(
+        _ message: String,
+        conversationId: String?,
+        sessionToken: String,
+        onStatus: @MainActor (String) -> Void
     ) async throws -> ChatResponse {
         struct Body: Encodable {
             let message: String
             let conversationId: String?
         }
-        let data = try await request(
-            path: "chat",
-            method: "POST",
-            sessionToken: sessionToken,
-            body: Body(message: message, conversationId: conversationId)
-        )
-        return try decoder.decode(ChatResponse.self, from: data)
+        struct Status: Decodable { let label: String }
+        struct StreamError: Decodable { let message: String }
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("chat/stream"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(sessionToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(Body(message: message, conversationId: conversationId))
+
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else { throw BankrAPIError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw BankrAPIError.server(statusCode: http.statusCode) }
+
+        // An event is an "event:" line then a "data:" line; keepalive comments
+        // start with ":" and are ignored.
+        var event: String?
+        for try await line in bytes.lines {
+            if line.hasPrefix("event: ") {
+                event = String(line.dropFirst("event: ".count))
+            } else if line.hasPrefix("data: "), let name = event {
+                let data = Data(line.dropFirst("data: ".count).utf8)
+                switch name {
+                case "status":
+                    await onStatus(try decoder.decode(Status.self, from: data).label)
+                case "done":
+                    return try decoder.decode(ChatResponse.self, from: data)
+                case "error":
+                    _ = try? decoder.decode(StreamError.self, from: data)
+                    throw BankrAPIError.invalidResponse
+                default:
+                    break
+                }
+                event = nil
+            }
+        }
+        throw BankrAPIError.invalidResponse
     }
 }

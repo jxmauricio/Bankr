@@ -45,7 +45,7 @@ readable by injected script).
   `POST /goals`
 - `src/pages/HomePage.tsx` — the whole signed-in home: net worth/income/
   spending tiles (`StatsBar`), goal pace, and an AI-agent-first chat stream
-  (not a buried tab) posting to `POST /chat`, with a conversation history
+  (not a buried tab) streaming from `POST /chat/stream` (live "Looking up…" status while it works), with a conversation history
   menu (`ChatHistoryMenu`, `GET /chat/conversations[/:id]`) and voice mode
   (see below)
 - `src/components/GoalPaceTrack.tsx` — a single track plotting both actual

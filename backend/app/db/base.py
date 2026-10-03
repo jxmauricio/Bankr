@@ -19,3 +19,11 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+def get_session_factory() -> sessionmaker:
+    """For work that outlives the request's own session -- a streamed
+    response keeps running after get_db's session has been closed -- so it
+    opens its own. A dependency (not an import) so tests can point it at
+    the test database."""
+    return SessionLocal

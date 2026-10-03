@@ -19,6 +19,17 @@ export class ApiError extends Error {
   }
 }
 
+function buildHeaders(token: string | null | undefined, hasJsonBody: boolean): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  // The backend anchors "this month" / "last week" to this zone, so a
+  // late-evening purchase lands in the user's month, not the server's.
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (timeZone) headers["X-Timezone"] = timeZone;
+  if (hasJsonBody) headers["Content-Type"] = "application/json";
+  return headers;
+}
+
 async function request<T>(
   path: string,
   {
@@ -38,13 +49,7 @@ async function request<T>(
     for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
   }
 
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  // The backend anchors "this month" / "last week" to this zone, so a
-  // late-evening purchase lands in the user's month, not the server's.
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  if (timeZone) headers["X-Timezone"] = timeZone;
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const headers = buildHeaders(token, body !== undefined);
 
   const response = await fetch(url, {
     method,
@@ -278,12 +283,49 @@ export interface ChatResponse {
   goal_proposal: GoalProposal | null;
 }
 
-export const sendChatMessage = (token: string, message: string, conversationId: string | null) =>
-  request<ChatResponse>("/chat", {
+/**
+ * Sends a chat turn over Server-Sent Events (POST /chat/stream): onStatus
+ * fires with a progress line ("Looking up Dining spending…") before each tool
+ * runs, and the promise resolves with the final reply. A stream that ends
+ * without a reply rejects with an ApiError like any other failure.
+ */
+export async function streamChatMessage(
+  token: string,
+  message: string,
+  conversationId: string | null,
+  onStatus: (label: string) => void
+): Promise<ChatResponse> {
+  const response = await fetch(new URL(BASE_URL + "/chat/stream"), {
     method: "POST",
-    token,
-    body: { message, conversation_id: conversationId },
+    headers: buildHeaders(token, true),
+    body: JSON.stringify({ message, conversation_id: conversationId }),
   });
+  if (!response.ok || !response.body) {
+    const body = await response.json().catch(() => null);
+    throw new ApiError(response.status, extractErrorMessage(body) ?? `Request failed (${response.status})`);
+  }
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    // Events are separated by a blank line; keep any partial tail for the next chunk.
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() ?? "";
+    for (const block of blocks) {
+      const event = block.match(/^event: (.*)$/m)?.[1];
+      const data = block.match(/^data: (.*)$/m)?.[1];
+      if (!event || data === undefined) continue; // keepalive comment
+      const payload = JSON.parse(data);
+      if (event === "status") onStatus(payload.label);
+      else if (event === "done") return payload as ChatResponse;
+      else if (event === "error") throw new ApiError(500, payload.message);
+    }
+  }
+  throw new ApiError(500, "Bankr couldn't respond. Try again.");
+}
 
 export interface ConversationSummary {
   conversation_id: string;

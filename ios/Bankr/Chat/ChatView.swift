@@ -23,7 +23,7 @@ struct ChatView: View {
                         if viewModel.isSending {
                             HStack {
                                 ProgressView().controlSize(.small)
-                                Text("Thinking…").font(.footnote).foregroundStyle(.secondary)
+                                Text(viewModel.statusLabel ?? "Thinking…").font(.footnote).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -59,7 +59,7 @@ struct ChatView: View {
     private func bubbleView(_ bubble: ChatBubble) -> some View {
         HStack {
             if bubble.role == "user" { Spacer(minLength: 40) }
-            Text(bubble.text)
+            Text(bubble.role == "assistant" ? Self.formatted(bubble.text) : AttributedString(bubble.text))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(bubble.role == "user" ? Color.accentColor : Color(.secondarySystemBackground))
@@ -67,6 +67,20 @@ struct ChatView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             if bubble.role == "assistant" { Spacer(minLength: 40) }
         }
+    }
+
+    /// The agent may use **bold** for the key number and "- " bullet lines;
+    /// show bullets as "•" and parse the bold, falling back to plain text.
+    private static func formatted(_ text: String) -> AttributedString {
+        let bulleted = text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> String in
+                let trimmed = line.drop { $0 == " " }
+                return trimmed.hasPrefix("- ") ? "• " + trimmed.dropFirst(2) : String(line)
+            }
+            .joined(separator: "\n")
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return (try? AttributedString(markdown: bulleted, options: options)) ?? AttributedString(text)
     }
 
     private var inputBar: some View {

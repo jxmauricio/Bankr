@@ -26,7 +26,7 @@ os.environ.setdefault(
 )
 
 from app.auth import get_current_user  # noqa: E402
-from app.db.base import Base, get_db  # noqa: E402
+from app.db.base import Base, get_db, get_session_factory  # noqa: E402
 from app.db import models  # noqa: E402,F401
 from app.main import app  # noqa: E402
 from app.rate_limit import auth_limiter, chat_limiter  # noqa: E402
@@ -84,5 +84,6 @@ def client(db, user):
 
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_current_user] = _override_get_current_user
+    app.dependency_overrides[get_session_factory] = lambda: TestSessionLocal
     yield TestClient(app)
     app.dependency_overrides.clear()
