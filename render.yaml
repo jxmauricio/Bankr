@@ -30,8 +30,10 @@ services:
       - key: PLAID_SECRET
         sync: false
       - key: PLAID_ENV
-        value: sandbox
+        sync: false
       - key: PLAID_WEBHOOK_URL
+        sync: false
+      - key: PLAID_REDIRECT_URI
         sync: false
       - key: AGENT_PROVIDER
         value: openrouter

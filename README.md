@@ -112,9 +112,13 @@ lint/build on every PR.
    secrets (table below). Migrations run on every boot.
 2. **Vercel** -- import the repo with root directory `web/`, set
    `VITE_API_BASE_URL` to the Render service URL.
-3. Back on Render, set `CORS_ALLOWED_ORIGINS` to the Vercel URL and
-   `PLAID_WEBHOOK_URL` to `https://<render-host>/webhooks/plaid`.
-4. Invite people with `https://<vercel-host>/?invite=<code>` -- the code
+3. Back on Render, set `CORS_ALLOWED_ORIGINS` to the Vercel URL,
+   `PLAID_WEBHOOK_URL` to `https://<render-host>/webhooks/plaid`, and
+   `PLAID_REDIRECT_URI` to `https://<vercel-host>/oauth-return`.
+4. In the Plaid Dashboard (API > Allowed redirect URIs) add that same
+   `/oauth-return` URL. Plaid rejects every link token whose redirect URI
+   isn't registered, so set both or neither.
+5. Invite people with `https://<vercel-host>/?invite=<code>` -- the code
    is prefilled on the signup form.
 
 | Variable | Production value |
@@ -127,6 +131,7 @@ lint/build on every PR.
 | `SIGNUP_INVITE_CODES` | Comma-separated codes; blank means open signup. |
 | `PLAID_CLIENT_ID` / `PLAID_SECRET` / `PLAID_ENV` | Production keys + `production` once Plaid approves; `sandbox` for a staging pass first. |
 | `PLAID_WEBHOOK_URL` | `https://<render-host>/webhooks/plaid` |
+| `PLAID_REDIRECT_URI` | `https://<vercel-host>/oauth-return` -- needed for OAuth banks (Chase, Wells Fargo, Capital One, ...); must be registered in the Plaid Dashboard. |
 | `OPENROUTER_API_KEY` | Set a monthly spend cap on the key in OpenRouter. |
 | `BRAVE_SEARCH_API_KEY` | Optional. |
 

@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     # Item. Blank is a valid, fully-functional choice (sync still runs via
     # the Refresh button and on link) -- see backend/README.md "Plaid webhooks".
     plaid_webhook_url: str = ""
+    # Where OAuth banks (Chase, Wells Fargo, ...) send the user back after
+    # they log in on the bank's own site, e.g. https://<web-host>/oauth-return.
+    # Must also be registered under Plaid Dashboard > API > Allowed redirect
+    # URIs. Blank omits it, which works for non-OAuth banks only.
+    plaid_redirect_uri: str = ""
 
     # Which backend app/agent/claude_agent.py's tool-use loop talks to (see
     # app/agent/agent_client.py). "openrouter" is the default -- routes to
@@ -127,6 +132,8 @@ class Settings(BaseSettings):
             problems.append("CORS_ALLOWED_ORIGINS must be the deployed web origin, not localhost")
         if problems:
             raise RuntimeError("Refusing to start in production: " + "; ".join(problems))
+        if self.plaid_env == "production" and not self.plaid_redirect_uri:
+            logger.warning("PLAID_REDIRECT_URI is unset -- OAuth banks (Chase, Wells Fargo, ...) can't be linked")
         if self.plaid_env == "sandbox":
             logger.warning("ENVIRONMENT=production but PLAID_ENV=sandbox -- only test banks can be linked")
 

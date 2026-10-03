@@ -110,6 +110,8 @@ class PlaidClient:
         # webhook is a valid, fully-functional choice (see settings.plaid_webhook_url).
         if settings.plaid_webhook_url:
             request_kwargs["webhook"] = settings.plaid_webhook_url
+        if settings.plaid_redirect_uri:
+            request_kwargs["redirect_uri"] = settings.plaid_redirect_uri
         response = client.link_token_create(LinkTokenCreateRequest(**request_kwargs))
         return response.link_token
 
