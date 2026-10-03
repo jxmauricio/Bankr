@@ -179,6 +179,12 @@ export function SettingsModal({
           </p>
         )}
 
+        <p className="mt-6 text-sm">
+          <a href="/privacy" target="_blank" rel="noreferrer" className="text-ink-soft underline hover:text-ink">
+            Privacy notice
+          </a>
+        </p>
+
         <div className="mt-8 border-t border-border pt-5">
           <h3 className="text-sm font-medium text-ink-soft">Delete account</h3>
           {!deleting ? (

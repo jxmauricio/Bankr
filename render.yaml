@@ -45,3 +45,5 @@ services:
         sync: false
       - key: BRAVE_SEARCH_API_KEY
         sync: false
+      - key: SENTRY_DSN
+        sync: false

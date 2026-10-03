@@ -16,6 +16,10 @@ class Settings(BaseSettings):
 
     database_url: str
 
+    # Error monitoring (Sentry). Blank disables it entirely, which is the
+    # local-dev default. See app/observability.py for what is and isn't sent.
+    sentry_dsn: str = ""
+
     # Comma-separated browser origins allowed to call the API. Defaults to
     # Vite's dev port; set to the deployed web origin(s) in production.
     cors_allowed_origins: str = "http://localhost:5173"
