@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
@@ -12,10 +12,13 @@ from app.auth import (
     verify_apple_identity_token,
     verify_password,
 )
+from app.api.deps import get_aggregator
 from app.config import settings
 from app.db.base import get_db
 from app.db.models import User
+from app.integrations.bank_aggregator import BankAggregatorClient
 from app.rate_limit import limit_auth_by_ip
+from app.services.account_removal import RemovalError, delete_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -103,3 +106,33 @@ class McpTokenResponse(BaseModel):
 def create_mcp_token(user: User = Depends(get_current_user)) -> McpTokenResponse:
     """Mint a token for connecting an external MCP client to /mcp."""
     return McpTokenResponse(mcp_token=issue_mcp_token(user.id))
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str
+
+
+@router.delete("/account", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(limit_auth_by_ip)])
+def delete_account(
+    body: DeleteAccountRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    aggregator: BankAggregatorClient = Depends(get_aggregator),
+) -> Response:
+    """Permanently delete the signed-in user, their data, and every bank
+    connection at Plaid. Requires the account password so a stolen or
+    left-open session can't wipe the account."""
+    if user.password_hash is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "This account has no password, so it can't be deleted from here."
+        )
+    if not verify_password(body.password, user.password_hash):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Incorrect password")
+    try:
+        delete_user(db, user.id, aggregator)
+    except RemovalError:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Couldn't disconnect your banks right now, so nothing was deleted. Try again.",
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

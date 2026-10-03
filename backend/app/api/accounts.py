@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from app.db.base import get_db
 from app.db.models import LinkedAccount, User
 from app.integrations.bank_aggregator import BankAggregatorClient
 from app.jobs.insights_job import run_insights_job_safely
+from app.services.account_removal import BankNotFound, RemovalError, disconnect_bank, list_bank_logins
 from app.services.crypto import decrypt_token
 from app.services.sync_service import sync_user_accounts
 
@@ -89,3 +90,52 @@ def resync_all_accounts(
         transactions_synced=total_transactions,
         net_worth=float(latest_result.net_worth_snapshot.net_worth),
     )
+
+
+class LinkedBankAccount(BaseModel):
+    name: str | None
+    mask: str | None
+    account_type: str
+
+
+class LinkedBank(BaseModel):
+    # Any one of the bank's account ids; DELETE /linked-accounts/{id} removes
+    # the whole bank login that account belongs to.
+    id: UUID
+    institution_name: str
+    status: str  # active | error
+    accounts: list[LinkedBankAccount]
+
+
+@router.get("", response_model=list[LinkedBank])
+def list_linked_banks(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[LinkedBank]:
+    """The user's connected banks, one entry per bank login."""
+    return [
+        LinkedBank(
+            id=login.accounts[0].id,
+            institution_name=login.accounts[0].institution_name,
+            status="error" if any(a.status != "active" for a in login.accounts) else "active",
+            accounts=[LinkedBankAccount(name=a.name, mask=a.mask, account_type=a.account_type) for a in login.accounts],
+        )
+        for login in list_bank_logins(db, user.id)
+    ]
+
+
+@router.delete("/{linked_account_id}", status_code=status.HTTP_204_NO_CONTENT)
+def disconnect_linked_bank(
+    linked_account_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    aggregator: BankAggregatorClient = Depends(get_aggregator),
+) -> Response:
+    """Disconnect a bank: removes the login at Plaid (ending its billing),
+    then deletes its accounts and transactions here."""
+    try:
+        disconnect_bank(db, user.id, linked_account_id, aggregator)
+    except BankNotFound:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bank not found")
+    except RemovalError:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, "Couldn't disconnect this bank right now. Nothing was changed; try again."
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

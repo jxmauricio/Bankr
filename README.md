@@ -140,9 +140,17 @@ lint/build on every PR.
 is in-memory, so keep the Render service at one instance until it moves to a
 shared store.
 
+Users can disconnect a bank or delete their account from **Settings** in
+the web app. Both call Plaid's `/item/remove` first (that is what ends the
+per-bank monthly charge) and only then delete local rows, so a Plaid outage
+leaves everything intact and retryable. Disconnecting deletes that bank's
+transactions; disconnecting the last bank also clears net-worth history.
+Account deletion requires the password and erases goals, chat history and
+insights too.
+
 Known gaps, fine for a small beta: the session token lives in
-`localStorage` rather than an httpOnly cookie, there are no push
-notifications, and there's no in-app account deletion yet.
+`localStorage` rather than an httpOnly cookie, and there are no push
+notifications.
 
 ## Full documentation
 

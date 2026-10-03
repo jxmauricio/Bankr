@@ -120,6 +120,20 @@ def sync_user_accounts(
         linked.sync_cursor = changes.next_cursor
         linked.item_id = resolved_item_id
 
+    snapshot = _upsert_today_snapshot(db, user_id)
+
+    recompute_goal_progress(db, user_id, snapshot)
+    db.commit()
+
+    return SyncResult(
+        linked_accounts=linked_accounts,
+        net_worth_snapshot=snapshot,
+        transactions_synced=transactions_synced,
+        transactions_removed=transactions_removed,
+    )
+
+
+def _upsert_today_snapshot(db: Session, user_id: UUID) -> NetWorthSnapshot:
     total_assets, total_liabilities = _balance_totals(db, user_id)
 
     # Upsert on (user_id, date) rather than always inserting: a trend chart
@@ -139,16 +153,17 @@ def sync_user_accounts(
     snapshot.total_liabilities = total_liabilities
     snapshot.net_worth = total_assets - total_liabilities
     db.flush()
+    return snapshot
 
+
+def refresh_net_worth(db: Session, user_id: UUID) -> NetWorthSnapshot:
+    """Recompute today's snapshot and goal progress from the accounts as they
+    stand now, without contacting the aggregator -- used after a bank is
+    disconnected."""
+    snapshot = _upsert_today_snapshot(db, user_id)
     recompute_goal_progress(db, user_id, snapshot)
     db.commit()
-
-    return SyncResult(
-        linked_accounts=linked_accounts,
-        net_worth_snapshot=snapshot,
-        transactions_synced=transactions_synced,
-        transactions_removed=transactions_removed,
-    )
+    return snapshot
 
 
 def _upsert_transaction(

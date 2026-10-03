@@ -97,6 +97,21 @@ export const linkAccount = (token: string, publicToken: string) =>
     body: { public_token: publicToken },
   });
 
+export interface LinkedBank {
+  id: string;
+  institution_name: string;
+  status: "active" | "error";
+  accounts: { name: string | null; mask: string | null; account_type: string }[];
+}
+
+export const fetchLinkedBanks = (token: string) => request<LinkedBank[]>("/linked-accounts", { token });
+
+export const disconnectBank = (token: string, bankId: string) =>
+  request<void>(`/linked-accounts/${bankId}`, { method: "DELETE", token });
+
+export const deleteAccount = (token: string, password: string) =>
+  request<void>("/auth/account", { method: "DELETE", token, body: { password } });
+
 // --- Goals ---
 
 export interface GoalResponse {

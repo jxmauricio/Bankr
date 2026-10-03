@@ -21,6 +21,7 @@ import { GoalSidebar } from "../components/GoalSidebar";
 import { GoalPaceTrack } from "../components/GoalPaceTrack";
 import { GoalProposalCard } from "../components/GoalProposalCard";
 import { CreateGoalModal, NewGoalButton } from "../components/CreateGoalModal";
+import { SettingsModal } from "../components/SettingsModal";
 import { StatsBar } from "../components/StatsBar";
 import { NetWorthFlowModal } from "../components/NetWorthFlowModal";
 import { TransactionSearchModal } from "../components/TransactionSearchModal";
@@ -48,12 +49,13 @@ type StreamItem =
 let nextId = 0;
 const makeId = () => `item-${nextId++}`;
 
-export function HomePage() {
+export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   const { token, signOut } = useSession();
   const [netWorth, setNetWorth] = useState<number | null>(null);
   const [monthRollup, setMonthRollup] = useState<PeriodRollup | null>(null);
   const [goals, setGoals] = useState<GoalProgress[]>([]);
   const [creatingGoal, setCreatingGoal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [items, setItems] = useState<StreamItem[]>([{ kind: "assistant-text", id: makeId(), text: GREETING }]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -211,6 +213,13 @@ export function HomePage() {
           <ChatHistoryMenu token={token} onSelectConversation={loadConversation} onNewChat={startNewChat} />
           <button
             type="button"
+            onClick={() => setShowSettings(true)}
+            className="text-sm text-ink-soft transition-colors hover:text-ink cursor-pointer"
+          >
+            Settings
+          </button>
+          <button
+            type="button"
             onClick={signOut}
             className="text-sm text-ink-soft transition-colors hover:text-ink cursor-pointer"
           >
@@ -233,6 +242,20 @@ export function HomePage() {
           group="spending"
           query={sourceQuery}
           onClose={() => setSourceQuery(null)}
+        />
+      )}
+
+      {showSettings && token && (
+        <SettingsModal
+          token={token}
+          onClose={() => setShowSettings(false)}
+          onBanksChanged={async (remaining) => {
+            // With no banks left there's nothing to show; let the onboarding
+            // gate send the user back to "Link your bank".
+            if (remaining === 0) return onNoBanksLeft();
+            await loadStandingState();
+          }}
+          onAccountDeleted={signOut}
         />
       )}
 
