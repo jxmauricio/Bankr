@@ -1,10 +1,28 @@
+import logging
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_JWT_SECRET = "change-me-in-prod"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # "development" | "production". Production refuses to boot with dev
+    # placeholder secrets -- see check_production_ready below.
+    environment: str = "development"
+
     database_url: str
+
+    # Comma-separated browser origins allowed to call the API. Defaults to
+    # Vite's dev port; set to the deployed web origin(s) in production.
+    cors_allowed_origins: str = "http://localhost:5173"
+
+    # Comma-separated invite codes accepted by POST /auth/signup. Blank means
+    # signup is open (the local-dev default); set it for a private beta.
+    signup_invite_codes: str = ""
 
     apple_team_id: str = ""
     apple_client_id: str = ""
@@ -88,4 +106,30 @@ class Settings(BaseSettings):
     apns_use_sandbox: bool = True
 
 
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+
+    @property
+    def invite_codes(self) -> set[str]:
+        return {c.strip() for c in self.signup_invite_codes.split(",") if c.strip()}
+
+    def check_production_ready(self) -> None:
+        """Fail fast rather than serve real bank data behind dev placeholders."""
+        if self.environment != "production":
+            return
+        problems = []
+        if self.session_jwt_secret in ("", _DEFAULT_JWT_SECRET) or len(self.session_jwt_secret) < 32:
+            problems.append("SESSION_JWT_SECRET must be a random value of at least 32 characters")
+        if not self.token_encryption_key:
+            problems.append("TOKEN_ENCRYPTION_KEY must be set")
+        if any("localhost" in o for o in self.cors_origins):
+            problems.append("CORS_ALLOWED_ORIGINS must be the deployed web origin, not localhost")
+        if problems:
+            raise RuntimeError("Refusing to start in production: " + "; ".join(problems))
+        if self.plaid_env == "sandbox":
+            logger.warning("ENVIRONMENT=production but PLAID_ENV=sandbox -- only test banks can be linked")
+
+
 settings = Settings()
+settings.check_production_ready()

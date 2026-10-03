@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.db.base import get_db
 from app.db.models import User
+from app.rate_limit import limit_chat_by_user
 from app.services import chat_service
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -87,7 +88,7 @@ def _goal_proposal(raw: list[dict] | None) -> dict | None:
     return None
 
 
-@router.post("", response_model=ChatResponse)
+@router.post("", response_model=ChatResponse, dependencies=[Depends(limit_chat_by_user)])
 def chat(
     body: ChatRequest,
     user: User = Depends(get_current_user),

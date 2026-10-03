@@ -28,7 +28,7 @@ same shape of change again.
 ```bash
 python3.13 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # runtime deps + pytest
 cp .env.example .env   # fill in real values as integrations come online
 ```
 

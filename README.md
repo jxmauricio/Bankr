@@ -26,7 +26,7 @@ You need the backend running first — both clients call `http://localhost:8000`
 # 1. Backend
 cd backend
 python3.13 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # runtime deps + pytest
 cp .env.example .env        # then fill in tokens, see below
 # local Postgres, if you don't already have one:
 brew install postgresql@16 && brew services start postgresql@16
@@ -100,6 +100,44 @@ Two more chat-agent tokens, both optional:
 | ---------- | ---------------- |
 | `APPLE_TEAM_ID`, `APPLE_CLIENT_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY_PATH` | Sign in with Apple — only used by `POST /auth/apple` for the iOS client. The web client uses email/password instead. |
 | `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_AUTH_KEY_PATH`, `APNS_TOPIC`, `APNS_USE_SANDBOX` | Push notifications — not yet wired up on either client (see `backend/README.md`). |
+
+## Deploying (private beta)
+
+Backend on Render (`render.yaml`, Docker image from `backend/Dockerfile`),
+web on Vercel (`web/vercel.json`), Postgres on a **separate prod** Supabase
+project. CI (`.github/workflows/ci.yml`) runs backend tests and the web
+lint/build on every PR.
+
+1. **Render** -- New > Blueprint, point at this repo. Fill in the prompted
+   secrets (table below). Migrations run on every boot.
+2. **Vercel** -- import the repo with root directory `web/`, set
+   `VITE_API_BASE_URL` to the Render service URL.
+3. Back on Render, set `CORS_ALLOWED_ORIGINS` to the Vercel URL and
+   `PLAID_WEBHOOK_URL` to `https://<render-host>/webhooks/plaid`.
+4. Invite people with `https://<vercel-host>/?invite=<code>` -- the code
+   is prefilled on the signup form.
+
+| Variable | Production value |
+| --- | --- |
+| `ENVIRONMENT` | `production` -- boot is refused if the JWT secret is a placeholder/short, `TOKEN_ENCRYPTION_KEY` is empty, or CORS still allows localhost. |
+| `DATABASE_URL` | Prod Supabase *Session pooler* URL (see `backend/.env.example`). |
+| `SESSION_JWT_SECRET` | `openssl rand -hex 32` -- never reuse the dev value. |
+| `TOKEN_ENCRYPTION_KEY` | Fresh Fernet key (command in "Tokens developers need"). Losing it means re-linking every bank. |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated web origins, e.g. `https://bankr.vercel.app`. |
+| `SIGNUP_INVITE_CODES` | Comma-separated codes; blank means open signup. |
+| `PLAID_CLIENT_ID` / `PLAID_SECRET` / `PLAID_ENV` | Production keys + `production` once Plaid approves; `sandbox` for a staging pass first. |
+| `PLAID_WEBHOOK_URL` | `https://<render-host>/webhooks/plaid` |
+| `OPENROUTER_API_KEY` | Set a monthly spend cap on the key in OpenRouter. |
+| `BRAVE_SEARCH_API_KEY` | Optional. |
+
+`/auth/login` and `/auth/signup` are limited to 10 requests/minute per IP and
+`/chat` to 30 messages/hour per user (`backend/app/rate_limit.py`). That state
+is in-memory, so keep the Render service at one instance until it moves to a
+shared store.
+
+Known gaps, fine for a small beta: the session token lives in
+`localStorage` rather than an httpOnly cookie, there are no push
+notifications, and there's no in-app account deletion yet.
 
 ## Full documentation
 

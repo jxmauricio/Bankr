@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
+import secrets
+
 from app.auth import (
     get_current_user,
     hash_password,
@@ -10,8 +12,10 @@ from app.auth import (
     verify_apple_identity_token,
     verify_password,
 )
+from app.config import settings
 from app.db.base import get_db
 from app.db.models import User
+from app.rate_limit import limit_auth_by_ip
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -27,6 +31,7 @@ class SessionResponse(BaseModel):
 class SignUpRequest(BaseModel):
     email: EmailStr
     password: str
+    invite_code: str = ""
 
 
 class LoginRequest(BaseModel):
@@ -50,8 +55,22 @@ def sign_in_with_apple(body: AppleSignInRequest, db: Session = Depends(get_db)) 
     return SessionResponse(session_token=issue_session_token(user.id))
 
 
-@router.post("/signup", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
+def _valid_invite_code(code: str) -> bool:
+    if not settings.invite_codes:
+        return True
+    return any(secrets.compare_digest(code.strip(), valid) for valid in settings.invite_codes)
+
+
+@router.post(
+    "/signup",
+    response_model=SessionResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit_auth_by_ip)],
+)
 def sign_up(body: SignUpRequest, db: Session = Depends(get_db)) -> SessionResponse:
+    if not _valid_invite_code(body.invite_code):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "A valid invite code is required to sign up")
+
     if len(body.password) < 8:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Password must be at least 8 characters")
 
@@ -67,7 +86,7 @@ def sign_up(body: SignUpRequest, db: Session = Depends(get_db)) -> SessionRespon
     return SessionResponse(session_token=issue_session_token(user.id))
 
 
-@router.post("/login", response_model=SessionResponse)
+@router.post("/login", response_model=SessionResponse, dependencies=[Depends(limit_auth_by_ip)])
 def login(body: LoginRequest, db: Session = Depends(get_db)) -> SessionResponse:
     user = db.query(User).filter(User.email == body.email).one_or_none()
     if user is None or user.password_hash is None or not verify_password(body.password, user.password_hash):

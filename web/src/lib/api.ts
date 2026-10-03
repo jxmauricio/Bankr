@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 // FastAPI's own HTTPException(detail=...) sends a plain string, but Pydantic
 // validation errors send a list of {msg, loc, ...} objects instead.
@@ -66,8 +66,8 @@ export interface SessionResponse {
   session_token: string;
 }
 
-export const signUp = (email: string, password: string) =>
-  request<SessionResponse>("/auth/signup", { method: "POST", body: { email, password } });
+export const signUp = (email: string, password: string, inviteCode: string) =>
+  request<SessionResponse>("/auth/signup", { method: "POST", body: { email, password, invite_code: inviteCode } });
 
 export const login = (email: string, password: string) =>
   request<SessionResponse>("/auth/login", { method: "POST", body: { email, password } });

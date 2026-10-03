@@ -10,6 +10,7 @@ from app.api.chat import router as chat_router
 from app.api.dashboard import router as dashboard_router
 from app.api.goals import router as goals_router
 from app.api.webhooks import router as webhooks_router
+from app.config import settings
 from app.mcp_server import McpEndpoint
 
 mcp_endpoint = McpEndpoint()
@@ -23,11 +24,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Bankr API", lifespan=lifespan)
 
-# Dev-only: the web app runs on Vite's default port. Tighten to the real
-# deployed origin once the web app has one.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=settings.cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
