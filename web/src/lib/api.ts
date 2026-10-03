@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 // FastAPI's own HTTPException(detail=...) sends a plain string, but Pydantic
 // validation errors send a list of {msg, loc, ...} objects instead.
@@ -17,6 +17,17 @@ export class ApiError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+function buildHeaders(token: string | null | undefined, hasJsonBody: boolean): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  // The backend anchors "this month" / "last week" to this zone, so a
+  // late-evening purchase lands in the user's month, not the server's.
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (timeZone) headers["X-Timezone"] = timeZone;
+  if (hasJsonBody) headers["Content-Type"] = "application/json";
+  return headers;
 }
 
 async function request<T>(
@@ -38,13 +49,7 @@ async function request<T>(
     for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
   }
 
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  // The backend anchors "this month" / "last week" to this zone, so a
-  // late-evening purchase lands in the user's month, not the server's.
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  if (timeZone) headers["X-Timezone"] = timeZone;
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const headers = buildHeaders(token, body !== undefined);
 
   const response = await fetch(url, {
     method,
@@ -66,8 +71,8 @@ export interface SessionResponse {
   session_token: string;
 }
 
-export const signUp = (email: string, password: string) =>
-  request<SessionResponse>("/auth/signup", { method: "POST", body: { email, password } });
+export const signUp = (email: string, password: string, inviteCode: string) =>
+  request<SessionResponse>("/auth/signup", { method: "POST", body: { email, password, invite_code: inviteCode } });
 
 export const login = (email: string, password: string) =>
   request<SessionResponse>("/auth/login", { method: "POST", body: { email, password } });
@@ -96,6 +101,21 @@ export const linkAccount = (token: string, publicToken: string) =>
     token,
     body: { public_token: publicToken },
   });
+
+export interface LinkedBank {
+  id: string;
+  institution_name: string;
+  status: "active" | "error";
+  accounts: { name: string | null; mask: string | null; account_type: string }[];
+}
+
+export const fetchLinkedBanks = (token: string) => request<LinkedBank[]>("/linked-accounts", { token });
+
+export const disconnectBank = (token: string, bankId: string) =>
+  request<void>(`/linked-accounts/${bankId}`, { method: "DELETE", token });
+
+export const deleteAccount = (token: string, password: string) =>
+  request<void>("/auth/account", { method: "DELETE", token, body: { password } });
 
 // --- Goals ---
 
@@ -263,12 +283,49 @@ export interface ChatResponse {
   goal_proposal: GoalProposal | null;
 }
 
-export const sendChatMessage = (token: string, message: string, conversationId: string | null) =>
-  request<ChatResponse>("/chat", {
+/**
+ * Sends a chat turn over Server-Sent Events (POST /chat/stream): onStatus
+ * fires with a progress line ("Looking up Dining spending…") before each tool
+ * runs, and the promise resolves with the final reply. A stream that ends
+ * without a reply rejects with an ApiError like any other failure.
+ */
+export async function streamChatMessage(
+  token: string,
+  message: string,
+  conversationId: string | null,
+  onStatus: (label: string) => void
+): Promise<ChatResponse> {
+  const response = await fetch(new URL(BASE_URL + "/chat/stream"), {
     method: "POST",
-    token,
-    body: { message, conversation_id: conversationId },
+    headers: buildHeaders(token, true),
+    body: JSON.stringify({ message, conversation_id: conversationId }),
   });
+  if (!response.ok || !response.body) {
+    const body = await response.json().catch(() => null);
+    throw new ApiError(response.status, extractErrorMessage(body) ?? `Request failed (${response.status})`);
+  }
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    // Events are separated by a blank line; keep any partial tail for the next chunk.
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() ?? "";
+    for (const block of blocks) {
+      const event = block.match(/^event: (.*)$/m)?.[1];
+      const data = block.match(/^data: (.*)$/m)?.[1];
+      if (!event || data === undefined) continue; // keepalive comment
+      const payload = JSON.parse(data);
+      if (event === "status") onStatus(payload.label);
+      else if (event === "done") return payload as ChatResponse;
+      else if (event === "error") throw new ApiError(500, payload.message);
+    }
+  }
+  throw new ApiError(500, "Bankr couldn't respond. Try again.");
+}
 
 export interface ConversationSummary {
   conversation_id: string;

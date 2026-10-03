@@ -24,6 +24,12 @@ import openai
 
 from app.agent.agent_client import ToolSpec
 
+# Upper bound on model->tool->model round trips per user message. Each round
+# is a paid API call, and nothing else stops a confused model from calling
+# tools forever. Real questions need 1-3 rounds; past the cap, one last call
+# with tools disabled makes the model answer from what it already gathered.
+MAX_TOOL_ROUNDS = 8
+
 
 class AnthropicAgentClient:
     def __init__(
@@ -61,12 +67,16 @@ class AnthropicAgentClient:
         anthropic_tools = self._to_anthropic_tools(tools)
         messages = list(history)
 
-        while True:
+        for round_number in range(MAX_TOOL_ROUNDS + 1):
+            final_round = round_number == MAX_TOOL_ROUNDS
             response = self._client.messages.create(
                 model=self._model,
                 system=system,
                 tools=anthropic_tools,
                 messages=messages,
+                # tool_choice "none" postdates this pinned SDK's typed params
+                # but is a valid Messages API value either way.
+                **({"tool_choice": {"type": "none"}} if final_round and anthropic_tools else {}),
                 **self._thinking_kwargs(1024),
             )
             # Preserve the response's own content blocks unmodified (thinking
@@ -74,7 +84,7 @@ class AnthropicAgentClient:
             # tool call to come back exactly as issued on the next turn.
             messages.append({"role": "assistant", "content": response.content})
 
-            if response.stop_reason != "tool_use":
+            if response.stop_reason != "tool_use" or final_round:
                 return "".join(block.text for block in response.content if block.type == "text")
 
             tool_results = []
@@ -125,14 +135,21 @@ class OpenAICompatibleAgentClient:
         openai_tools = self._to_openai_tools(tools)
         messages = [{"role": "system", "content": system}] + list(history)
 
-        while True:
+        for round_number in range(MAX_TOOL_ROUNDS + 1):
+            final_round = round_number == MAX_TOOL_ROUNDS
             response = self._client.chat.completions.create(
-                model=self._model, messages=messages, tools=openai_tools, extra_body=self._extra_body
+                model=self._model,
+                messages=messages,
+                tools=openai_tools,
+                # Only sent with tools present -- some endpoints reject
+                # tool_choice alongside an empty tools list.
+                **({"tool_choice": "none"} if final_round and openai_tools else {}),
+                extra_body=self._extra_body,
             )
             message = response.choices[0].message
             messages.append(message.model_dump(exclude_none=True))
 
-            if not message.tool_calls:
+            if not message.tool_calls or final_round:
                 return message.content or ""
 
             for tool_call in message.tool_calls:

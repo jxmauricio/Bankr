@@ -26,7 +26,7 @@ You need the backend running first — both clients call `http://localhost:8000`
 # 1. Backend
 cd backend
 python3.13 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # runtime deps + pytest
 cp .env.example .env        # then fill in tokens, see below
 # local Postgres, if you don't already have one:
 brew install postgresql@16 && brew services start postgresql@16
@@ -91,7 +91,7 @@ Two more chat-agent tokens, both optional:
 
 | Variable | What it's for | How to get it |
 | ---------- | ---------------- | -------------- |
-| `BRAVE_SEARCH_API_KEY` | Lets the agent call a `web_search` tool for current info (rates, inflation, ...). | [api.search.brave.com](https://api.search.brave.com) (free tier available). Without it, `web_search` returns a clear error result instead of live results. |
+| `BRAVE_SEARCH_API_KEY` | Lets the agent call a `web_search` tool for current info (rates, inflation, ...). | [api.search.brave.com](https://api.search.brave.com) (free tier available). Optional: without it, search uses OpenRouter's web plugin (about $0.007 per search, no extra account) when `AGENT_PROVIDER=openrouter`; with neither, `web_search` returns a clear error result. |
 | `AGENT_EXTENDED_THINKING` / `AGENT_THINKING_BUDGET_TOKENS` | Turns on reasoning before the reply, for `anthropic` and `openrouter` only. | No signup — just `true`/a token budget in `backend/.env`. Off by default (slower, more tokens per reply). |
 
 ### iOS-only (skip these if you're only running the web client)
@@ -100,6 +100,57 @@ Two more chat-agent tokens, both optional:
 | ---------- | ---------------- |
 | `APPLE_TEAM_ID`, `APPLE_CLIENT_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY_PATH` | Sign in with Apple — only used by `POST /auth/apple` for the iOS client. The web client uses email/password instead. |
 | `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_AUTH_KEY_PATH`, `APNS_TOPIC`, `APNS_USE_SANDBOX` | Push notifications — not yet wired up on either client (see `backend/README.md`). |
+
+## Deploying (private beta)
+
+Backend on Render (`render.yaml`, Docker image from `backend/Dockerfile`),
+web on Vercel (`web/vercel.json`), Postgres on a **separate prod** Supabase
+project. CI (`.github/workflows/ci.yml`) runs backend tests and the web
+lint/build on every PR.
+
+1. **Render** -- New > Blueprint, point at this repo. Fill in the prompted
+   secrets (table below). Migrations run on every boot.
+2. **Vercel** -- import the repo with root directory `web/`, set
+   `VITE_API_BASE_URL` to the Render service URL.
+3. Back on Render, set `CORS_ALLOWED_ORIGINS` to the Vercel URL,
+   `PLAID_WEBHOOK_URL` to `https://<render-host>/webhooks/plaid`, and
+   `PLAID_REDIRECT_URI` to `https://<vercel-host>/oauth-return`.
+4. In the Plaid Dashboard (API > Allowed redirect URIs) add that same
+   `/oauth-return` URL. Plaid rejects every link token whose redirect URI
+   isn't registered, so set both or neither.
+5. Invite people with `https://<vercel-host>/?invite=<code>` -- the code
+   is prefilled on the signup form.
+
+| Variable | Production value |
+| --- | --- |
+| `ENVIRONMENT` | `production` -- boot is refused if the JWT secret is a placeholder/short, `TOKEN_ENCRYPTION_KEY` is empty, or CORS still allows localhost. |
+| `DATABASE_URL` | Prod Supabase *Session pooler* URL (see `backend/.env.example`). |
+| `SESSION_JWT_SECRET` | `openssl rand -hex 32` -- never reuse the dev value. |
+| `TOKEN_ENCRYPTION_KEY` | Fresh Fernet key (command in "Tokens developers need"). Losing it means re-linking every bank. |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated web origins, e.g. `https://bankr.vercel.app`. |
+| `SIGNUP_INVITE_CODES` | Comma-separated codes; blank means open signup. |
+| `PLAID_CLIENT_ID` / `PLAID_SECRET` / `PLAID_ENV` | Production keys + `production` once Plaid approves; `sandbox` for a staging pass first. |
+| `PLAID_WEBHOOK_URL` | `https://<render-host>/webhooks/plaid` |
+| `PLAID_REDIRECT_URI` | `https://<vercel-host>/oauth-return` -- needed for OAuth banks (Chase, Wells Fargo, Capital One, ...); must be registered in the Plaid Dashboard. |
+| `OPENROUTER_API_KEY` | Set a monthly spend cap on the key in OpenRouter. |
+| `BRAVE_SEARCH_API_KEY` | Optional. |
+
+`/auth/login` and `/auth/signup` are limited to 10 requests/minute per IP and
+`/chat` to 30 messages/hour per user (`backend/app/rate_limit.py`). That state
+is in-memory, so keep the Render service at one instance until it moves to a
+shared store.
+
+Users can disconnect a bank or delete their account from **Settings** in
+the web app. Both call Plaid's `/item/remove` first (that is what ends the
+per-bank monthly charge) and only then delete local rows, so a Plaid outage
+leaves everything intact and retryable. Disconnecting deletes that bank's
+transactions; disconnecting the last bank also clears net-worth history.
+Account deletion requires the password and erases goals, chat history and
+insights too.
+
+Known gaps, fine for a small beta: the session token lives in
+`localStorage` rather than an httpOnly cookie, and there are no push
+notifications.
 
 ## Full documentation
 

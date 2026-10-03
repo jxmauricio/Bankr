@@ -30,6 +30,7 @@ from plaid.api import plaid_api
 from plaid.model.accounts_get_request import AccountsGetRequest
 from plaid.model.country_code import CountryCode
 from plaid.model.item_get_request import ItemGetRequest
+from plaid.model.item_remove_request import ItemRemoveRequest
 from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchangeRequest
 from plaid.model.item_webhook_update_request import ItemWebhookUpdateRequest
 from plaid.model.link_token_create_request import LinkTokenCreateRequest
@@ -110,6 +111,8 @@ class PlaidClient:
         # webhook is a valid, fully-functional choice (see settings.plaid_webhook_url).
         if settings.plaid_webhook_url:
             request_kwargs["webhook"] = settings.plaid_webhook_url
+        if settings.plaid_redirect_uri:
+            request_kwargs["redirect_uri"] = settings.plaid_redirect_uri
         response = client.link_token_create(LinkTokenCreateRequest(**request_kwargs))
         return response.link_token
 
@@ -204,6 +207,19 @@ class PlaidClient:
         client = _client()
         response = client.item_get(ItemGetRequest(access_token=access_token))
         return response.item.item_id
+
+    def remove_item(self, access_token: str) -> None:
+        """Tell Plaid to drop this bank login. This is what ends the monthly
+        per-Item charge and invalidates the access token. An Item Plaid no
+        longer has (already removed, or revoked at the bank) is the state we
+        want, so it counts as success -- which also makes a retry after a
+        partial failure safe."""
+        client = _client()
+        try:
+            client.item_remove(ItemRemoveRequest(access_token=access_token))
+        except plaid.ApiException as e:
+            if _plaid_error_code(e) not in ("ITEM_NOT_FOUND", "INVALID_ACCESS_TOKEN"):
+                raise
 
     def update_item_webhook(self, access_token: str, webhook_url: str) -> None:
         client = _client()

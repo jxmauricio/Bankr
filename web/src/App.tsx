@@ -43,7 +43,7 @@ function PostSignInGate() {
 
   switch (step) {
     case "home":
-      return <HomePage />;
+      return <HomePage onNoBanksLeft={loadOnboardingState} />;
     case "set-goal":
       return <GoalSetupPage onGoalSet={() => setStep("home")} />;
     case "link-bank":

@@ -1,3 +1,5 @@
+import json
+
 from app.agent import claude_agent
 from app.db.models import ChatMessage
 from app.services.sync_service import sync_user_accounts
@@ -170,3 +172,63 @@ def test_chat_propose_spending_tracker_returns_category_and_window(client, db, u
     assert body["goal_proposal"]["window"] == "this_month"
     assert body["goal_proposal"]["target_amount"] == 0.0
     assert db.query(Goal).filter(Goal.user_id == user.id).count() == 0
+
+
+def _sse_events(response) -> list[tuple[str, dict]]:
+    events = []
+    for block in response.text.split("\n\n"):
+        lines = [line for line in block.splitlines() if not line.startswith(":")]
+        if not lines:
+            continue
+        event = next(line[len("event: ") :] for line in lines if line.startswith("event: "))
+        data = next(line[len("data: ") :] for line in lines if line.startswith("data: "))
+        events.append((event, json.loads(data)))
+    return events
+
+
+def test_chat_stream_sends_status_then_the_reply(client, db, user, monkeypatch):
+    sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
+    monkeypatch.setattr(
+        claude_agent,
+        "_client",
+        FakeAgentClient(
+            turns=[
+                ScriptedTurn(
+                    final_text="Your net worth is $2,100.",
+                    tool_calls=[("get_net_worth", {}), ("get_spending", {"category": "Dining"})],
+                ),
+            ]
+        ),
+    )
+
+    response = client.post("/chat/stream", json={"message": "what's my net worth?"})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = _sse_events(response)
+    assert [name for name, _ in events] == ["status", "status", "done"]
+    assert events[0][1] == {"label": "Checking your balances…"}
+    assert events[1][1] == {"label": "Looking up Dining spending…"}
+    done = events[2][1]
+    assert done["reply"] == "Your net worth is $2,100."
+    assert done["sources"][0]["tool"] == "get_net_worth"
+
+    # Saved exactly like the non-streaming endpoint.
+    messages = db.query(ChatMessage).filter(ChatMessage.user_id == user.id).order_by(ChatMessage.created_at).all()
+    assert [m.role for m in messages] == ["user", "assistant"]
+    assert messages[1].content == "Your net worth is $2,100."
+
+
+def test_chat_stream_reports_a_failed_turn_as_an_error_event(client, user, monkeypatch):
+    class ExplodingClient:
+        def run_turn(self, *args, **kwargs):
+            raise RuntimeError("provider down")
+
+    monkeypatch.setattr(claude_agent, "_client", ExplodingClient())
+
+    response = client.post("/chat/stream", json={"message": "hi"})
+
+    assert response.status_code == 200
+    events = _sse_events(response)
+    assert [name for name, _ in events] == ["error"]
+    assert "couldn't respond" in events[0][1]["message"]

@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
+
+import secrets
 
 from app.auth import (
     get_current_user,
@@ -10,8 +12,13 @@ from app.auth import (
     verify_apple_identity_token,
     verify_password,
 )
+from app.api.deps import get_aggregator
+from app.config import settings
 from app.db.base import get_db
 from app.db.models import User
+from app.integrations.bank_aggregator import BankAggregatorClient
+from app.rate_limit import limit_auth_by_ip
+from app.services.account_removal import RemovalError, delete_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -27,6 +34,7 @@ class SessionResponse(BaseModel):
 class SignUpRequest(BaseModel):
     email: EmailStr
     password: str
+    invite_code: str = ""
 
 
 class LoginRequest(BaseModel):
@@ -50,8 +58,22 @@ def sign_in_with_apple(body: AppleSignInRequest, db: Session = Depends(get_db)) 
     return SessionResponse(session_token=issue_session_token(user.id))
 
 
-@router.post("/signup", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
+def _valid_invite_code(code: str) -> bool:
+    if not settings.invite_codes:
+        return True
+    return any(secrets.compare_digest(code.strip(), valid) for valid in settings.invite_codes)
+
+
+@router.post(
+    "/signup",
+    response_model=SessionResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit_auth_by_ip)],
+)
 def sign_up(body: SignUpRequest, db: Session = Depends(get_db)) -> SessionResponse:
+    if not _valid_invite_code(body.invite_code):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "A valid invite code is required to sign up")
+
     if len(body.password) < 8:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Password must be at least 8 characters")
 
@@ -67,7 +89,7 @@ def sign_up(body: SignUpRequest, db: Session = Depends(get_db)) -> SessionRespon
     return SessionResponse(session_token=issue_session_token(user.id))
 
 
-@router.post("/login", response_model=SessionResponse)
+@router.post("/login", response_model=SessionResponse, dependencies=[Depends(limit_auth_by_ip)])
 def login(body: LoginRequest, db: Session = Depends(get_db)) -> SessionResponse:
     user = db.query(User).filter(User.email == body.email).one_or_none()
     if user is None or user.password_hash is None or not verify_password(body.password, user.password_hash):
@@ -84,3 +106,33 @@ class McpTokenResponse(BaseModel):
 def create_mcp_token(user: User = Depends(get_current_user)) -> McpTokenResponse:
     """Mint a token for connecting an external MCP client to /mcp."""
     return McpTokenResponse(mcp_token=issue_mcp_token(user.id))
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str
+
+
+@router.delete("/account", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(limit_auth_by_ip)])
+def delete_account(
+    body: DeleteAccountRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    aggregator: BankAggregatorClient = Depends(get_aggregator),
+) -> Response:
+    """Permanently delete the signed-in user, their data, and every bank
+    connection at Plaid. Requires the account password so a stolen or
+    left-open session can't wipe the account."""
+    if user.password_hash is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "This account has no password, so it can't be deleted from here."
+        )
+    if not verify_password(body.password, user.password_hash):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Incorrect password")
+    try:
+        delete_user(db, user.id, aggregator)
+    except RemovalError:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Couldn't disconnect your banks right now, so nothing was deleted. Try again.",
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

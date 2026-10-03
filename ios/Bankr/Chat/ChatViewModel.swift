@@ -11,6 +11,9 @@ final class ChatViewModel: ObservableObject {
     @Published private(set) var messages: [ChatBubble] = []
     @Published var draft = ""
     @Published private(set) var isSending = false
+    /// Latest progress line from the streaming endpoint, nil until the first
+    /// tool runs ("Looking up Dining spending…").
+    @Published private(set) var statusLabel: String?
     @Published private(set) var errorMessage: String?
 
     private var conversationId: String?
@@ -23,12 +26,18 @@ final class ChatViewModel: ObservableObject {
         errorMessage = nil
         messages.append(ChatBubble(role: "user", text: text))
         isSending = true
-        defer { isSending = false }
+        statusLabel = nil
+        defer {
+            isSending = false
+            statusLabel = nil
+        }
 
         do {
-            let response = try await BankrAPIClient.shared.sendChatMessage(
+            let response = try await BankrAPIClient.shared.streamChatMessage(
                 text, conversationId: conversationId, sessionToken: sessionToken
-            )
+            ) { [weak self] label in
+                self?.statusLabel = label
+            }
             conversationId = response.conversationId
             messages.append(ChatBubble(role: "assistant", text: response.reply))
         } catch {

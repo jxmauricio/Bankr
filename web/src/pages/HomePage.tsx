@@ -8,7 +8,7 @@ import {
   fetchRollup,
   fetchSpending,
   resyncAccounts,
-  sendChatMessage,
+  streamChatMessage,
   type ChatSource,
   type GoalProgress,
   type GoalProposal,
@@ -21,6 +21,7 @@ import { GoalSidebar } from "../components/GoalSidebar";
 import { GoalPaceTrack } from "../components/GoalPaceTrack";
 import { GoalProposalCard } from "../components/GoalProposalCard";
 import { CreateGoalModal, NewGoalButton } from "../components/CreateGoalModal";
+import { SettingsModal } from "../components/SettingsModal";
 import { StatsBar } from "../components/StatsBar";
 import { NetWorthFlowModal } from "../components/NetWorthFlowModal";
 import { TransactionSearchModal } from "../components/TransactionSearchModal";
@@ -48,16 +49,18 @@ type StreamItem =
 let nextId = 0;
 const makeId = () => `item-${nextId++}`;
 
-export function HomePage() {
+export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   const { token, signOut } = useSession();
   const [netWorth, setNetWorth] = useState<number | null>(null);
   const [monthRollup, setMonthRollup] = useState<PeriodRollup | null>(null);
   const [goals, setGoals] = useState<GoalProgress[]>([]);
   const [creatingGoal, setCreatingGoal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [items, setItems] = useState<StreamItem[]>([{ kind: "assistant-text", id: makeId(), text: GREETING }]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [statusLabel, setStatusLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showFlow, setShowFlow] = useState(false);
   const [statTileGroup, setStatTileGroup] = useState<Topic | null>(null);
@@ -106,7 +109,7 @@ export function HomePage() {
 
   useEffect(() => {
     streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight, behavior: "smooth" });
-  }, [items, isSending]);
+  }, [items, isSending, statusLabel]);
 
   // Keep the active conversation in sync with localStorage so a refresh (or
   // reopening the tab) restores it instead of dropping back to the greeting.
@@ -124,8 +127,9 @@ export function HomePage() {
     pushItem({ kind: "user-text", id: makeId(), text });
     setError(null);
     setIsSending(true);
+    setStatusLabel(null);
     try {
-      const response = await sendChatMessage(token, text, conversationId);
+      const response = await streamChatMessage(token, text, conversationId, setStatusLabel);
       setConversationId(response.conversation_id);
       pushItem({
         kind: "assistant-text",
@@ -143,6 +147,7 @@ export function HomePage() {
       setError(err instanceof ApiError ? err.message : "Bankr couldn't respond. Try again.");
     } finally {
       setIsSending(false);
+      setStatusLabel(null);
     }
   }
 
@@ -211,6 +216,13 @@ export function HomePage() {
           <ChatHistoryMenu token={token} onSelectConversation={loadConversation} onNewChat={startNewChat} />
           <button
             type="button"
+            onClick={() => setShowSettings(true)}
+            className="text-sm text-ink-soft transition-colors hover:text-ink cursor-pointer"
+          >
+            Settings
+          </button>
+          <button
+            type="button"
             onClick={signOut}
             className="text-sm text-ink-soft transition-colors hover:text-ink cursor-pointer"
           >
@@ -233,6 +245,20 @@ export function HomePage() {
           group="spending"
           query={sourceQuery}
           onClose={() => setSourceQuery(null)}
+        />
+      )}
+
+      {showSettings && token && (
+        <SettingsModal
+          token={token}
+          onClose={() => setShowSettings(false)}
+          onBanksChanged={async (remaining) => {
+            // With no banks left there's nothing to show; let the onboarding
+            // gate send the user back to "Link your bank".
+            if (remaining === 0) return onNoBanksLeft();
+            await loadStandingState();
+          }}
+          onAccountDeleted={signOut}
         />
       )}
 
@@ -288,7 +314,7 @@ export function HomePage() {
               {isSending && (
                 <div className="flex justify-start">
                   <div className="rounded-2xl rounded-bl-sm border-l-2 border-gold bg-surface px-4 py-3">
-                    <ThinkingIndicator />
+                    <ThinkingIndicator label={statusLabel} />
                   </div>
                 </div>
               )}
@@ -511,12 +537,15 @@ function MicIcon() {
   );
 }
 
-function ThinkingIndicator() {
+function ThinkingIndicator({ label }: { label: string | null }) {
   return (
-    <div className="flex items-center gap-1.5" role="status" aria-label="Bankr is thinking">
-      <span className="h-1.5 w-1.5 animate-thinking rounded-full bg-gold [animation-delay:0ms]" />
-      <span className="h-1.5 w-1.5 animate-thinking rounded-full bg-gold [animation-delay:160ms]" />
-      <span className="h-1.5 w-1.5 animate-thinking rounded-full bg-gold [animation-delay:320ms]" />
+    <div className="flex items-center gap-2" role="status" aria-label={label ?? "Bankr is thinking"}>
+      <div className="flex items-center gap-1.5">
+        <span className="h-1.5 w-1.5 animate-thinking rounded-full bg-gold [animation-delay:0ms]" />
+        <span className="h-1.5 w-1.5 animate-thinking rounded-full bg-gold [animation-delay:160ms]" />
+        <span className="h-1.5 w-1.5 animate-thinking rounded-full bg-gold [animation-delay:320ms]" />
+      </div>
+      {label && <span className="text-sm text-ink-soft">{label}</span>}
     </div>
   );
 }

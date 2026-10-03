@@ -14,6 +14,7 @@ reply are a separate, lightweight thing we do keep (ChatMessage.tool_calls),
 purely for the user-facing "sources" trail -- never fed back into history.
 """
 
+from typing import Callable
 from uuid import UUID
 
 from sqlalchemy import func
@@ -24,26 +25,46 @@ from app.db.models import ChatMessage
 
 _PREVIEW_MAX_CHARS = 120
 
+# How many prior messages are sent to the model with each new one. The whole
+# history is resent on every call, so without a cap long conversations cost
+# more per message forever; 20 (~10 exchanges) keeps follow-ups like "what
+# about the month before?" working. The full conversation stays in the DB
+# and in the UI -- only what the model sees is trimmed.
+MAX_HISTORY_MESSAGES = 20
+
 
 def _conversation_history(db: Session, user_id: UUID, conversation_id: UUID) -> list[dict]:
     rows = (
         db.query(ChatMessage)
         .filter(ChatMessage.user_id == user_id, ChatMessage.conversation_id == conversation_id)
-        .order_by(ChatMessage.created_at)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(MAX_HISTORY_MESSAGES)
         .all()
     )
+    rows.reverse()
+    # Anthropic rejects a history that opens on an assistant turn, which a
+    # cut through the middle of an exchange would leave.
+    while rows and rows[0].role != "user":
+        rows.pop(0)
     return [{"role": row.role, "content": row.content} for row in rows]
 
 
-def send_message(db: Session, user_id: UUID, conversation_id: UUID, message_text: str) -> tuple[str, list[dict]]:
-    """Returns (reply text, sources) -- see run_agent_turn for what sources is."""
+def send_message(
+    db: Session,
+    user_id: UUID,
+    conversation_id: UUID,
+    message_text: str,
+    on_status: Callable[[str], None] | None = None,
+) -> tuple[str, list[dict]]:
+    """Returns (reply text, sources) -- see run_agent_turn for what sources
+    is and what on_status receives."""
     history = _conversation_history(db, user_id, conversation_id)
     history.append({"role": "user", "content": message_text})
 
     db.add(ChatMessage(user_id=user_id, conversation_id=conversation_id, role="user", content=message_text))
     db.commit()
 
-    assistant_text, sources = run_agent_turn(db, user_id, history)
+    assistant_text, sources = run_agent_turn(db, user_id, history, on_status)
 
     db.add(
         ChatMessage(

@@ -1,16 +1,28 @@
+import json
+import logging
+import queue
+import threading
 from datetime import datetime
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.auth import get_current_user
-from app.db.base import get_db
+from app.db.base import get_db, get_session_factory
 from app.db.models import User
+from app.rate_limit import limit_chat_by_user
 from app.services import chat_service
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+# Idle gap after which the stream sends an SSE comment, so a proxy doesn't
+# close a connection that's just waiting on a slow model round.
+_KEEPALIVE_SECONDS = 15
 
 
 class ChatRequest(BaseModel):
@@ -87,7 +99,7 @@ def _goal_proposal(raw: list[dict] | None) -> dict | None:
     return None
 
 
-@router.post("", response_model=ChatResponse)
+@router.post("", response_model=ChatResponse, dependencies=[Depends(limit_chat_by_user)])
 def chat(
     body: ChatRequest,
     user: User = Depends(get_current_user),
@@ -100,6 +112,70 @@ def chat(
         reply=reply,
         sources=_public_sources(sources),
         goal_proposal=_goal_proposal(sources),
+    )
+
+
+@router.post("/stream", dependencies=[Depends(limit_chat_by_user)])
+def chat_stream(
+    body: ChatRequest,
+    user: User = Depends(get_current_user),
+    session_factory: sessionmaker = Depends(get_session_factory),
+) -> StreamingResponse:
+    """Same turn as POST /chat, delivered as Server-Sent Events so the client
+    can show progress during a multi-round turn:
+
+      event: status  data: {"label": "Looking up Dining spending…"}  (0..n)
+      event: done    data: <the ChatResponse JSON>                    (once)
+      event: error   data: {"message": "..."}                         (instead of done)
+
+    The turn runs in a worker thread with its own DB session (this request's
+    session is closed before the body streams). If the client disconnects the
+    turn still finishes and is saved, so the reply is there when they reopen
+    the conversation."""
+    conversation_id = body.conversation_id or uuid4()
+    user_id = user.id
+    events: queue.Queue[tuple[str, dict] | None] = queue.Queue()
+
+    def run_turn() -> None:
+        try:
+            with session_factory() as db:
+                reply, sources = chat_service.send_message(
+                    db,
+                    user_id,
+                    conversation_id,
+                    body.message,
+                    on_status=lambda label: events.put(("status", {"label": label})),
+                )
+            response = ChatResponse(
+                conversation_id=conversation_id,
+                reply=reply,
+                sources=_public_sources(sources),
+                goal_proposal=_goal_proposal(sources),
+            )
+            events.put(("done", response.model_dump(mode="json")))
+        except Exception:
+            logger.exception("Streaming chat turn failed")
+            events.put(("error", {"message": "Bankr couldn't respond. Try again."}))
+        finally:
+            events.put(None)
+
+    def stream():
+        threading.Thread(target=run_turn, daemon=True).start()
+        while True:
+            try:
+                item = events.get(timeout=_KEEPALIVE_SECONDS)
+            except queue.Empty:
+                yield ": keepalive\n\n"
+                continue
+            if item is None:
+                return
+            event, data = item
+            yield f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

@@ -79,6 +79,12 @@ class BankAggregatorClient(Protocol):
         app/services/webhook_service.py finds the right LinkedAccount rows."""
         ...
 
+    def remove_item(self, access_token: str) -> None:
+        """Drop this bank login at the aggregator: ends billing for it and
+        invalidates the access token. Must be idempotent (removing an already
+        removed login succeeds) and raise on any other failure."""
+        ...
+
     def update_item_webhook(self, access_token: str, webhook_url: str) -> None:
         """Attach (or change) the webhook URL for an already-linked Item.
         create_link_token only sets one for *new* links, so this is what

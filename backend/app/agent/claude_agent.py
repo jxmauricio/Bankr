@@ -24,6 +24,7 @@ directly, so swapping to a cheaper model for local prototyping doesn't
 touch this file.
 """
 
+from typing import Callable
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -115,11 +116,21 @@ mention that the total is net of them.
 - If a tool returns an error with did_you_mean or valid options, retry with \
 one of those instead of giving up or guessing.
 
-Write in plain conversational prose, 2-4 sentences, like a text message from \
-a sharp friend -- never markdown. No headers, no bold/italic asterisks, no \
-bullet or numbered lists, no emoji. Lead with the answer, not a preamble \
-("Let me check..."). Weave numbers into the sentence itself instead of \
-listing them out one per line."""
+Write like a text message from a sharp friend, and make it easy to scan. \
+Lead with the answer on the first line, not a preamble ("Let me check..."). \
+Bold only the single most important number, like **$412.30**. Pick the \
+shape that fits the question:
+- One number (a total, a balance): 1-3 sentences of plain prose with the \
+numbers woven in.
+- A breakdown ("what am I spending on"): one intro line with the date range, \
+then up to 5 lines like "- Dining — $412", largest first. If there are more, \
+say the card shows the rest.
+- A comparison: one line per item, like "- Dining: $412 vs $380 (up $32, +8%)".
+- Transactions: one line each, like "- Sep 14 · Shell · $54.20 · Gas · pending".
+- A goal or status: amount out of target with the percent, then one sentence \
+on pace or the next step.
+Only "- " bullets and **bold** are allowed: no headers, italics, tables, \
+numbered or nested lists, or emoji. Keep the whole reply to about 6 lines."""
 
 _SPEND_CATEGORIES = ", ".join(name for name, type_, _ in DEFAULT_CATEGORIES if type_ == "expense")
 _WINDOW_PROPS = {
@@ -372,6 +383,36 @@ def _describe_tool_call(name: str, tool_input: dict, result: dict | None = None)
     return name
 
 
+def _progress_label(name: str, tool_input: dict) -> str:
+    """What to tell the user while a tool runs, in the present tense
+    ("Looking up Dining spending…"). Built from the model's input only --
+    the result doesn't exist yet -- and deliberately generic enough to be
+    safe to show before anything has been verified."""
+    if name == "get_net_worth":
+        return "Checking your balances…"
+    if name == "get_cash_flow":
+        return "Comparing income and spending…"
+    if name in ("get_spending", "find_transactions"):
+        what = tool_input.get("category") or tool_input.get("merchant")
+        return f"Looking up {what} spending…" if what else "Looking up your spending…"
+    if name == "compare_spending":
+        what = tool_input.get("category")
+        return f"Comparing {what} spending…" if what else "Comparing your spending…"
+    if name == "get_goal_progress":
+        return "Checking your goals…"
+    if name == "get_recent_transactions":
+        return "Pulling your recent transactions…"
+    if name == "get_unusual_transactions":
+        return "Scanning for unusual charges…"
+    if name == "calculate":
+        return "Running the numbers…"
+    if name == "web_search":
+        return "Searching the web…"
+    if name == "propose_goal":
+        return "Drafting a goal…"
+    return "Working on it…"
+
+
 def _source_query(name: str, tool_input: dict, result: dict) -> dict | None:
     """The transaction filter a source chip opens, so the user can see the
     exact rows behind a number. Only for tools whose figure is a sum of
@@ -401,16 +442,27 @@ _client = build_agent_client()
 _search_client = build_web_search_client()
 
 
-def run_agent_turn(db: Session, user_id: UUID, messages: list[dict]) -> tuple[str, list[dict]]:
+def run_agent_turn(
+    db: Session,
+    user_id: UUID,
+    messages: list[dict],
+    on_status: Callable[[str], None] | None = None,
+) -> tuple[str, list[dict]]:
     """Run one user turn to completion, resolving any tool calls, and return
     (final assistant reply text, sources) -- sources is every tool call that
     backed this specific reply, as [{"tool": name, "label": ...}], in call
     order. Shown to the user as a trust/verification trail (see
     app/api/chat.py's ChatResponse.sources and ChatMessage.tool_calls, where
-    it's also persisted) without exposing raw tool inputs/outputs."""
+    it's also persisted) without exposing raw tool inputs/outputs.
+
+    on_status, when given, is called with a short progress line just before
+    each tool runs -- the streaming chat endpoint forwards these so the user
+    sees what's happening during a multi-round turn."""
     sources: list[dict] = []
 
     def call_tool(name: str, tool_input: dict) -> dict:
+        if on_status:
+            on_status(_progress_label(name, tool_input))
         result = _TOOL_DISPATCH[name](db, user_id, **tool_input)
         entry: dict = {"tool": name, "label": _describe_tool_call(name, tool_input, result)}
         query = _source_query(name, tool_input, result)

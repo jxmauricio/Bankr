@@ -28,7 +28,7 @@ same shape of change again.
 ```bash
 python3.13 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # runtime deps + pytest
 cp .env.example .env   # fill in real values as integrations come online
 ```
 
@@ -95,7 +95,11 @@ pytest
   newest first, with a preview from the first message) and
   `GET /chat/conversations/{id}` (full history, 404 if it's not this user's)
   let the web client browse and reopen a past conversation — see
-  `ChatHistoryMenu.tsx` in the web app
+  `ChatHistoryMenu.tsx` in the web app. `POST /chat/stream` runs the same turn
+  as Server-Sent Events (`status` progress lines before each tool call, then
+  `done` with the same body as `POST /chat`, or `error`); the web and iOS
+  clients use it. It needs a host that doesn't buffer responses (Render
+  doesn't; behind nginx, `X-Accel-Buffering: no` is already sent)
 - `app/agent/tools.py` — tool implementations the agent can call. Most are
   DB-backed (also the source of truth `dashboard_service.py` and
   `goal_service.py` reuse for net worth and goal pacing, so the dashboard and
@@ -259,11 +263,7 @@ still verifies the real signature Plaid attaches.
 
 ## Not yet wired up
 
-1. A real `OPENROUTER_API_KEY` (or a key for one of the other two providers
-   above) to exercise `claude_agent.py` and `insights_job.py` against a live
-   LLM (currently mock-verified only — `/chat` degrades to a clear in-UI
-   error without one, verified live in the web app).
-2. `app/integrations/apns.py` for push delivery of insights (currently
+1. `app/integrations/apns.py` for push delivery of insights (currently
    `InsightLog.delivered_via` is always `"in_app"`) — was iOS-specific to
    begin with and is lower priority now that iOS is shelved; the web app has
    no push story yet either.

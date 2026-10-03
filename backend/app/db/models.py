@@ -145,6 +145,9 @@ class InsightLog(Base):
     type: Mapped[str] = mapped_column(String)  # overspend | goal_drift | unusual_transaction | weekly_summary
     message: Mapped[str] = mapped_column(Text)
     related_transaction_ids: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    # Identifies the event an insight is about (see insights_job._dedupe_key)
+    # so the job, which reruns on every sync, never phrases it twice.
+    dedupe_key: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     delivered_via: Mapped[str] = mapped_column(String)  # push | in_app
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

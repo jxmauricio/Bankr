@@ -17,6 +17,7 @@ class FakeAggregatorClient:
         removed_ids: list[str] | None = None,
         item_id: str | None = None,
         verify_webhook_result: bool = True,
+        fail_remove_for: set[str] | None = None,
     ):
         self.accounts = accounts if accounts is not None else self._default_accounts()
         self.transactions_by_account = (
@@ -28,6 +29,9 @@ class FakeAggregatorClient:
         self.get_item_id_calls: list[str] = []
         self.verify_webhook_result = verify_webhook_result
         self.updated_webhooks: list[tuple[str, str]] = []
+        self.removed_tokens: list[str] = []
+        # Access tokens whose remove_item raises, to simulate Plaid failing.
+        self.fail_remove_for = fail_remove_for or set()
 
     @staticmethod
     def _default_accounts() -> list[AggregatorAccount]:
@@ -110,6 +114,11 @@ class FakeAggregatorClient:
         set `item_id=` explicitly to control it."""
         self.get_item_id_calls.append(access_token)
         return self.item_id or f"item-{access_token}"
+
+    def remove_item(self, access_token: str) -> None:
+        if access_token in self.fail_remove_for:
+            raise RuntimeError("plaid unavailable")
+        self.removed_tokens.append(access_token)
 
     def update_item_webhook(self, access_token: str, webhook_url: str) -> None:
         self.updated_webhooks.append((access_token, webhook_url))

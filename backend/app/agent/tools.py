@@ -479,7 +479,12 @@ def get_unusual_transactions(db: Session, user_id: UUID, stddev_threshold: float
     ]
     return {
         "unusual_transactions": [
-            {"date": t.date.isoformat(), "amount": float(t.amount), "merchant_name": t.merchant_name}
+            {
+                "transaction_id": str(t.id),
+                "date": t.date.isoformat(),
+                "amount": float(t.amount),
+                "merchant_name": t.merchant_name,
+            }
             for t in unusual
         ]
     }
@@ -564,7 +569,7 @@ def web_search(query: str, max_results: int = 5, *, client: WebSearchClient | No
     reason app/api/deps.py injects the bank aggregator instead of
     constructing PlaidClient() inline."""
     if client is None:
-        return {"query": query, "error": "Web search is not configured (no BRAVE_SEARCH_API_KEY set)."}
+        return {"query": query, "error": "Web search is not configured (set OPENROUTER_API_KEY with AGENT_PROVIDER=openrouter, or BRAVE_SEARCH_API_KEY)."}
     try:
         results = client.search(query, max_results=max_results)
     except Exception as e:

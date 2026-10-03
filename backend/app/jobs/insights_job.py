@@ -13,6 +13,7 @@ and keeps LLM cost/latency bounded to actual events instead of every sync.
 
 import logging
 from dataclasses import dataclass
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -67,15 +68,45 @@ def _phrase_insight(candidate: InsightCandidate) -> str:
     )
 
 
+def _dedupe_key(candidate: InsightCandidate, today: date) -> str | None:
+    """The event an insight is about. The job reruns on every sync (each
+    webhook, each Refresh), so without this the same nudge would be paid for
+    and logged several times a day. An unusual charge is worth one nudge
+    ever; an off-pace goal gets one per ISO week while it stays off pace."""
+    if candidate.type == "unusual_transaction":
+        return f"unusual_transaction:{candidate.data['transaction_id']}"
+    if candidate.type == "goal_drift":
+        year, week, _ = today.isocalendar()
+        return f"goal_drift:{candidate.data['id']}:{year}-W{week:02d}"
+    return None
+
+
 def run_insights_job(db: Session, user_id: UUID) -> list[InsightLog]:
     candidates = detect_candidates(db, user_id)
+    keys = {id(c): _dedupe_key(c, date.today()) for c in candidates}
+    already_sent = {
+        key
+        for (key,) in db.query(InsightLog.dedupe_key).filter(
+            InsightLog.user_id == user_id,
+            InsightLog.dedupe_key.in_([k for k in keys.values() if k]),
+        )
+    }
     logs = []
     for candidate in candidates:
+        key = keys[id(candidate)]
+        if key in already_sent:
+            continue
+        if key:
+            already_sent.add(key)
         message = _phrase_insight(candidate)
         log = InsightLog(
             user_id=user_id,
             type=candidate.type,
             message=message,
+            related_transaction_ids=(
+                [candidate.data["transaction_id"]] if candidate.type == "unusual_transaction" else None
+            ),
+            dedupe_key=key,
             delivered_via="in_app",  # TODO: also dispatch via APNs once app/integrations/apns.py exists
         )
         db.add(log)

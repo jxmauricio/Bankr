@@ -7,6 +7,8 @@ export function AuthPage() {
   const [mode, setMode] = useState<"signup" | "login">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Invite links look like /?invite=CODE so friends don't have to type it.
+  const [inviteCode, setInviteCode] = useState(() => new URLSearchParams(window.location.search).get("invite") ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
@@ -15,7 +17,7 @@ export function AuthPage() {
     setError(null);
     setIsBusy(true);
     try {
-      const response = mode === "signup" ? await signUp(email, password) : await login(email, password);
+      const response = mode === "signup" ? await signUp(email, password, inviteCode) : await login(email, password);
       signIn(response.session_token);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't reach Bankr. Check your connection.");
@@ -82,6 +84,21 @@ export function AuthPage() {
               />
               {mode === "signup" && <p className="mt-1.5 text-xs text-ink-faint">At least 8 characters.</p>}
             </div>
+            {mode === "signup" && (
+              <div>
+                <label htmlFor="invite" className="mb-1.5 block text-sm font-medium text-ink-soft">
+                  Invite code
+                </label>
+                <input
+                  id="invite"
+                  type="text"
+                  autoComplete="off"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                />
+              </div>
+            )}
 
             {error && (
               <p role="alert" className="text-sm text-danger">

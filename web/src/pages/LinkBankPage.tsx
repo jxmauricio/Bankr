@@ -3,22 +3,49 @@ import { usePlaidLink } from "react-plaid-link";
 import { ApiError, fetchLinkToken, linkAccount } from "../lib/api";
 import { useSession } from "../lib/session";
 
+// OAuth banks (Chase, Wells Fargo, ...) send the user off to the bank's own
+// site, then back to PLAID_REDIRECT_URI (/oauth-return?oauth_state_id=...).
+// Plaid requires resuming Link there with the *same* link token, so it's
+// stashed before Link opens and reused on return.
+const LINK_TOKEN_KEY = "bankr.plaidLinkToken";
+const OAUTH_RETURN_PATH = "/oauth-return";
+
+function isOAuthReturn() {
+  return (
+    window.location.pathname === OAUTH_RETURN_PATH && new URLSearchParams(window.location.search).has("oauth_state_id")
+  );
+}
+
+function leaveOAuthReturn() {
+  localStorage.removeItem(LINK_TOKEN_KEY);
+  if (window.location.pathname === OAUTH_RETURN_PATH) window.history.replaceState(null, "", "/");
+}
+
 export function LinkBankPage({ onLinked }: { onLinked: () => void }) {
   const { token } = useSession();
-  const [linkToken, setLinkToken] = useState<string | null>(null);
+  const [resumingOAuth] = useState(() => isOAuthReturn() && localStorage.getItem(LINK_TOKEN_KEY) !== null);
+  const [linkToken, setLinkToken] = useState<string | null>(() =>
+    resumingOAuth ? localStorage.getItem(LINK_TOKEN_KEY) : null
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || resumingOAuth) return;
+    leaveOAuthReturn();
     fetchLinkToken(token)
-      .then((res) => setLinkToken(res.link_token))
+      .then((res) => {
+        localStorage.setItem(LINK_TOKEN_KEY, res.link_token);
+        setLinkToken(res.link_token);
+      })
       .catch(() => setError("Couldn't start bank linking. Check your connection and try again."));
-  }, [token]);
+  }, [token, resumingOAuth]);
 
   const { open, ready } = usePlaidLink({
     token: linkToken,
+    receivedRedirectUri: resumingOAuth ? window.location.href : undefined,
     onSuccess: (publicToken) => {
+      leaveOAuthReturn();
       if (!token || !publicToken) return;
       setIsSyncing(true);
       linkAccount(token, publicToken)
@@ -29,9 +56,16 @@ export function LinkBankPage({ onLinked }: { onLinked: () => void }) {
         });
     },
     onExit: (plaidError) => {
+      if (resumingOAuth) leaveOAuthReturn();
       if (plaidError) setError(plaidError.display_message ?? "Bank linking was interrupted. Try again.");
     },
   });
+
+  // Coming back from the bank's site: reopen Link straight away so it can
+  // finish the connection, rather than making the user click again.
+  useEffect(() => {
+    if (resumingOAuth && ready) open();
+  }, [resumingOAuth, ready, open]);
 
   const isBusy = !linkToken || isSyncing;
 
