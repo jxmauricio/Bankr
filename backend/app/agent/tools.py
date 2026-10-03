@@ -479,7 +479,12 @@ def get_unusual_transactions(db: Session, user_id: UUID, stddev_threshold: float
     ]
     return {
         "unusual_transactions": [
-            {"date": t.date.isoformat(), "amount": float(t.amount), "merchant_name": t.merchant_name}
+            {
+                "transaction_id": str(t.id),
+                "date": t.date.isoformat(),
+                "amount": float(t.amount),
+                "merchant_name": t.merchant_name,
+            }
             for t in unusual
         ]
     }

@@ -24,14 +24,27 @@ from app.db.models import ChatMessage
 
 _PREVIEW_MAX_CHARS = 120
 
+# How many prior messages are sent to the model with each new one. The whole
+# history is resent on every call, so without a cap long conversations cost
+# more per message forever; 20 (~10 exchanges) keeps follow-ups like "what
+# about the month before?" working. The full conversation stays in the DB
+# and in the UI -- only what the model sees is trimmed.
+MAX_HISTORY_MESSAGES = 20
+
 
 def _conversation_history(db: Session, user_id: UUID, conversation_id: UUID) -> list[dict]:
     rows = (
         db.query(ChatMessage)
         .filter(ChatMessage.user_id == user_id, ChatMessage.conversation_id == conversation_id)
-        .order_by(ChatMessage.created_at)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(MAX_HISTORY_MESSAGES)
         .all()
     )
+    rows.reverse()
+    # Anthropic rejects a history that opens on an assistant turn, which a
+    # cut through the middle of an exchange would leave.
+    while rows and rows[0].role != "user":
+        rows.pop(0)
     return [{"role": row.role, "content": row.content} for row in rows]
 
 
