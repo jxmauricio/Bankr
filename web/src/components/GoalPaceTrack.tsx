@@ -35,7 +35,7 @@ export function GoalPaceTrack({
             type="button"
             onClick={() => setConfirming(true)}
             aria-label={`Delete ${goalTitle(progress)}`}
-            className="absolute right-3 top-3 rounded-md p-1 text-ink-faint transition-colors hover:bg-bg hover:text-danger cursor-pointer"
+            className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint transition-colors hover:bg-raised hover:text-negative cursor-pointer"
           >
             <TrashIcon />
           </button>
@@ -61,50 +61,101 @@ export function GoalPaceTrack({
   );
 }
 
+/** Whole dollars on goal cards; cents only when they matter. */
+const whole = (n: number) => formatMoney(n).replace(/\.00$/, "");
+
+const CARD = "rounded-[20px] bg-surface px-[18px] py-4 pr-10";
+
+/** The rail: a neutral fill for progress, a tick where steady pace would put
+ * you today, and a gap between them that is hatched or coloured by whether it
+ * helps (good) or hurts (bad). `fill` and `pace` are 0..1. */
+function PaceRail({
+  fill,
+  pace,
+  gap,
+  label,
+}: {
+  fill: number;
+  pace: number | undefined;
+  gap: "good" | "bad" | "warn" | "none";
+  label: string;
+}) {
+  const f = Math.min(Math.max(fill, 0), 1) * 100;
+  const p = pace === undefined ? undefined : Math.min(Math.max(pace, 0), 1) * 100;
+  const lo = p === undefined ? f : Math.min(f, p);
+  const hi = p === undefined ? f : Math.max(f, p);
+  const gapClass =
+    gap === "good" ? "bg-positive" : gap === "bad" ? "bg-negative" : gap === "warn" ? "hatch-warn" : "";
+  return (
+    <div role="img" aria-label={label} className="relative mt-3 h-1.5 rounded-[3px] bg-line">
+      <div className="absolute inset-y-0 left-0 rounded-l-[3px] bg-ink-soft" style={{ width: `${lo}%` }} />
+      {gap !== "none" && hi > lo && (
+        <div className={`absolute inset-y-0 ${gapClass}`} style={{ left: `${lo}%`, width: `${hi - lo}%` }} />
+      )}
+      {p !== undefined && (
+        <div
+          className="absolute -top-[5px] h-4 w-0.5 rounded-[1px] bg-ink"
+          style={{ left: `calc(${p}% - 1px)` }}
+          title="Where steady pace puts you today"
+        />
+      )}
+    </div>
+  );
+}
+
+function KindTag({ children }: { children: string }) {
+  return <span className="font-mono text-[10px] tracking-[0.1em] text-ink-faint">{children}</span>;
+}
+
 function SavingsGoalTrack({ progress }: { progress: GoalProgress }) {
   const fraction = Math.min(progress.progress_fraction ?? 0, 1);
   const expected = progress.expected_progress_fraction;
   const onPace = progress.on_pace;
+  const reached = fraction >= 1;
+  const target = progress.target_amount;
+  const gapAmount = expected !== undefined ? Math.abs(expected - fraction) * target : 0;
+  const ahead = expected !== undefined && fraction > expected && !reached;
+  const behind = onPace === false && !reached;
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-5 pr-10">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-ink-soft">{goalTitle(progress)}</span>
-        {onPace !== undefined && (
-          <span
-            className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-              onPace ? "bg-positive-soft text-positive" : "bg-gold-soft text-gold-strong"
-            }`}
-          >
-            {onPace ? "On pace" : "Behind pace"}
-          </span>
-        )}
+    <div className={CARD}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-sm font-semibold text-ink">{goalTitle(progress)}</span>
+        <KindTag>SAVE</KindTag>
       </div>
-
-      <div className="mt-3 flex items-baseline gap-1.5">
-        <span className="font-tabular text-2xl font-semibold text-ink">
-          {formatMoney(progress.current_progress_amount ?? 0)}
+      <div className="mt-2.5 flex items-baseline justify-between gap-2 text-xs text-ink-soft">
+        <span>
+          <span className="font-mono text-[13px] tabular-nums text-ink">
+            {whole(progress.current_progress_amount ?? 0)}
+          </span>{" "}
+          / <span className="font-mono tabular-nums">{whole(target)}</span>
         </span>
-        <span className="font-tabular text-ink-faint">/ {formatMoney(progress.target_amount)}</span>
+        {progress.target_date && <span className="shrink-0">{progress.target_date}</span>}
       </div>
-
-      <div className="relative mt-4 h-2.5 rounded-full bg-bg">
-        <div
-          className="h-full rounded-full bg-accent transition-[width]"
-          style={{ width: `${fraction * 100}%` }}
+      {reached ? (
+        <div className="mt-3 h-1.5 rounded-[3px] bg-signal" role="img" aria-label="Goal reached" />
+      ) : (
+        <PaceRail
+          fill={fraction}
+          pace={expected}
+          gap={ahead ? "good" : behind ? "warn" : "none"}
+          label={`${Math.round(fraction * 100)}% saved${
+            expected !== undefined ? `; pace mark at ${Math.round(expected * 100)}%` : ""
+          }. ${reached ? "Reached" : behind ? "Behind" : ahead ? "Ahead" : "On pace"}.`}
         />
-        {expected !== undefined && (
-          <div
-            className="absolute top-1/2 h-3.5 w-0.5 -translate-y-1/2 rounded-full bg-gold"
-            style={{ left: `${Math.min(expected, 1) * 100}%` }}
-            title="Where you'd need to be to stay on pace"
-          />
-        )}
-      </div>
-
-      <div className="mt-2 flex justify-between text-xs text-ink-faint">
-        <span>{Math.round(fraction * 100)}% there</span>
-        {progress.target_date && <span>Target {progress.target_date}</span>}
+      )}
+      <div
+        className={`mt-2.5 font-mono text-[11px] tabular-nums ${
+          reached ? "text-signal" : behind ? "text-warn" : ahead ? "text-positive" : "text-ink-soft"
+        }`}
+      >
+        {reached
+          ? "✓ REACHED"
+          : behind
+            ? `▼ BEHIND ${whole(gapAmount)}`
+            : ahead
+              ? `▲ AHEAD ${whole(gapAmount)}`
+              : "● ON PACE"}
       </div>
     </div>
   );
@@ -113,70 +164,63 @@ function SavingsGoalTrack({ progress }: { progress: GoalProgress }) {
 function SpendingTrackerTrack({ progress }: { progress: GoalProgress }) {
   const spent = progress.current_progress_amount ?? 0;
   const budget = progress.target_amount > 0 ? progress.target_amount : null;
-  const remaining = budget != null ? (progress.remaining_amount ?? budget - spent) : null;
   const over = Boolean(progress.over_budget);
   const expected = progress.expected_progress_fraction;
-  const ahead = Boolean(budget && !over && progress.on_pace === false);
   const fraction = budget ? Math.min(Math.max(spent / budget, 0), 1) : null;
+  const paceGap = budget && expected !== undefined ? spent - expected * budget : 0;
+  const overPace = !over && budget && expected !== undefined && paceGap > budget * 0.02;
+  const underPace = !over && budget && expected !== undefined && paceGap < -budget * 0.02;
   const title = progress.name || progress.category || "Spending";
   const period = progress.window_label || progress.window || "";
-
-  let badge: { label: string; className: string } | null = null;
-  if (over) badge = { label: "Over budget", className: "bg-danger-soft text-danger" };
-  else if (ahead) badge = { label: "Ahead of pace", className: "bg-gold-soft text-gold-strong" };
-  else if (budget && expected !== undefined) badge = { label: "On pace", className: "bg-positive-soft text-positive" };
-  else if (budget) badge = { label: "On track", className: "bg-positive-soft text-positive" };
+  const money = (n: number) => whole(Math.abs(n));
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-5 pr-10">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-ink-soft">{title}</span>
-        {badge && (
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.className}`}>{badge.label}</span>
-        )}
+    <div className={CARD}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-sm font-semibold text-ink">{title}</span>
+        <KindTag>TRACK</KindTag>
       </div>
-
-      {budget && remaining != null ? (
-        <>
-          <div className="mt-3 flex items-baseline gap-1.5">
-            <span className={`font-tabular text-2xl font-semibold ${over ? "text-danger" : "text-ink"}`}>
-              {formatMoney(Math.abs(remaining))}
-            </span>
-            <span className="text-sm text-ink-faint">{over ? "over" : "left"}</span>
-          </div>
-          <div className="mt-0.5 font-tabular text-xs text-ink-faint">
-            {formatMoney(spent)} of {formatMoney(budget)}
-          </div>
-        </>
-      ) : (
-        <div className="mt-3 flex items-baseline gap-1.5">
-          <span className="font-tabular text-2xl font-semibold text-ink">{formatMoney(spent)}</span>
-          <span className="text-sm text-ink-faint">spent</span>
-        </div>
-      )}
-
-      {fraction !== null && (
-        <div className="relative mt-4 h-2.5 rounded-full bg-bg">
-          <div
-            className={`h-full rounded-full transition-[width] ${
-              over ? "bg-danger" : ahead ? "bg-gold" : "bg-accent"
-            }`}
-            style={{ width: `${fraction * 100}%` }}
-          />
-          {expected !== undefined && (
-            <div
-              className="absolute top-1/2 h-3.5 w-0.5 -translate-y-1/2 rounded-full bg-gold"
-              style={{ left: `${Math.min(expected, 1) * 100}%` }}
-              title="Even spend through this window"
-            />
+      <div className="mt-2.5 flex items-baseline justify-between gap-2 text-xs text-ink-soft">
+        <span>
+          <span className="font-mono text-[13px] tabular-nums text-ink">{whole(spent)}</span>
+          {budget && (
+            <>
+              {" "}
+              / <span className="font-mono tabular-nums">{whole(budget)}</span>
+            </>
           )}
+          {!budget && " spent"}
+        </span>
+        <span className="shrink-0">{period}</span>
+      </div>
+      {fraction !== null &&
+        (over ? (
+          <div className="relative mt-3 h-1.5 rounded-[3px] bg-negative" role="img" aria-label="Over the limit" />
+        ) : (
+          <PaceRail
+            fill={fraction}
+            pace={expected}
+            gap={overPace ? "bad" : underPace ? "good" : "none"}
+            label={`${Math.round(fraction * 100)}% of budget${
+              expected !== undefined ? `; pace mark at ${Math.round(expected * 100)}%` : ""
+            }. ${overPace ? "Over pace" : underPace ? "Under pace" : "On pace"}.`}
+          />
+        ))}
+      {budget && (
+        <div
+          className={`mt-2.5 font-mono text-[11px] tabular-nums ${
+            over || overPace ? "text-negative" : underPace ? "text-positive" : "text-ink-soft"
+          }`}
+        >
+          {over
+            ? `▲ ${money(spent - budget)} OVER THE ${money(budget)} LIMIT`
+            : overPace
+              ? `▲ ${money(paceGap)} OVER PACE`
+              : underPace
+                ? `● ${money(paceGap)} UNDER PACE`
+                : "● ON PACE"}
         </div>
       )}
-
-      <div className="mt-2 flex justify-between text-xs text-ink-faint">
-        <span>{period}</span>
-        {progress.label && <span>{progress.label}</span>}
-      </div>
     </div>
   );
 }
@@ -218,14 +262,14 @@ function DeleteGoalModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4"
       onClick={() => {
         if (!isBusy) onCancel();
       }}
       role="presentation"
     >
       <div
-        className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6"
+        className="w-full max-w-sm rounded-3xl border border-line-strong bg-surface shadow-modal p-6"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -238,7 +282,7 @@ function DeleteGoalModal({
           It’ll come off the left. You can add another anytime with New goal.
         </p>
         {error && (
-          <p role="alert" className="mt-3 text-sm text-danger">
+          <p role="alert" className="mt-3 text-sm text-negative">
             {error}
           </p>
         )}
@@ -247,7 +291,7 @@ function DeleteGoalModal({
             type="button"
             onClick={onCancel}
             disabled={isBusy}
-            className="flex-1 rounded-lg border border-border py-2 text-sm text-ink-soft transition-colors hover:border-ink-faint hover:text-ink disabled:opacity-60 cursor-pointer"
+            className="flex-1 min-h-11 rounded-[14px] bg-raised py-2 text-sm text-ink-soft transition-colors hover:text-ink disabled:opacity-60 cursor-pointer"
           >
             Cancel
           </button>
@@ -255,7 +299,7 @@ function DeleteGoalModal({
             type="button"
             onClick={handleDelete}
             disabled={isBusy}
-            className="flex-1 rounded-lg bg-danger py-2 text-sm font-medium text-white transition-colors hover:opacity-90 disabled:opacity-60 cursor-pointer"
+            className="flex-1 min-h-11 rounded-[14px] bg-negative py-2 text-sm font-medium text-white transition-colors hover:opacity-90 disabled:opacity-60 cursor-pointer"
           >
             {isBusy ? "Deleting…" : "Delete"}
           </button>

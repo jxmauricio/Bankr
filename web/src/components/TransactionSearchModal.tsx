@@ -46,12 +46,12 @@ export function TransactionSearchModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface p-6"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-line-strong bg-surface shadow-modal p-6"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -72,14 +72,14 @@ export function TransactionSearchModal({
                 )}
               </p>
             ) : (
-            <div className="mt-2 inline-flex rounded-full border border-border bg-bg p-0.5 text-xs">
+            <div className="mt-2 inline-flex rounded-full bg-raised p-0.5 text-xs">
               {(["week", "month", "year"] as const).map((p) => (
                 <button
                   key={p}
                   type="button"
                   onClick={() => setPeriod(p)}
                   className={`rounded-full px-2.5 py-1 capitalize transition-colors cursor-pointer ${
-                    period === p ? "bg-accent text-white" : "text-ink-soft hover:text-ink"
+                    period === p ? "bg-accent text-bg" : "text-ink-soft hover:text-ink"
                   }`}
                 >
                   {p}
@@ -92,7 +92,7 @@ export function TransactionSearchModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-full p-1.5 text-ink-soft transition-colors hover:bg-bg hover:text-ink cursor-pointer"
+            className="rounded-full p-1.5 text-ink-soft transition-colors hover:bg-raised hover:text-ink cursor-pointer"
           >
             <CloseIcon />
           </button>

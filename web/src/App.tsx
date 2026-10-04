@@ -55,7 +55,7 @@ function PostSignInGate() {
           <button
             type="button"
             onClick={loadOnboardingState}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-strong cursor-pointer"
+            className="rounded-[14px] bg-accent px-4 py-2 text-sm font-medium text-bg hover:bg-accent-strong cursor-pointer"
           >
             Retry
           </button>
@@ -64,7 +64,7 @@ function PostSignInGate() {
     default:
       return (
         <div className="flex min-h-screen items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-accent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-signal" />
         </div>
       );
   }

@@ -31,6 +31,10 @@ class SessionResponse(BaseModel):
     session_token: str
 
 
+class ProfileResponse(BaseModel):
+    email: str
+
+
 class SignUpRequest(BaseModel):
     email: EmailStr
     password: str
@@ -100,6 +104,11 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> SessionResponse:
 
 class McpTokenResponse(BaseModel):
     mcp_token: str
+
+
+@router.get("/me", response_model=ProfileResponse)
+def get_profile(user: User = Depends(get_current_user)) -> ProfileResponse:
+    return ProfileResponse(email=user.email)
 
 
 @router.post("/mcp-token", response_model=McpTokenResponse)

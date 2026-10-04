@@ -70,8 +70,8 @@ function SavingsGoalProposalCard({
 
   if (status === "created") {
     return (
-      <div className="max-w-[85%] rounded-xl border border-border bg-surface p-4">
-        <p className="text-sm text-ink-soft">Goal set — it’s on the left.</p>
+      <div className="w-full rounded-[20px] bg-surface p-4">
+        <p className="text-sm text-signal">✓ Goal set — it’s on the left.</p>
       </div>
     );
   }
@@ -103,9 +103,10 @@ function SavingsGoalProposalCard({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-[85%] space-y-3 rounded-xl border border-border bg-surface p-4">
+    <form onSubmit={handleSubmit} className="w-full space-y-4 rounded-[20px] border border-signal/35 bg-signal-wash p-5">
       <div>
-        <p className="text-sm font-medium text-ink">Create this savings goal?</p>
+        <p className="font-mono text-[11px] tracking-[0.12em] text-signal">CREATE THIS GOAL?</p>
+        <p className="mt-1.5 text-lg font-semibold text-ink">Savings goal</p>
         <p className="mt-0.5 text-xs text-ink-faint">
           {proposal.at_limit
             ? "You already have 5 goals — finish or drop one before adding another."
@@ -124,7 +125,7 @@ function SavingsGoalProposalCard({
         <label htmlFor={`proposal-amount-${proposal.target_amount}`} className="mb-1 block text-xs font-medium text-ink-soft">
           Target amount
         </label>
-        <div className="flex items-center rounded-lg border border-border bg-bg px-3 focus-within:border-accent">
+        <div className="flex min-h-11 items-center rounded-[14px] border border-control bg-surface px-3.5 focus-within:border-accent">
           <span className="font-tabular text-ink-faint">$</span>
           <input
             id={`proposal-amount-${proposal.target_amount}`}
@@ -148,12 +149,12 @@ function SavingsGoalProposalCard({
           type="date"
           value={targetDate}
           onChange={(e) => setTargetDate(e.target.value)}
-          className="w-full rounded-lg border border-border bg-bg px-3 py-2 font-tabular text-sm text-ink outline-none focus:border-accent"
+          className="w-full min-h-11 rounded-[14px] border border-control bg-surface px-3.5 py-2 font-tabular text-sm text-ink outline-none focus:border-accent"
         />
       </div>
 
       {error && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-sm text-negative">
           {error}
         </p>
       )}
@@ -192,8 +193,8 @@ function SpendingTrackerProposalCard({
 
   if (status === "created") {
     return (
-      <div className="max-w-[85%] rounded-xl border border-border bg-surface p-4">
-        <p className="text-sm text-ink-soft">Tracking {name || category} — it’s on the left.</p>
+      <div className="w-full rounded-[20px] bg-surface p-4">
+        <p className="text-sm text-signal">✓ Tracking {name || category} — it’s on the left.</p>
       </div>
     );
   }
@@ -226,9 +227,10 @@ function SpendingTrackerProposalCard({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-[85%] space-y-3 rounded-xl border border-border bg-surface p-4">
+    <form onSubmit={handleSubmit} className="w-full space-y-4 rounded-[20px] border border-signal/35 bg-signal-wash p-5">
       <div>
-        <p className="text-sm font-medium text-ink">Track this spending?</p>
+        <p className="font-mono text-[11px] tracking-[0.12em] text-signal">CREATE THIS GOAL?</p>
+        <p className="mt-1.5 text-lg font-semibold text-ink">Spending tracker</p>
         <p className="mt-0.5 text-xs text-ink-faint">
           {proposal.at_limit
             ? "You already have 5 goals — finish or drop one before adding another."
@@ -250,7 +252,7 @@ function SpendingTrackerProposalCard({
             setName((current) => (!current.trim() || current === category ? next : current));
             setCategory(next);
           }}
-          className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-ink outline-none focus:border-accent cursor-pointer"
+          className="w-full min-h-11 rounded-[14px] border border-control bg-surface px-3.5 py-2 text-sm text-ink outline-none focus:border-accent cursor-pointer"
         >
           {SPEND_CATEGORIES.map((item) => (
             <option key={item} value={item}>
@@ -269,7 +271,7 @@ function SpendingTrackerProposalCard({
               type="button"
               onClick={() => setWindowName(w.id)}
               className={`rounded-lg border px-2.5 py-2 text-left text-xs transition-colors cursor-pointer ${
-                windowName === w.id ? "border-accent bg-accent-soft text-ink" : "border-border bg-bg text-ink-soft hover:border-ink-faint"
+                windowName === w.id ? "border-accent bg-accent-soft text-ink" : "border-line bg-raised text-ink-soft hover:border-ink-faint"
               }`}
             >
               {w.label}
@@ -282,7 +284,7 @@ function SpendingTrackerProposalCard({
         <label htmlFor="tracker-budget" className="mb-1 block text-xs font-medium text-ink-soft">
           Spending cap <span className="text-ink-faint">(optional)</span>
         </label>
-        <div className="flex items-center rounded-lg border border-border bg-bg px-3 focus-within:border-accent">
+        <div className="flex min-h-11 items-center rounded-[14px] border border-control bg-surface px-3.5 focus-within:border-accent">
           <span className="font-tabular text-ink-faint">$</span>
           <input
             id="tracker-budget"
@@ -298,7 +300,7 @@ function SpendingTrackerProposalCard({
       </div>
 
       {error && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-sm text-negative">
           {error}
         </p>
       )}
@@ -332,14 +334,14 @@ function CardActions({
       <button
         type="button"
         onClick={onDismiss}
-        className="flex-1 rounded-lg border border-border py-2 text-sm text-ink-soft transition-colors hover:border-ink-faint hover:text-ink cursor-pointer"
+        className="flex-1 min-h-11 rounded-[14px] bg-raised py-2 text-sm text-ink-soft transition-colors hover:text-ink cursor-pointer"
       >
         Not now
       </button>
       <button
         type="submit"
         disabled={isBusy || atLimit}
-        className="flex-1 rounded-lg bg-accent py-2 text-sm font-medium text-white transition-colors hover:bg-accent-strong disabled:opacity-60 cursor-pointer"
+        className="flex-1 rounded-[14px] bg-accent py-2 text-sm font-medium text-bg transition-colors hover:bg-accent-strong disabled:opacity-60 cursor-pointer"
       >
         {isBusy ? busyLabel : confirmLabel}
       </button>

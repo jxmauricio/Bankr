@@ -28,7 +28,7 @@ export function AssistantText({ text }: { text: string }) {
         block.kind === "p" ? (
           <p key={i}>{renderBold(block.line)}</p>
         ) : (
-          <ul key={i} className="list-disc space-y-0.5 pl-5 tabular-nums">
+          <ul key={i} className="list-disc space-y-1 pl-5 marker:text-signal">
             {block.items.map((item, j) => (
               <li key={j}>{renderBold(item)}</li>
             ))}
@@ -39,14 +39,29 @@ export function AssistantText({ text }: { text: string }) {
   );
 }
 
+const MONEY = /(-?\$[\d,]+(?:\.\d+)?)/g;
+
+/** Dollar amounts render as mono "figures" with a dotted signal underline. */
+function renderFigures(text: string, keyPrefix: string): ReactNode[] {
+  return text.split(MONEY).map((part, i) =>
+    /^-?\$[\d,]/.test(part) ? (
+      <span key={`${keyPrefix}-${i}`} className="fig text-ink">
+        {part}
+      </span>
+    ) : (
+      <span key={`${keyPrefix}-${i}`}>{part}</span>
+    ),
+  );
+}
+
 function renderBold(line: string): ReactNode[] {
   return line.split(/(\*\*[^*]+\*\*)/g).map((chunk, j) =>
     chunk.startsWith("**") && chunk.endsWith("**") ? (
       <strong key={j} className="font-semibold">
-        {chunk.slice(2, -2)}
+        {renderFigures(chunk.slice(2, -2), `b${j}`)}
       </strong>
     ) : (
-      <span key={j}>{chunk}</span>
+      <span key={j}>{renderFigures(chunk, `t${j}`)}</span>
     )
   );
 }

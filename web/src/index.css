@@ -1,30 +1,74 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
+/* Direction D: graphite + signal teal. Dark first; [data-theme="light"] swaps values. */
 @theme {
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-body: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-body: "Space Grotesk", system-ui, sans-serif;
+  --font-sans: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  --color-bg: #10131C;
-  --color-surface: #171B27;
-  --color-surface-dark: #0B0D13;
-  --color-ink: #E8EAF0;
-  --color-ink-soft: #8D93A8;
-  --color-ink-faint: #565D72;
-  --color-accent: #5B54F0;
-  --color-accent-strong: #7A73FF;
-  --color-accent-soft: #201F3D;
-  --color-gold: #E0AC4E;
-  --color-gold-soft: #2C2413;
-  --color-gold-strong: #F0C878;
-  --color-positive: #34C77B;
-  --color-positive-soft: #142A1E;
-  --color-danger: #E2574C;
-  --color-danger-soft: #2E1A18;
-  --color-border: #262B3A;
+  --color-bg: #0B0D10;
+  --color-surface: #12151A;
+  --color-raised: #191D24;
+  --color-line: #222731;
+  --color-line-strong: #323946;
+  --color-control: #606879;
+  --color-ink: #E6EAF0;
+  --color-ink-soft: #A3ABBA;
+  --color-ink-faint: #7B8296;
+  --color-signal: #3ED1BF;
+  --color-signal-hi: #7FE6D9;
+  --color-signal-wash: rgb(62 209 191 / 0.08);
+  --color-user: #0F6E6A;
+  --color-positive: #4FD18B;
+  --color-positive-soft: rgb(79 209 139 / 0.12);
+  --color-negative: #FF7A6B;
+  --color-negative-soft: rgb(255 122 107 / 0.1);
+  --color-warn: #F5A54A;
+  --color-warn-soft: rgb(245 165 74 / 0.1);
+
+  /* Legacy names kept so older screens inherit the new palette. */
+  --color-border: #222731;
+  --color-surface-dark: #0B0D10;
+  --color-accent: #3ED1BF;
+  --color-accent-strong: #7FE6D9;
+  --color-accent-soft: rgb(62 209 191 / 0.08);
+  --color-danger: #FF7A6B;
+  --color-danger-soft: rgb(255 122 107 / 0.1);
+  --color-gold: #F5A54A;
+  --color-gold-strong: #F5A54A;
+  --color-gold-soft: rgb(245 165 74 / 0.1);
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --shadow-menu: 0 8px 24px rgb(0 0 0 / 0.35);
+  --shadow-modal: 0 24px 64px rgb(0 0 0 / 0.55);
+  --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
 
   --animate-thinking: thinking 1.3s ease-in-out infinite;
+}
+
+[data-theme="light"] {
+  --color-bg: #F5F7FA;
+  --color-surface: #FFFFFF;
+  --color-raised: #EEF1F5;
+  --color-line: #E2E6EC;
+  --color-border: #E2E6EC;
+  --color-line-strong: #CDD3DC;
+  --color-control: #8A94A6;
+  --color-ink: #0F1319;
+  --color-ink-soft: #4A5361;
+  --color-ink-faint: #5F6878;
+  --color-signal: #0B7A6E;
+  --color-accent: #0B7A6E;
+  --color-positive: #1A7F4B;
+  --color-negative: #C2412F;
+  --color-danger: #C2412F;
+  --color-warn: #9A5B0E;
+  --color-gold: #9A5B0E;
 }
 
 @keyframes thinking {
@@ -47,4 +91,42 @@ body {
 .font-tabular {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* In the base layer so utilities like outline-none can opt a control out
+ * (e.g. an input inside a wrapper that draws its own focus ring). */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-signal);
+    outline-offset: 2px;
+  }
+}
+
+/* A sourced figure in an answer: mono, dotted underline in signal. */
+.fig {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  font-size: 0.94em;
+  text-decoration: underline dotted var(--color-signal);
+  text-underline-offset: 4px;
+}
+
+/* Pace-gap hatching: colour is never the only signal. */
+.hatch-warn {
+  background: repeating-linear-gradient(135deg, var(--color-warn) 0 2px, transparent 2px 5px);
+}
+.hatch-pos {
+  background: repeating-linear-gradient(135deg, var(--color-positive) 0 2px, transparent 2px 5px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }

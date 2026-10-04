@@ -30,7 +30,7 @@ export function GoalNameField({
               className={`rounded-full border px-2.5 py-1 text-xs transition-colors cursor-pointer ${
                 value === suggestion
                   ? "border-accent bg-accent-soft text-ink"
-                  : "border-border bg-bg text-ink-soft hover:border-ink-faint hover:text-ink"
+                  : "border-line bg-raised text-ink-soft hover:text-ink"
               }`}
             >
               {suggestion}
@@ -44,7 +44,7 @@ export function GoalNameField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder ?? (suggestions ? "Or name it yourself" : "Name this tracker")}
-        className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+        className="w-full min-h-11 rounded-[14px] border border-control bg-surface px-3.5 py-2 text-sm text-ink outline-none focus:border-accent"
       />
     </div>
   );

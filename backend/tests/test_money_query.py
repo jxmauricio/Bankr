@@ -3,7 +3,7 @@
 If any of these drift, a user checking their bank would catch us -- which
 is the one failure the MVP can't afford."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -186,3 +186,41 @@ def test_empty_window_reports_zero_transactions_not_just_zero(db, ledger):
     result = mq.spend_query(db, ledger.id, mq.resolve_window(TODAY, start="2025-01-01", end="2025-01-31"))
     assert result["total_spent"] == 0
     assert result["transaction_count"] == 0
+
+
+# --- averages -------------------------------------------------------------------
+
+
+def test_average_matches_the_mean_of_each_complete_month(db, ledger):
+    avg = mq.average_cash_flow(db, ledger.id, "month")
+    assert not avg["partial"]
+    assert avg["end"] == "2026-08-31"  # the in-progress month is excluded
+
+    flows = [
+        mq.cash_flow(db, ledger.id, mq.Window(date.fromisoformat(s), date.fromisoformat(e), "custom"))
+        for s, e in _complete_months(avg)
+    ]
+    assert avg["months_used"] == len(flows)
+    assert avg["income"] == pytest.approx(sum(f["income"] for f in flows) / len(flows), abs=0.01)
+    assert avg["spending"] == pytest.approx(sum(f["spending"] for f in flows) / len(flows), abs=0.01)
+
+
+def test_yearly_average_is_twelve_times_the_monthly_one_and_flags_extrapolation(db, ledger):
+    month = mq.average_cash_flow(db, ledger.id, "month")
+    year = mq.average_cash_flow(db, ledger.id, "year")
+    assert year["income"] == pytest.approx(month["income"] * 12, abs=0.1)
+    assert year["spending"] == pytest.approx(month["spending"] * 12, abs=0.1)
+    assert year["annualized"] == (year["months_used"] < 12)
+
+
+def test_average_rejects_unknown_basis(db, ledger):
+    with pytest.raises(mq.QueryError):
+        mq.average_cash_flow(db, ledger.id, "decade")
+
+
+def _complete_months(avg):
+    start, end = date.fromisoformat(avg["start"]), date.fromisoformat(avg["end"])
+    month = start
+    while month <= end:
+        yield month.isoformat(), mq._month_end(month).isoformat()
+        month = mq._month_end(month) + timedelta(days=1)

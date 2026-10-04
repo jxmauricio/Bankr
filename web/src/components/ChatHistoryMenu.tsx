@@ -57,20 +57,20 @@ export function ChatHistoryMenu({
         onClick={toggle}
         aria-label="Conversation history"
         aria-expanded={open}
-        className="rounded-full p-1.5 text-ink-soft transition-colors hover:bg-bg hover:text-ink cursor-pointer"
+        className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-surface text-ink-soft transition-colors hover:text-ink cursor-pointer"
       >
         <HistoryIcon />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-10 mt-2 w-72 rounded-xl border border-border bg-surface p-1.5 shadow-lg">
+        <div className="absolute left-0 top-full z-10 mt-2 w-72 rounded-[20px] border border-line bg-raised p-1.5 shadow-menu">
           <button
             type="button"
             onClick={() => {
               setOpen(false);
               onNewChat();
             }}
-            className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-accent-strong transition-colors hover:bg-bg cursor-pointer"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-signal-hi transition-colors hover:bg-surface cursor-pointer"
           >
             + New chat
           </button>
@@ -91,7 +91,7 @@ export function ChatHistoryMenu({
                       setOpen(false);
                       onSelectConversation(c.conversation_id);
                     }}
-                    className="w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-bg cursor-pointer"
+                    className="w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-surface cursor-pointer"
                   >
                     <div className="truncate text-sm text-ink">{c.preview || "New conversation"}</div>
                     <div className="mt-0.5 text-xs text-ink-faint">
@@ -111,9 +111,9 @@ export function ChatHistoryMenu({
 
 function HistoryIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 3" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+      <path d="M4 6h16M4 12h10M4 18h7" />
+      <circle cx="18" cy="17" r="3.2" />
     </svg>
   );
 }

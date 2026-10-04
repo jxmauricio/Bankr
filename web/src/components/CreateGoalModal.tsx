@@ -87,7 +87,7 @@ export function CreateGoalModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4"
       onClick={() => {
         if (!isBusy) onClose();
       }}
@@ -95,7 +95,7 @@ export function CreateGoalModal({
     >
       <form
         onSubmit={handleSubmit}
-        className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-border bg-surface p-6"
+        className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-3xl border border-line-strong bg-surface shadow-modal p-6"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -122,7 +122,7 @@ export function CreateGoalModal({
                 setName(kind === "track_spending" ? category : "");
               }}
               className={`w-full rounded-lg border p-3 text-left transition-colors cursor-pointer ${
-                type === kind ? "border-accent bg-accent-soft" : "border-border bg-bg hover:border-ink-faint"
+                type === kind ? "border-accent bg-accent-soft" : "border-line bg-raised hover:border-ink-faint"
               }`}
             >
               <div className="text-sm font-medium text-ink">{GOAL_KIND_LABELS[kind]}</div>
@@ -146,7 +146,7 @@ export function CreateGoalModal({
                   setName((current) => (!current.trim() || current === category ? next : current));
                   setCategory(next);
                 }}
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-ink outline-none focus:border-accent cursor-pointer"
+                className="w-full min-h-11 rounded-[14px] border border-control bg-surface px-3.5 py-2 text-sm text-ink outline-none focus:border-accent cursor-pointer"
               >
                 {SPEND_CATEGORIES.map((item) => (
                   <option key={item} value={item}>
@@ -166,7 +166,7 @@ export function CreateGoalModal({
                     className={`rounded-lg border px-2.5 py-2 text-left text-xs transition-colors cursor-pointer ${
                       windowName === w.id
                         ? "border-accent bg-accent-soft text-ink"
-                        : "border-border bg-bg text-ink-soft hover:border-ink-faint"
+                        : "border-line bg-raised text-ink-soft hover:border-ink-faint"
                     }`}
                   >
                     {w.label}
@@ -178,7 +178,7 @@ export function CreateGoalModal({
               <label htmlFor="new-goal-cap" className="mb-1 block text-xs font-medium text-ink-soft">
                 Spending cap <span className="text-ink-faint">(optional)</span>
               </label>
-              <div className="flex items-center rounded-lg border border-border bg-bg px-3 focus-within:border-accent">
+              <div className="flex min-h-11 items-center rounded-[14px] border border-control bg-surface px-3.5 focus-within:border-accent">
                 <span className="font-tabular text-ink-faint">$</span>
                 <input
                   id="new-goal-cap"
@@ -200,7 +200,7 @@ export function CreateGoalModal({
               <label htmlFor="new-goal-amount" className="mb-1 block text-xs font-medium text-ink-soft">
                 Target amount
               </label>
-              <div className="flex items-center rounded-lg border border-border bg-bg px-3 focus-within:border-accent">
+              <div className="flex min-h-11 items-center rounded-[14px] border border-control bg-surface px-3.5 focus-within:border-accent">
                 <span className="font-tabular text-ink-faint">$</span>
                 <input
                   id="new-goal-amount"
@@ -223,14 +223,14 @@ export function CreateGoalModal({
                 type="date"
                 value={targetDate}
                 onChange={(e) => setTargetDate(e.target.value)}
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2 font-tabular text-sm text-ink outline-none focus:border-accent"
+                className="w-full min-h-11 rounded-[14px] border border-control bg-surface px-3.5 py-2 font-tabular text-sm text-ink outline-none focus:border-accent"
               />
             </div>
           </div>
         )}
 
         {error && (
-          <p role="alert" className="mt-3 text-sm text-danger">
+          <p role="alert" className="mt-3 text-sm text-negative">
             {error}
           </p>
         )}
@@ -240,14 +240,14 @@ export function CreateGoalModal({
             type="button"
             onClick={onClose}
             disabled={isBusy}
-            className="flex-1 rounded-lg border border-border py-2 text-sm text-ink-soft transition-colors hover:border-ink-faint hover:text-ink disabled:opacity-60 cursor-pointer"
+            className="flex-1 min-h-11 rounded-[14px] bg-raised py-2 text-sm text-ink-soft transition-colors hover:text-ink disabled:opacity-60 cursor-pointer"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isBusy || atLimit}
-            className="flex-1 rounded-lg bg-accent py-2 text-sm font-medium text-white transition-colors hover:bg-accent-strong disabled:opacity-60 cursor-pointer"
+            className="flex-1 rounded-[14px] bg-accent py-2 text-sm font-medium text-bg transition-colors hover:bg-accent-strong disabled:opacity-60 cursor-pointer"
           >
             {isBusy ? "Saving…" : isTracker ? "Start tracking" : "Set goal"}
           </button>
@@ -262,7 +262,7 @@ export function NewGoalButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-surface px-3 py-3 text-sm font-medium text-ink-soft transition-colors hover:border-accent hover:bg-accent-soft hover:text-ink cursor-pointer"
+      className="flex w-full items-center justify-center gap-1.5 h-12 rounded-2xl border border-dashed border-line-strong bg-transparent px-3 text-sm font-medium text-ink-soft transition-colors hover:border-signal hover:bg-signal-wash hover:text-ink cursor-pointer"
     >
       <PlusIcon />
       New goal

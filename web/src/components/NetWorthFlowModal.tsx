@@ -282,12 +282,12 @@ export function NetWorthFlowModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-2xl border border-border bg-surface p-8"
+        className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-3xl border border-line-strong bg-surface shadow-modal p-8"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -304,7 +304,7 @@ export function NetWorthFlowModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-full p-1.5 text-ink-soft transition-colors hover:bg-bg hover:text-ink cursor-pointer"
+            className="rounded-full p-1.5 text-ink-soft transition-colors hover:bg-raised hover:text-ink cursor-pointer"
           >
             <CloseIcon />
           </button>
@@ -389,7 +389,7 @@ function isFlowGroup(id: string): id is FlowGroup {
 
 function ChartViewToggle({ value, onChange }: { value: ChartView; onChange: (view: ChartView) => void }) {
   return (
-    <div className="inline-flex shrink-0 rounded-full border border-border bg-bg p-0.5 text-xs" role="tablist" aria-label="Spending chart">
+    <div className="inline-flex shrink-0 rounded-full bg-raised p-0.5 text-xs" role="tablist" aria-label="Spending chart">
       {CHART_VIEWS.map((view) => (
         <button
           key={view.id}
@@ -398,7 +398,7 @@ function ChartViewToggle({ value, onChange }: { value: ChartView; onChange: (vie
           aria-selected={value === view.id}
           onClick={() => onChange(view.id)}
           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 transition-colors cursor-pointer ${
-            value === view.id ? "bg-accent text-white" : "text-ink-soft hover:text-ink"
+            value === view.id ? "bg-accent text-bg" : "text-ink-soft hover:text-ink"
           }`}
         >
           <ChartViewIcon view={view.id} />
@@ -543,7 +543,7 @@ function SpendingPie({
               onMouseEnter={() => setHovered(slice.name)}
               onMouseLeave={() => setHovered(null)}
               className={`flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-xs transition-colors cursor-pointer ${
-                selected?.name === slice.name ? "bg-accent-soft" : "hover:bg-bg"
+                selected?.name === slice.name ? "bg-accent-soft" : "hover:bg-raised"
               }`}
             >
               <span className="flex min-w-0 items-center gap-2 text-ink">
@@ -584,7 +584,7 @@ function SpendingBars({
               onClick={() => onSelect(slice)}
               aria-pressed={isSelected}
               className={`w-full rounded-lg px-2 py-1.5 text-left transition-colors cursor-pointer ${
-                isSelected ? "bg-accent-soft" : "hover:bg-bg"
+                isSelected ? "bg-accent-soft" : "hover:bg-raised"
               }`}
             >
               <div className="flex items-baseline justify-between gap-3 text-xs">
@@ -593,7 +593,7 @@ function SpendingBars({
                   {formatMoney(slice.amount)} · {((slice.amount / total) * 100).toFixed(0)}%
                 </span>
               </div>
-              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-bg">
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-raised">
                 <div
                   className="h-full rounded-full"
                   style={{ width: `${Math.max((slice.amount / max) * 100, 2)}%`, backgroundColor: colorForCategory(slice.name) }}
@@ -771,7 +771,7 @@ function ItemSearchPanel({
 }) {
   const title = category ?? (group === "income" ? "Income" : "Spending");
   return (
-    <div className="mt-4 rounded-xl border border-border bg-bg p-4">
+    <div className="mt-4 rounded-[20px] bg-raised p-4">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-medium text-ink">{title} transactions</h3>
         <button
@@ -802,7 +802,7 @@ function CloseIcon() {
  * up -- assets minus what's owed on cards and loans. */
 function AccountBreakdown({ breakdown }: { breakdown: NetWorthHistory | null }) {
   if (breakdown === null) {
-    return <div className="mt-4 h-24 animate-pulse rounded-xl bg-bg" />;
+    return <div className="mt-4 h-24 animate-pulse rounded-xl bg-raised" />;
   }
   if (breakdown.accounts.length === 0) {
     return <p className="mt-4 text-sm text-ink-faint">No account balances synced yet.</p>;
@@ -821,7 +821,7 @@ function AccountBreakdown({ breakdown }: { breakdown: NetWorthHistory | null }) 
                 {a.type} · {a.kind === "liability" ? "owed" : "asset"}
               </div>
             </div>
-            <span className={`font-tabular shrink-0 pl-3 ${a.kind === "liability" ? "text-danger" : "text-ink"}`}>
+            <span className={`font-tabular shrink-0 pl-3 ${a.kind === "liability" ? "text-negative" : "text-ink"}`}>
               {a.kind === "liability" ? "−" : ""}
               {formatMoney(a.balance)}
             </span>
@@ -837,7 +837,7 @@ function AccountBreakdown({ breakdown }: { breakdown: NetWorthHistory | null }) 
           </li>
         ))}
       </ul>
-      <div className="flex items-center justify-between border-t border-border bg-bg px-4 py-2.5 text-sm font-semibold">
+      <div className="flex items-center justify-between border-t border-line bg-raised px-4 py-2.5 text-sm font-semibold">
         <span className="text-ink">Net worth</span>
         <span className="font-tabular text-ink">{breakdown.current !== null ? formatMoney(breakdown.current) : "—"}</span>
       </div>
