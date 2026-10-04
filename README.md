@@ -111,7 +111,9 @@ lint/build on every PR.
 1. **Render** -- New > Blueprint, point at this repo. Fill in the prompted
    secrets (table below). Migrations run on every boot.
 2. **Vercel** -- import the repo with root directory `web/`, set
-   `VITE_API_BASE_URL` to the Render service URL.
+   `VITE_API_BASE_URL` to the Render service URL. Optional: `VITE_SENTRY_DSN`
+   for browser error reporting and `VITE_CONTACT_EMAIL` for the contact line
+   on the `/privacy` page.
 3. Back on Render, set `CORS_ALLOWED_ORIGINS` to the Vercel URL,
    `PLAID_WEBHOOK_URL` to `https://<render-host>/webhooks/plaid`, and
    `PLAID_REDIRECT_URI` to `https://<vercel-host>/oauth-return`.
@@ -134,6 +136,7 @@ lint/build on every PR.
 | `PLAID_REDIRECT_URI` | `https://<vercel-host>/oauth-return` -- needed for OAuth banks (Chase, Wells Fargo, Capital One, ...); must be registered in the Plaid Dashboard. |
 | `OPENROUTER_API_KEY` | Set a monthly spend cap on the key in OpenRouter. |
 | `BRAVE_SEARCH_API_KEY` | Optional. |
+| `SENTRY_DSN` | Optional backend error reporting. Stack traces only: request bodies, local variables, and user IP/email are never attached (`backend/app/observability.py`, covered by `tests/test_observability.py`). |
 
 `/auth/login` and `/auth/signup` are limited to 10 requests/minute per IP and
 `/chat` to 30 messages/hour per user (`backend/app/rate_limit.py`). That state

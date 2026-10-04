@@ -115,6 +115,12 @@ export function AuthPage() {
             </button>
           </form>
         </div>
+
+        <p className="mt-6 text-center text-xs text-ink-faint">
+          <a href="/privacy" className="underline transition-colors hover:text-ink-soft">
+            How Bankr handles your data
+          </a>
+        </p>
       </div>
     </div>
   );

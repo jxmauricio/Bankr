@@ -12,6 +12,10 @@ from app.api.goals import router as goals_router
 from app.api.webhooks import router as webhooks_router
 from app.config import settings
 from app.mcp_server import McpEndpoint
+from app.observability import init_sentry
+
+# Before the app is built so the framework integrations can hook in.
+init_sentry(settings)
 
 mcp_endpoint = McpEndpoint()
 

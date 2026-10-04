@@ -16,3 +16,4 @@ plaid-python==42.0.0
 bcrypt==4.2.1
 mcp==1.12.4
 starlette==0.41.3
+sentry-sdk[fastapi]==2.71.0
