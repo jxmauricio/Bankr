@@ -41,7 +41,7 @@ class LinkedAccount(Base):
     __tablename__ = "linked_accounts"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     aggregator: Mapped[str] = mapped_column(String, default="plaid")
     aggregator_account_id: Mapped[str] = mapped_column(String, index=True)
     institution_name: Mapped[str] = mapped_column(String)
@@ -90,7 +90,7 @@ class Transaction(Base):
     __tablename__ = "transactions"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    linked_account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("linked_accounts.id"), index=True)
+    linked_account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("linked_accounts.id", ondelete="CASCADE"), index=True)
     aggregator_transaction_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     amount: Mapped[float] = mapped_column(Numeric(12, 2))
     date: Mapped[date] = mapped_column(Date, index=True)
@@ -109,7 +109,7 @@ class Goal(Base):
     __tablename__ = "goals"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     type: Mapped[str] = mapped_column(String)  # save | track_spending
     target_amount: Mapped[float] = mapped_column(Numeric(12, 2))
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -130,7 +130,7 @@ class NetWorthSnapshot(Base):
     __tablename__ = "net_worth_snapshots"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     date: Mapped[date] = mapped_column(Date, index=True)
     total_assets: Mapped[float] = mapped_column(Numeric(14, 2))
     total_liabilities: Mapped[float] = mapped_column(Numeric(14, 2))
@@ -141,7 +141,7 @@ class InsightLog(Base):
     __tablename__ = "insight_logs"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     type: Mapped[str] = mapped_column(String)  # overspend | goal_drift | unusual_transaction | weekly_summary
     message: Mapped[str] = mapped_column(Text)
     related_transaction_ids: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
@@ -157,7 +157,7 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     role: Mapped[str] = mapped_column(String)  # user | assistant | tool
     content: Mapped[str] = mapped_column(Text)
