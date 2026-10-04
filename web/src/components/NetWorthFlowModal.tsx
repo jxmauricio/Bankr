@@ -1,7 +1,8 @@
 import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { sankey, type SankeyNode } from "d3-sankey";
-import { fetchIncome, fetchNetWorth, fetchSpending, type ItemizedItem, type NetWorthHistory } from "../lib/api";
+import { fetchIncomeWindow, fetchNetWorth, fetchSpendingWindow, type ItemizedItem, type NetWorthHistory } from "../lib/api";
 import { formatMoney } from "../lib/format";
+import { periodInfo, type Period } from "../lib/period";
 import { TransactionSearch } from "./TransactionSearch";
 
 type FlowGroup = "income" | "spending";
@@ -227,13 +228,19 @@ function layoutFlow(income: CategorySlice[], spending: CategorySlice[], totalInc
   return layout;
 }
 
+function periodPossessive(label: string) {
+  return /s$/i.test(label) ? `${label}'` : `${label}'s`;
+}
+
 export function NetWorthFlowModal({
   token,
   netWorth,
+  period,
   onClose,
 }: {
   token: string;
   netWorth: number | null;
+  period: Period;
   onClose: () => void;
 }) {
   const [incomeItems, setIncomeItems] = useState<ItemizedItem[] | null>(null);
@@ -242,12 +249,16 @@ export function NetWorthFlowModal({
   const [selectedSlice, setSelectedSlice] = useState<CategorySlice | null>(null);
   const [chartView, setChartView] = useState<ChartView>("flow");
   const [breakdown, setBreakdown] = useState<NetWorthHistory | null>(null);
+  const info = periodInfo(period);
+  const periodHeading = periodPossessive(info.label);
 
   useEffect(() => {
+    setIncomeItems(null);
+    setSpendingItems(null);
     fetchNetWorth(token).then(setBreakdown);
-    fetchIncome(token, "month").then((r) => setIncomeItems(r.items));
-    fetchSpending(token, "month").then((r) => setSpendingItems(r.items));
-  }, [token]);
+    fetchIncomeWindow(token, info.window).then((r) => setIncomeItems(r.items));
+    fetchSpendingWindow(token, info.window).then((r) => setSpendingItems(r.items));
+  }, [token, info.window]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -291,7 +302,7 @@ export function NetWorthFlowModal({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Net worth flow this month"
+        aria-label={`Net worth flow for ${info.label}`}
       >
         <div className="flex items-start justify-between">
           <div>
@@ -315,7 +326,7 @@ export function NetWorthFlowModal({
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="font-display text-lg font-semibold text-ink">
-              {chartView === "flow" ? "This month's flow" : "This month's spending"}
+              {chartView === "flow" ? `${periodHeading} flow` : `${periodHeading} spending`}
             </h2>
             <p className="mt-1 text-sm text-ink-faint">
               {chartView === "flow"
@@ -333,7 +344,7 @@ export function NetWorthFlowModal({
         ) : chartView === "flow" ? (
           grandTotal === 0 ? (
             <div className="mt-8 flex h-64 items-center justify-center text-sm text-ink-faint">
-              No income or spending recorded this month yet.
+              No income or spending recorded for {info.label.toLowerCase()} yet.
             </div>
           ) : (
             <>
@@ -345,7 +356,13 @@ export function NetWorthFlowModal({
                 selectedGroup={selectedGroup}
                 onSelectGroup={toggleGroup}
               />
-              <FlowLegend income={income!} spending={spending!} totalIncome={totalIncome} totalSpending={totalSpending} />
+              <FlowLegend
+                income={income!}
+                spending={spending!}
+                totalIncome={totalIncome}
+                totalSpending={totalSpending}
+                emptyLabel={`Nothing for ${info.label.toLowerCase()}.`}
+              />
               {selectedGroup && (
                 <ItemSearchPanel
                   key={selectedGroup}
@@ -358,7 +375,7 @@ export function NetWorthFlowModal({
           )
         ) : totalSpending === 0 ? (
           <div className="mt-8 flex h-64 items-center justify-center text-sm text-ink-faint">
-            No spending recorded this month yet.
+            No spending recorded for {info.label.toLowerCase()} yet.
           </div>
         ) : (
           <>
@@ -716,18 +733,20 @@ function FlowLegend({
   spending,
   totalIncome,
   totalSpending,
+  emptyLabel,
 }: {
   income: CategorySlice[];
   spending: CategorySlice[];
   totalIncome: number;
   totalSpending: number;
+  emptyLabel: string;
 }) {
   return (
     <div className="mt-4 grid grid-cols-1 gap-4 border-t border-border pt-3 sm:grid-cols-2">
       <div>
         <div className="text-[11px] font-medium text-ink-faint">Income · {formatMoney(totalIncome)}</div>
         <ul className="mt-1.5 space-y-1">
-          {income.length === 0 && <li className="text-xs text-ink-faint">Nothing this month.</li>}
+          {income.length === 0 && <li className="text-xs text-ink-faint">{emptyLabel}</li>}
           {income.map((c) => (
             <li key={c.name} className="flex items-center justify-between text-xs">
               <span className="flex items-center gap-2 text-ink">
@@ -742,7 +761,7 @@ function FlowLegend({
       <div>
         <div className="text-[11px] font-medium text-ink-faint">Spending · {formatMoney(totalSpending)}</div>
         <ul className="mt-1.5 space-y-1">
-          {spending.length === 0 && <li className="text-xs text-ink-faint">Nothing this month.</li>}
+          {spending.length === 0 && <li className="text-xs text-ink-faint">{emptyLabel}</li>}
           {spending.map((c) => (
             <li key={c.name} className="flex items-center justify-between text-xs">
               <span className="flex items-center gap-2 text-ink">

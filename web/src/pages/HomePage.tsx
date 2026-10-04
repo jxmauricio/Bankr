@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   ApiError,
   fetchConversation,
@@ -28,7 +28,7 @@ import { AverageBar } from "../components/AverageBar";
 import { ProfileMenu } from "../components/ProfileMenu";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { loadPeriod, savePeriod, type Period as TimePeriod } from "../lib/period";
-import { RelinkBanner, StaleBanner, isStale } from "../components/StatusBanners";
+import { RelinkBanner } from "../components/StatusBanners";
 import { SourceBreakdown } from "../components/SourceBreakdown";
 import { SettingsModal } from "../components/SettingsModal";
 import { NetWorthFlowModal } from "../components/NetWorthFlowModal";
@@ -237,7 +237,16 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   }
 
   const brokenBanks = banks.filter((b) => b.status === "error").map((b) => b.institution_name);
-  const lastAssistantId = [...items].reverse().find((i) => i.kind === "assistant-text")?.id;
+  const lastAssistant = [...items].reverse().find((i) => i.kind === "assistant-text");
+  const lastAssistantId = lastAssistant?.id;
+  const isGreeting = items.length === 1 && Boolean(lastAssistantId?.startsWith(GREETING_ID));
+  const composerSuggestions = isSending
+    ? []
+    : isGreeting
+      ? starterPromptsFor(goals)
+      : lastAssistant?.kind === "assistant-text"
+        ? followUpsFor(lastAssistant)
+        : [];
 
   return (
     <div className="flex h-screen flex-col">
@@ -263,7 +272,12 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
       </header>
 
       {showFlow && token && (
-        <NetWorthFlowModal token={token} netWorth={netWorth} onClose={() => setShowFlow(false)} />
+        <NetWorthFlowModal
+          token={token}
+          netWorth={netWorth}
+          period={period}
+          onClose={() => setShowFlow(false)}
+        />
       )}
 
       {sourceQuery && token && (
@@ -310,15 +324,12 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
           <div ref={streamRef} className="flex-1 space-y-4 overflow-y-auto px-7 py-3">
             <div className="mx-auto flex max-w-2xl flex-col gap-4">
               {brokenBanks.length > 0 && <RelinkBanner banks={brokenBanks} onManage={() => setShowSettings(true)} />}
-              {brokenBanks.length === 0 && nwAsOf && isStale(nwAsOf) && (
-                <StaleBanner asOf={nwAsOf} onRefresh={refreshFromBank} isRefreshing={isRefreshing} />
-              )}
               {token && (
                 <AverageBar
                   token={token}
                   period={period}
                   netWorth={netWorth}
-                  asOf={monthRollup?.as_of}
+                  asOf={nwAsOf ?? monthRollup?.as_of}
                   onNetWorthClick={() => setShowFlow(true)}
                   onRefresh={refreshFromBank}
                   isRefreshing={isRefreshing}
@@ -327,6 +338,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                   accountCount={accountCount}
                   excludedCount={excludedCount}
                   bankCount={banks.length}
+                  showStale={brokenBanks.length === 0}
                 />
               )}
               <div className="flex flex-col gap-3 lg:hidden">
@@ -340,9 +352,6 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                 ))}
                 <NewGoalButton onClick={() => setCreatingGoal(true)} />
               </div>
-              {items.length === 1 && items[0].id.startsWith(GREETING_ID) && !isSending && (
-                <StarterPrompts goals={goals} onAsk={ask} />
-              )}
               {items.filter((item) => !item.id.startsWith(GREETING_ID)).map((item) => (
                 <StreamEntry
                   key={item.id}
@@ -350,7 +359,6 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                   token={token}
                   onGoalCreated={refreshGoalProgress}
                   onOpenSource={setSourceQuery}
-                  onAsk={ask}
                   isLast={item.id === lastAssistantId && !item.id.startsWith(GREETING_ID) && !isSending}
                 />
               ))}
@@ -374,6 +382,9 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
             onSubmit={handleSubmit}
             className="mx-auto w-full max-w-2xl shrink-0 px-7 pb-5 pt-2"
           >
+            {composerSuggestions.length > 0 && (
+              <SuggestionChips suggestions={composerSuggestions} onAsk={ask} />
+            )}
             <div className="flex items-center gap-2 rounded-3xl border border-control bg-surface p-1.5 focus-within:border-signal">
             <button
               type="button"
@@ -429,61 +440,56 @@ function StreamEntry({
   token,
   onGoalCreated,
   onOpenSource,
-  onAsk,
   isLast,
 }: {
   item: StreamItem;
   token: string | null;
   onGoalCreated: () => void | Promise<void>;
   onOpenSource: (query: SourceQuery) => void;
-  onAsk: (text: string) => void;
   isLast: boolean;
 }) {
   switch (item.kind) {
     case "assistant-text": {
       const breakdownQuery = item.sources?.find((s) => s.query && !s.query.merchant)?.query ?? null;
-      const followUps = isLast ? followUpsFor(item) : [];
       return (
         <div className="flex items-start gap-3">
          <BotMark />
-         <div className="flex min-w-0 flex-1 flex-col items-start gap-3">
+         <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
           <div className="max-w-full rounded-[6px_20px_20px_20px] bg-surface px-5 py-[18px] text-[15px] leading-[1.65] text-ink">
             <AssistantText text={item.text} />
-            {isLast && breakdownQuery && (
-              <div className="mt-4">
-                <SourceBreakdown token={token} query={breakdownQuery} onOpen={onOpenSource} />
-              </div>
-            )}
           </div>
           {item.sources && item.sources.length > 0 && (
-            <div
-              className="flex flex-wrap items-center gap-2 text-xs text-ink-soft"
+            <ExpandToggle
+              label={`${item.sources.length} source${item.sources.length === 1 ? "" : "s"}`}
               title="Grounded in your real account data via these lookups"
             >
-              <span className="mr-1 flex items-center gap-1.5">
-                <SourceIcon />
-                Grounded in your data
-              </span>
-              {item.sources.map((source, i) =>
-                source.query ? (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => onOpenSource(source.query!)}
-                    title="See the transactions behind this number"
-                    className="flex min-h-9 items-center gap-2 rounded-full bg-raised px-3.5 text-xs transition-colors hover:text-ink cursor-pointer"
-                  >
-                    <span className="font-mono text-signal">{i + 1}</span>
-                    {source.label}
-                  </button>
-                ) : (
-                  <span key={i} className="flex min-h-9 items-center gap-2 rounded-full bg-raised px-3.5">
-                    <span className="font-mono text-signal">{i + 1}</span>
-                    {source.label}
-                  </span>
-                ),
+              <div className="flex flex-wrap items-center gap-2 text-xs text-ink-soft">
+                {item.sources.map((source, i) =>
+                  source.query ? (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => onOpenSource(source.query!)}
+                      title="See the transactions behind this number"
+                      className="flex min-h-8 items-center gap-2 rounded-full bg-raised px-3 text-xs transition-colors hover:text-ink cursor-pointer"
+                    >
+                      <span className="font-mono text-signal">{i + 1}</span>
+                      {source.label}
+                    </button>
+                  ) : (
+                    <span key={i} className="flex min-h-8 items-center gap-2 rounded-full bg-raised px-3">
+                      <span className="font-mono text-signal">{i + 1}</span>
+                      {source.label}
+                    </span>
+                  ),
+                )}
+              </div>
+              {isLast && breakdownQuery && (
+                <div className="mt-2">
+                  <SourceBreakdown token={token} query={breakdownQuery} onOpen={onOpenSource} />
+                </div>
               )}
-            </div>
+            </ExpandToggle>
           )}
           {item.goalProposal && (
             <GoalProposalCard
@@ -491,20 +497,6 @@ function StreamEntry({
               proposal={item.goalProposal}
               onCreated={onGoalCreated}
             />
-          )}
-          {followUps.length > 0 && (
-            <div aria-label="Suggested follow-ups" className="flex flex-wrap gap-2">
-              {followUps.map((text) => (
-                <button
-                  key={text}
-                  type="button"
-                  onClick={() => onAsk(text)}
-                  className="h-11 cursor-pointer rounded-[22px] border border-line-strong px-4 text-[13px] text-ink-soft transition-colors hover:border-signal hover:text-ink"
-                >
-                  {text}
-                </button>
-              ))}
-            </div>
           )}
          </div>
         </div>
@@ -619,40 +611,68 @@ function followUpsFor(item: { sources?: ChatSource[]; goalProposal?: GoalProposa
   return [];
 }
 
-function StarterPrompts({ goals, onAsk }: { goals: GoalProgress[]; onAsk: (text: string) => void }) {
-  const goalName = goals[0]?.name?.trim();
-  const prompts = [
-    { tag: "SPENDING", text: "What did I spend on food this month?" },
-    { tag: "GOALS", text: goalName ? `Am I on pace for ${goalName}?` : "Am I on pace for my goal?" },
-    { tag: "NET WORTH", text: "Which account grew the most this year?" },
-    { tag: "INCOME", text: "How steady has my income been?" },
-  ];
+function ExpandToggle({
+  label,
+  title,
+  children,
+}: {
+  label: string;
+  title?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
   return (
-    <section aria-label="Suggested questions" className="flex flex-col gap-4 pt-4">
-      <h1 className="font-display text-[32px] font-medium leading-[1.1] tracking-tight text-ink sm:text-[40px]">
-        What would you like to know?
-      </h1>
-      <div className="grid gap-2.5 sm:grid-cols-2">
-        {prompts.map((p) => (
-          <button
-            key={p.tag}
-            type="button"
-            onClick={() => onAsk(p.text)}
-            className="flex min-h-[76px] cursor-pointer flex-col items-start gap-1 rounded-xl border border-line bg-surface p-4 text-left transition-colors hover:border-line-strong"
-          >
-            <span className="font-mono text-[10px] tracking-[0.12em] text-ink-faint">{p.tag}</span>
-            <span className="text-sm text-ink">{p.text}</span>
-          </button>
-        ))}
-      </div>
-      <p className="flex items-start gap-3 rounded-xl border border-dashed border-line-strong p-4 text-[13px] leading-relaxed text-ink-soft">
-        <SourceIcon />
-        <span>
-          Figures with a dotted underline, like <span className="fig text-ink">$612.40</span>, are sourced. Tap the
-          matching source below an answer to see every transaction behind it.
-        </span>
-      </p>
-    </section>
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        title={title}
+        className="flex items-center gap-1 text-xs text-ink-faint transition-colors hover:text-ink-soft cursor-pointer"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.4"
+          className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+          aria-hidden
+        >
+          <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        {label}
+      </button>
+      {open && <div className="mt-2">{children}</div>}
+    </div>
+  );
+}
+
+function starterPromptsFor(goals: GoalProgress[]): string[] {
+  const goalName = goals[0]?.name?.trim();
+  return [
+    "What did I spend on food this month?",
+    goalName ? `Am I on pace for ${goalName}?` : "Am I on pace for my goal?",
+    "Which account grew the most this year?",
+    "How steady has my income been?",
+  ];
+}
+
+function SuggestionChips({ suggestions, onAsk }: { suggestions: string[]; onAsk: (text: string) => void }) {
+  return (
+    <div aria-label="Suggested questions" className="mb-2 flex flex-wrap gap-1.5">
+      {suggestions.map((text) => (
+        <button
+          key={text}
+          type="button"
+          onClick={() => onAsk(text)}
+          className="cursor-pointer whitespace-nowrap rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12px] leading-snug text-ink-soft transition-colors hover:border-signal hover:text-ink"
+        >
+          {text}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -694,13 +714,5 @@ function ThinkingIndicator({ label }: { label: string | null }) {
       </div>
       {label && <span className="text-sm text-ink-soft">{label}</span>}
     </div>
-  );
-}
-
-function SourceIcon() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0">
-      <path d="M20 6 9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

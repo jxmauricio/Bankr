@@ -227,6 +227,12 @@ export const fetchRollup = (token: string, period: string) =>
 export const fetchRollupWindow = (token: string, window: string) =>
   request<PeriodRollup>("/dashboard/rollup", { token, query: { window } });
 
+export const fetchIncomeWindow = (token: string, window: string) =>
+  request<ItemizedTransactions>("/dashboard/income", { token, query: { window } });
+
+export const fetchSpendingWindow = (token: string, window: string) =>
+  request<ItemizedTransactions>("/dashboard/spending", { token, query: { window } });
+
 export type AverageBasis = "month" | "year";
 
 export interface AverageCashFlow {
