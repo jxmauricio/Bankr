@@ -1,6 +1,6 @@
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.agent.tools import get_goal_progress
@@ -12,6 +12,7 @@ from app.services.dashboard_service import (
     get_net_worth_history,
     get_period_rollup,
 )
+from app.services import money_query as mq
 from app.services.money_query import QueryError
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -77,6 +78,29 @@ def rollup(
         return get_period_rollup(db, user.id, period, window)
     except QueryError as e:
         raise _query_error(e) from e
+
+
+@router.get("/average")
+def average(
+    basis: Literal["month", "year"] = "month",
+    month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Average income and spending per month (or per year) over the last
+    12 complete months. With `month` (YYYY-MM), that one month's totals
+    instead."""
+    try:
+        result = mq.month_cash_flow(db, user.id, month) if month else mq.average_cash_flow(db, user.id, basis)
+    except QueryError as e:
+        raise _query_error(e) from e
+    return {**result, "as_of": mq.data_freshness(db, user.id)}
+
+
+@router.get("/months")
+def months(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[str]:
+    """Months (YYYY-MM, newest first) that can be picked for a month view."""
+    return mq.available_months(db, user.id)
 
 
 @router.get("/goal-progress")

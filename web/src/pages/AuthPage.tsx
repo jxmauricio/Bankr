@@ -30,12 +30,15 @@ export function AuthPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <div className="mb-10 text-center">
-          <h1 className="font-display text-4xl font-semibold tracking-tight text-ink">Bankr</h1>
-          <p className="mt-2 text-ink-soft">Simpler than a spreadsheet, smarter than a budget app.</p>
+          <h1 className="font-display text-4xl font-semibold tracking-tight text-ink">
+            bankr<span className="text-signal">_</span>
+          </h1>
+          <p className="mt-2 text-ink-soft">Ask your money anything. Every answer shows its source.</p>
+          <span className="mt-4 inline-block rounded-full bg-signal-wash px-2.5 py-1 font-mono text-[10px] tracking-[0.12em] text-signal">PRIVATE BETA</span>
         </div>
 
-        <div className="rounded-2xl bg-surface border border-border p-6 shadow-sm">
-          <div className="mb-6 flex rounded-full bg-bg p-1 text-sm font-medium">
+        <div className="rounded-3xl bg-surface p-6">
+          <div className="mb-6 flex rounded-full bg-raised p-1 text-sm font-medium">
             {(["signup", "login"] as const).map((m) => (
               <button
                 key={m}
@@ -45,7 +48,7 @@ export function AuthPage() {
                   setError(null);
                 }}
                 className={`flex-1 rounded-full py-1.5 transition-colors cursor-pointer ${
-                  mode === m ? "bg-surface text-ink shadow-sm" : "text-ink-soft"
+                  mode === m ? "bg-signal text-bg" : "text-ink-soft"
                 }`}
               >
                 {m === "signup" ? "Create account" : "Sign in"}
@@ -65,7 +68,7 @@ export function AuthPage() {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                className="w-full min-h-11 rounded-[14px] border border-control bg-surface px-3.5 py-2 text-ink outline-none focus:border-accent "
               />
             </div>
             <div>
@@ -80,7 +83,7 @@ export function AuthPage() {
                 autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                className="w-full min-h-11 rounded-[14px] border border-control bg-surface px-3.5 py-2 text-ink outline-none focus:border-accent "
               />
               {mode === "signup" && <p className="mt-1.5 text-xs text-ink-faint">At least 8 characters.</p>}
             </div>
@@ -95,13 +98,13 @@ export function AuthPage() {
                   autoComplete="off"
                   value={inviteCode}
                   onChange={(e) => setInviteCode(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                  className="w-full min-h-11 rounded-[14px] border border-control bg-surface px-3.5 py-2 text-ink outline-none focus:border-accent "
                 />
               </div>
             )}
 
             {error && (
-              <p role="alert" className="text-sm text-danger">
+              <p role="alert" className="text-sm text-negative">
                 {error}
               </p>
             )}
@@ -109,7 +112,7 @@ export function AuthPage() {
             <button
               type="submit"
               disabled={isBusy}
-              className="w-full rounded-lg bg-accent py-2.5 font-medium text-white transition-colors hover:bg-accent-strong disabled:opacity-60 cursor-pointer"
+              className="w-full rounded-[14px] bg-accent py-2.5 font-medium text-bg transition-colors hover:bg-accent-strong disabled:opacity-60 cursor-pointer"
             >
               {isBusy ? "One moment…" : mode === "signup" ? "Create account" : "Sign in"}
             </button>

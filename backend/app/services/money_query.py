@@ -459,6 +459,115 @@ def cash_flow(db: Session, user_id: UUID, window: Window) -> dict:
     }
 
 
+MAX_AVERAGE_MONTHS = 12
+
+
+def _earliest_transaction_date(db: Session, user_id: UUID) -> date | None:
+    return (
+        db.query(func.min(Transaction.date))
+        .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
+        .filter(LinkedAccount.user_id == user_id)
+        .scalar()
+    )
+
+
+def average_cash_flow(db: Session, user_id: UUID, basis: str = "month") -> dict:
+    """Average income and spending over up to the last 12 *complete* calendar
+    months (the in-progress month would drag every average down).
+
+    basis="month": the average per month. basis="year": that monthly average
+    x 12, i.e. a yearly figure; with fewer than 12 months of history it is an
+    extrapolation, and `annualized` says so. The first month of history is
+    skipped unless it began on the 1st, since it's usually only part of a month.
+    If there is no complete month yet, the month so far is used and flagged
+    `partial`, using everything since the first transaction, scaled to a
+    per-month rate (a freshly linked bank only has a few weeks of history, and
+    "the month so far" can easily hold no pay at all)."""
+    if basis not in ("month", "year"):
+        raise QueryError("basis must be 'month' or 'year'")
+    today = today_for_user(db, user_id)
+    earliest = _earliest_transaction_date(db, user_id)
+
+    months: list[Window] = []
+    cursor = _month_start(today)
+    if earliest is not None:
+        first_full = _month_start(earliest) if earliest.day == 1 else _month_end(earliest) + timedelta(days=1)
+        while len(months) < MAX_AVERAGE_MONTHS:
+            last = cursor - timedelta(days=1)
+            start = _month_start(last)
+            if start < first_full:
+                break
+            months.append(Window(start, last, "custom"))
+            cursor = start
+    partial = not months
+    if partial:
+        history_start = earliest if earliest is not None else _month_start(today)
+        months = [Window(history_start, today, "custom")]
+
+    flows = [cash_flow(db, user_id, w) for w in months]
+    if partial:
+        n = max((today - months[0].start).days + 1, 1) / 30.4375
+    else:
+        n = len(flows)
+    avg_income = sum(f["income"] for f in flows) / n
+    avg_spending = sum(f["spending"] for f in flows) / n
+    scale = 12 if basis == "year" else 1
+    start = min(w.start for w in months)
+    end = max(w.end for w in months)
+    return {
+        "basis": basis,
+        "income": _money(avg_income * scale),
+        "spending": _money(avg_spending * scale),
+        "net": _money((avg_income - avg_spending) * scale),
+        "months_used": round(n, 1) if partial else n,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "label": format_range(start, end),
+        "partial": partial,
+        "annualized": basis == "year" and n < 12,
+    }
+
+
+def available_months(db: Session, user_id: UUID) -> list[str]:
+    """Every calendar month from the first transaction to this one, as
+    "YYYY-MM", newest first -- the choices for a specific-month view."""
+    today = today_for_user(db, user_id)
+    earliest = _earliest_transaction_date(db, user_id) or today
+    months: list[str] = []
+    cursor = _month_start(today)
+    while cursor >= _month_start(earliest):
+        months.append(cursor.strftime("%Y-%m"))
+        cursor = _month_start(cursor - timedelta(days=1))
+    return months
+
+
+def month_cash_flow(db: Session, user_id: UUID, month: str) -> dict:
+    """One calendar month's income and spending, in the same shape as
+    average_cash_flow. The current month ends today and is flagged `partial`."""
+    try:
+        first = date.fromisoformat(f"{month}-01")
+    except ValueError as exc:
+        raise QueryError("month must be YYYY-MM") from exc
+    today = today_for_user(db, user_id)
+    if first > today:
+        raise QueryError("month is in the future")
+    end = min(_month_end(first), today)
+    flow = cash_flow(db, user_id, Window(first, end, "custom"))
+    return {
+        "basis": "month",
+        "month": month,
+        "income": flow["income"],
+        "spending": flow["spending"],
+        "net": flow["net"],
+        "months_used": 1,
+        "start": first.isoformat(),
+        "end": end.isoformat(),
+        "label": format_range(first, end),
+        "partial": end < _month_end(first),
+        "annualized": False,
+    }
+
+
 def compare_spend(
     db: Session,
     user_id: UUID,

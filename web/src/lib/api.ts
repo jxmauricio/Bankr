@@ -77,6 +77,12 @@ export const signUp = (email: string, password: string, inviteCode: string) =>
 export const login = (email: string, password: string) =>
   request<SessionResponse>("/auth/login", { method: "POST", body: { email, password } });
 
+export interface Profile {
+  email: string;
+}
+
+export const fetchProfile = (token: string) => request<Profile>("/auth/me", { token });
+
 // --- Linked accounts ---
 
 export interface LinkTokenResponse {
@@ -216,6 +222,29 @@ export interface PeriodRollup {
 
 export const fetchRollup = (token: string, period: string) =>
   request<PeriodRollup>("/dashboard/rollup", { token, query: { period } });
+
+/** Income and spending for a named window (this_month, last_month, last_90_days, last_year, ...). */
+export const fetchRollupWindow = (token: string, window: string) =>
+  request<PeriodRollup>("/dashboard/rollup", { token, query: { window } });
+
+export type AverageBasis = "month" | "year";
+
+export interface AverageCashFlow {
+  basis: AverageBasis;
+  income: number;
+  spending: number;
+  net: number;
+  months_used: number;
+  label: string;
+  partial: boolean;
+  annualized: boolean;
+}
+
+export const fetchAverage = (token: string, basis: AverageBasis, month?: string) =>
+  request<AverageCashFlow>("/dashboard/average", { token, query: month ? { basis, month } : { basis } });
+
+/** "YYYY-MM" values, newest first. */
+export const fetchMonths = (token: string) => request<string[]>("/dashboard/months", { token });
 
 export interface ItemizedItem {
   date: string;

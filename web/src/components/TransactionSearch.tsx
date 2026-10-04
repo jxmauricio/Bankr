@@ -22,7 +22,7 @@ export function TransactionSearch({ items, group }: { items: ItemizedItem[]; gro
         onChange={(e) => setQuery(e.target.value)}
         placeholder={`Search ${group} by merchant or category`}
         aria-label={`Search ${group} transactions`}
-        className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-accent"
+        className="w-full min-h-11 rounded-[14px] border border-control bg-surface px-3.5 py-2 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-accent"
       />
 
       {filtered.length === 0 ? (

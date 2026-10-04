@@ -96,7 +96,7 @@ export function GoalSetupPage({ onGoalSet }: { onGoalSet: () => void }) {
         </div>
 
         {type && (
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4 rounded-xl border border-border bg-surface p-4">
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4 rounded-[20px] bg-surface p-4">
             <GoalNameField
               id="setup-name"
               value={name}
@@ -119,7 +119,7 @@ export function GoalSetupPage({ onGoalSet }: { onGoalSet: () => void }) {
                       setName((current) => (!current.trim() || current === category ? next : current));
                       setCategory(next);
                     }}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft cursor-pointer"
+                    className="w-full min-h-11 rounded-[14px] border border-control bg-surface px-3.5 py-2 text-ink outline-none focus:border-accent  cursor-pointer"
                   >
                     {SPEND_CATEGORIES.map((item) => (
                       <option key={item} value={item}>
@@ -139,7 +139,7 @@ export function GoalSetupPage({ onGoalSet }: { onGoalSet: () => void }) {
                         className={`rounded-lg border px-2.5 py-2 text-left text-xs transition-colors cursor-pointer ${
                           windowName === w.id
                             ? "border-accent bg-accent-soft text-ink"
-                            : "border-border bg-bg text-ink-soft hover:border-ink-faint"
+                            : "border-line bg-raised text-ink-soft hover:border-ink-faint"
                         }`}
                       >
                         {w.label}
@@ -151,7 +151,7 @@ export function GoalSetupPage({ onGoalSet }: { onGoalSet: () => void }) {
                   <label htmlFor="setup-cap" className="mb-1.5 block text-sm font-medium text-ink-soft">
                     Spending cap <span className="text-ink-faint">(optional)</span>
                   </label>
-                  <div className="flex items-center rounded-lg border border-border bg-surface px-3 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft">
+                  <div className="flex min-h-11 items-center rounded-[14px] border border-control bg-surface px-3.5 focus-within:border-accent ">
                     <span className="font-tabular text-ink-faint">$</span>
                     <input
                       id="setup-cap"
@@ -172,7 +172,7 @@ export function GoalSetupPage({ onGoalSet }: { onGoalSet: () => void }) {
                   <label htmlFor="amount" className="mb-1.5 block text-sm font-medium text-ink-soft">
                     Target amount
                   </label>
-                  <div className="flex items-center rounded-lg border border-border bg-surface px-3 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft">
+                  <div className="flex min-h-11 items-center rounded-[14px] border border-control bg-surface px-3.5 focus-within:border-accent ">
                     <span className="font-tabular text-ink-faint">$</span>
                     <input
                       id="amount"
@@ -196,14 +196,14 @@ export function GoalSetupPage({ onGoalSet }: { onGoalSet: () => void }) {
                     type="date"
                     value={targetDate}
                     onChange={(e) => setTargetDate(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-tabular text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                    className="w-full min-h-11 rounded-[14px] border border-control bg-surface px-3.5 py-2 font-tabular text-ink outline-none focus:border-accent "
                   />
                 </div>
               </>
             )}
 
             {error && (
-              <p role="alert" className="text-sm text-danger">
+              <p role="alert" className="text-sm text-negative">
                 {error}
               </p>
             )}
@@ -211,7 +211,7 @@ export function GoalSetupPage({ onGoalSet }: { onGoalSet: () => void }) {
             <button
               type="submit"
               disabled={isBusy}
-              className="w-full rounded-lg bg-accent py-2.5 font-medium text-white transition-colors hover:bg-accent-strong disabled:opacity-60 cursor-pointer"
+              className="w-full rounded-[14px] bg-accent py-2.5 font-medium text-bg transition-colors hover:bg-accent-strong disabled:opacity-60 cursor-pointer"
             >
               {isBusy ? "Saving…" : isTracker ? "Start tracking" : "Set goal"}
             </button>

@@ -1,25 +1,8 @@
 import { useEffect, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import { ApiError, fetchLinkToken, linkAccount } from "../lib/api";
+import { LINK_TOKEN_KEY, isOAuthReturn, leaveOAuthReturn } from "../lib/plaidOAuth";
 import { useSession } from "../lib/session";
-
-// OAuth banks (Chase, Wells Fargo, ...) send the user off to the bank's own
-// site, then back to PLAID_REDIRECT_URI (/oauth-return?oauth_state_id=...).
-// Plaid requires resuming Link there with the *same* link token, so it's
-// stashed before Link opens and reused on return.
-const LINK_TOKEN_KEY = "bankr.plaidLinkToken";
-const OAUTH_RETURN_PATH = "/oauth-return";
-
-function isOAuthReturn() {
-  return (
-    window.location.pathname === OAUTH_RETURN_PATH && new URLSearchParams(window.location.search).has("oauth_state_id")
-  );
-}
-
-function leaveOAuthReturn() {
-  localStorage.removeItem(LINK_TOKEN_KEY);
-  if (window.location.pathname === OAUTH_RETURN_PATH) window.history.replaceState(null, "", "/");
-}
 
 export function LinkBankPage({ onLinked }: { onLinked: () => void }) {
   const { token } = useSession();
@@ -72,7 +55,7 @@ export function LinkBankPage({ onLinked }: { onLinked: () => void }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm text-center">
-        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-soft text-accent">
+        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-signal text-signal">
           <BankIcon />
         </div>
         <h1 className="font-display text-2xl font-semibold text-ink">Link your bank</h1>
@@ -81,7 +64,7 @@ export function LinkBankPage({ onLinked }: { onLinked: () => void }) {
         </p>
 
         {error && (
-          <p role="alert" className="mt-4 text-sm text-danger">
+          <p role="alert" className="mt-4 text-sm text-negative">
             {error}
           </p>
         )}
@@ -90,10 +73,22 @@ export function LinkBankPage({ onLinked }: { onLinked: () => void }) {
           type="button"
           disabled={!ready || isBusy}
           onClick={() => open()}
-          className="mt-8 w-full rounded-lg bg-accent py-2.5 font-medium text-white transition-colors hover:bg-accent-strong disabled:opacity-60 cursor-pointer"
+          className="mt-8 w-full rounded-[14px] bg-accent py-2.5 font-medium text-bg transition-colors hover:bg-accent-strong disabled:opacity-60 cursor-pointer"
         >
           {isSyncing ? "Syncing your accounts…" : "Connect a bank account"}
         </button>
+        <ul className="mt-6 space-y-2.5 text-left text-[13px] leading-relaxed text-ink-soft">
+          {[
+            "Read-only. Bankr can see balances and transactions — it can’t move money.",
+            "Your bank login goes to Plaid, never to Bankr.",
+            "Disconnect any bank, or delete your account, whenever you like in Settings.",
+          ].map((line) => (
+            <li key={line} className="flex gap-3">
+              <span aria-hidden className="mt-0.5 text-signal">✓</span>
+              {line}
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { AddBankButton } from "./AddBankButton";
 import { ApiError, deleteAccount, disconnectBank, fetchLinkedBanks, type LinkedBank } from "../lib/api";
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -32,7 +33,7 @@ export function SettingsModal({
 }: {
   token: string;
   onClose: () => void;
-  /** Called after a bank is disconnected, with how many remain. */
+  /** Called after a bank is connected or disconnected, with how many remain. */
   onBanksChanged: (remaining: number) => void | Promise<void>;
   onAccountDeleted: () => void;
 }) {
@@ -40,13 +41,14 @@ export function SettingsModal({
   const [confirmingBankId, setConfirmingBankId] = useState<string | null>(null);
   const [busyBankId, setBusyBankId] = useState<string | null>(null);
   const [bankError, setBankError] = useState<string | null>(null);
+  const [isLinking, setIsLinking] = useState(false);
 
   const [deleting, setDeleting] = useState(false);
   const [password, setPassword] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const isBusy = busyBankId !== null || isDeleting;
+  const isBusy = busyBankId !== null || isDeleting || isLinking;
 
   useEffect(() => {
     fetchLinkedBanks(token)
@@ -93,14 +95,14 @@ export function SettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4"
       onClick={() => {
         if (!isBusy) onClose();
       }}
       role="presentation"
     >
       <div
-        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-surface p-6"
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-line-strong bg-surface shadow-modal p-6"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -125,13 +127,13 @@ export function SettingsModal({
         {banks?.length === 0 && <p className="mt-2 text-sm text-ink-faint">No banks connected.</p>}
         <ul className="mt-2 space-y-2">
           {banks?.map((bank) => (
-            <li key={bank.id} className="rounded-lg border border-border p-3">
+            <li key={bank.id} className="rounded-[14px] border border-line p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate font-medium text-ink">{bank.institution_name}</p>
                   <p className="mt-0.5 text-xs text-ink-faint">{describeAccounts(bank.accounts)}</p>
                   {bank.status === "error" && (
-                    <p className="mt-1 text-xs text-danger">Needs attention: sign in to this bank again.</p>
+                    <p className="mt-1 text-xs text-negative">Needs attention: sign in to this bank again.</p>
                   )}
                 </div>
                 {confirmingBankId !== bank.id && (
@@ -139,14 +141,14 @@ export function SettingsModal({
                     type="button"
                     onClick={() => setConfirmingBankId(bank.id)}
                     disabled={isBusy}
-                    className="shrink-0 text-sm text-ink-soft transition-colors hover:text-danger disabled:opacity-60 cursor-pointer"
+                    className="shrink-0 text-sm text-ink-soft transition-colors hover:text-negative disabled:opacity-60 cursor-pointer"
                   >
                     Disconnect
                   </button>
                 )}
               </div>
               {confirmingBankId === bank.id && (
-                <div className="mt-3 rounded-lg bg-bg p-3">
+                <div className="mt-3 rounded-xl bg-raised p-3">
                   <p className="text-sm text-ink-soft">
                     This removes {bank.institution_name} and its transactions from Bankr. You can link it again later.
                   </p>
@@ -174,10 +176,20 @@ export function SettingsModal({
           ))}
         </ul>
         {bankError && (
-          <p role="alert" className="mt-3 text-sm text-danger">
+          <p role="alert" className="mt-3 text-sm text-negative">
             {bankError}
           </p>
         )}
+        <AddBankButton
+          token={token}
+          disabled={busyBankId !== null || isDeleting}
+          onBusyChange={setIsLinking}
+          onLinked={async () => {
+            const updated = await fetchLinkedBanks(token);
+            setBanks(updated);
+            await onBanksChanged(updated.length);
+          }}
+        />
 
         <p className="mt-6 text-sm">
           <a href="/privacy" target="_blank" rel="noreferrer" className="text-ink-soft underline hover:text-ink">
@@ -196,7 +208,7 @@ export function SettingsModal({
                 type="button"
                 onClick={() => setDeleting(true)}
                 disabled={isBusy}
-                className="mt-3 rounded-lg border border-danger px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger-soft disabled:opacity-60 cursor-pointer"
+                className="mt-3 rounded-lg border border-danger px-3 py-1.5 text-sm font-medium text-negative transition-colors hover:bg-negative-soft disabled:opacity-60 cursor-pointer"
               >
                 Delete my account…
               </button>
@@ -217,10 +229,10 @@ export function SettingsModal({
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-3 w-full rounded-lg border border-border bg-surface px-3 py-2 text-ink outline-none focus:border-danger focus:ring-2 focus:ring-danger-soft"
+                className="mt-3 w-full min-h-11 rounded-[14px] border border-control bg-surface px-3.5 py-2 text-ink outline-none focus:border-danger focus:ring-2 focus:ring-danger-soft"
               />
               {deleteError && (
-                <p role="alert" className="mt-2 text-sm text-danger">
+                <p role="alert" className="mt-2 text-sm text-negative">
                   {deleteError}
                 </p>
               )}
