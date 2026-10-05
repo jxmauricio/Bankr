@@ -151,6 +151,13 @@ transactions; disconnecting the last bank also clears net-worth history.
 Account deletion requires the password and erases goals, chat history and
 insights too.
 
+There's no self-serve "forgot password" yet. To reset one, run this from
+`backend/` on your own machine with the prod connection string (Render's
+free plan has no Shell tab):
+`DATABASE_URL='<prod url>' python -m app.scripts.reset_password friend@example.com`.
+It prints a temporary password to send them (`--prompt` lets you type one
+instead).
+
 Known gaps, fine for a small beta: the session token lives in
 `localStorage` rather than an httpOnly cookie, and there are no push
 notifications.
