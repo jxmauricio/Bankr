@@ -257,12 +257,13 @@ export function CreateGoalModal({
   );
 }
 
-export function NewGoalButton({ onClick }: { onClick: () => void }) {
+export function NewGoalButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-center gap-1.5 h-12 rounded-2xl border border-dashed border-line-strong bg-transparent px-3 text-sm font-medium text-ink-soft transition-colors hover:border-signal hover:bg-signal-wash hover:text-ink cursor-pointer"
+      disabled={disabled}
+      className="flex w-full items-center justify-center gap-1.5 h-12 rounded-2xl border border-dashed border-line-strong bg-transparent px-3 text-sm font-medium text-ink-soft transition-colors hover:border-signal hover:bg-signal-wash hover:text-ink cursor-pointer disabled:cursor-default disabled:border-line disabled:bg-transparent disabled:text-ink-faint"
     >
       <PlusIcon />
       New goal

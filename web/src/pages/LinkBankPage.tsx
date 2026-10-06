@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import { ApiError, fetchLinkToken, linkAccount } from "../lib/api";
 import { LINK_TOKEN_KEY, isOAuthReturn, leaveOAuthReturn } from "../lib/plaidOAuth";
 import { useSession } from "../lib/session";
+import { SetupHeader, StepEyebrow } from "../components/SetupHeader";
 
 export function LinkBankPage({ onLinked }: { onLinked: () => void }) {
   const { token } = useSession();
@@ -53,51 +54,122 @@ export function LinkBankPage({ onLinked }: { onLinked: () => void }) {
   const isBusy = !linkToken || isSyncing;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6">
-      <div className="w-full max-w-sm text-center">
-        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-signal text-signal">
-          <BankIcon />
-        </div>
-        <h1 className="font-display text-2xl font-semibold text-ink">Link your bank</h1>
-        <p className="mt-2 text-ink-soft">
-          Bankr reads your balances and transactions to build your dashboard and track your goal.
-        </p>
-
-        {error && (
-          <p role="alert" className="mt-4 text-sm text-negative">
-            {error}
+    <div className="flex min-h-screen flex-col">
+      <SetupHeader step={1} />
+      <div className="mx-auto flex w-full max-w-[1080px] flex-1 flex-wrap items-start gap-16 px-6 py-12 sm:px-8 sm:py-14">
+        <section className="flex min-w-0 flex-[1_1_420px] flex-col gap-7">
+          <StepEyebrow>STEP 1 OF 2</StepEyebrow>
+          <h1 className="font-display text-[34px] font-normal leading-[1.08] tracking-[-0.02em] text-ink sm:text-[46px]">
+            Link the accounts you want Bankr to read.
+          </h1>
+          <p className="max-w-[480px] text-base leading-relaxed text-ink-soft">
+            Checking, savings and credit cards give the clearest picture. You can add or remove banks later in Settings.
           </p>
-        )}
+          <div className="flex flex-col items-start gap-3">
+            <button
+              type="button"
+              disabled={!ready || isBusy}
+              onClick={() => open()}
+              className="flex h-[52px] cursor-pointer items-center gap-2.5 rounded-xl bg-ink px-6 text-base font-medium text-bg transition-opacity disabled:cursor-default disabled:opacity-60"
+            >
+              <LockIcon />
+              {isSyncing ? "Syncing your accounts…" : "Connect securely with Plaid"}
+            </button>
+            <span className="text-[13px] text-ink-faint">Opens Plaid in a secure window · about 1 minute</span>
+          </div>
+          {error && (
+            <p role="alert" className="text-sm text-negative">
+              {error}
+            </p>
+          )}
+          <div className="flex flex-col gap-1 rounded-xl border border-dashed border-line-strong p-[18px]">
+            <span className="text-sm text-ink">Linked accounts</span>
+            <span role="status" className="text-[13px] text-ink-faint">
+              {isSyncing ? "Reading balances and transactions…" : "None yet. They’ll appear as •••• 1234 once linked."}
+            </span>
+          </div>
+        </section>
 
-        <button
-          type="button"
-          disabled={!ready || isBusy}
-          onClick={() => open()}
-          className="mt-8 w-full rounded-[14px] bg-accent py-2.5 font-medium text-bg transition-colors hover:bg-accent-strong disabled:opacity-60 cursor-pointer"
+        <aside
+          aria-label="How your data is protected"
+          className="flex min-w-0 flex-[1_1_340px] flex-col gap-[22px] rounded-3xl border border-line bg-surface p-7"
         >
-          {isSyncing ? "Syncing your accounts…" : "Connect a bank account"}
-        </button>
-        <ul className="mt-6 space-y-2.5 text-left text-[13px] leading-relaxed text-ink-soft">
-          {[
-            "Read-only. Bankr can see balances and transactions — it can’t move money.",
-            "Your bank login goes to Plaid, never to Bankr.",
-            "Disconnect any bank, or delete your account, whenever you like in Settings.",
-          ].map((line) => (
-            <li key={line} className="flex gap-3">
-              <span aria-hidden className="mt-0.5 text-signal">✓</span>
-              {line}
-            </li>
-          ))}
-        </ul>
+          <h2 className="font-display text-[22px] font-medium text-ink">What Bankr can and can’t do</h2>
+          <Assurance icon={<EyeIcon />} title="Read-only">
+            Bankr sees balances and transactions. It can’t move money, pay bills or trade.
+          </Assurance>
+          <Assurance icon={<LockIcon size={22} />} title="Your bank login stays with Plaid">
+            You sign in to your bank inside Plaid. Bankr never sees your bank password.
+          </Assurance>
+          <Assurance icon={<MaskIcon />} title="Account numbers stay masked">
+            Everywhere in Bankr you’ll only see the last four digits.
+          </Assurance>
+          <Assurance icon={<TrashIcon />} title="Leave anytime">
+            Unlink a bank or delete your account and data from Settings.
+          </Assurance>
+          <a href="/privacy" className="text-sm text-signal hover:text-signal-hi">
+            Read the privacy notice →
+          </a>
+        </aside>
       </div>
     </div>
   );
 }
 
-function BankIcon() {
+function Assurance({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
   return (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M3 10.5 12 4l9 6.5M4.5 10.5v8M9 10.5v8M15 10.5v8M19.5 10.5v8M2.5 20h19" strokeLinecap="round" strokeLinejoin="round" />
+    <div className="flex gap-3.5">
+      <span className="shrink-0 text-signal">{icon}</span>
+      <div className="flex flex-col gap-1">
+        <span className="text-[15px] font-medium text-ink">{title}</span>
+        <span className="text-sm leading-relaxed text-ink-soft">{children}</span>
+      </div>
+    </div>
+  );
+}
+
+const iconProps = {
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.6,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  "aria-hidden": true,
+} as const;
+
+function LockIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...iconProps} strokeWidth={1.8}>
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" {...iconProps}>
+      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function MaskIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" {...iconProps}>
+      <path d="M4 8h16M4 16h16" />
+      <circle cx="8" cy="12" r="1" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="16" cy="12" r="1" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" {...iconProps}>
+      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
     </svg>
   );
 }

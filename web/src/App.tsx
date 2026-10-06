@@ -5,6 +5,7 @@ import { AuthPage } from "./pages/AuthPage";
 import { LinkBankPage } from "./pages/LinkBankPage";
 import { GoalSetupPage } from "./pages/GoalSetupPage";
 import { HomePage } from "./pages/HomePage";
+import { BootScreen } from "./components/BootScreen";
 
 type OnboardingStep = "loading" | "link-bank" | "set-goal" | "home" | "load-failed";
 
@@ -18,12 +19,19 @@ export function App() {
 function PostSignInGate() {
   const { token } = useSession();
   const [step, setStep] = useState<OnboardingStep>("loading");
+  const [balancesRead, setBalancesRead] = useState(false);
+  const [goalsRead, setGoalsRead] = useState(false);
 
   async function loadOnboardingState() {
     if (!token) return;
     setStep("loading");
+    setBalancesRead(false);
+    setGoalsRead(false);
     try {
-      const [netWorth, goalProgress] = await Promise.all([fetchNetWorth(token), fetchGoalProgress(token)]);
+      const [netWorth, goalProgress] = await Promise.all([
+        fetchNetWorth(token).finally(() => setBalancesRead(true)),
+        fetchGoalProgress(token).finally(() => setGoalsRead(true)),
+      ]);
       if (netWorth.current === null) {
         setStep("link-bank");
       } else if (!goalProgress.goals?.length) {
@@ -63,9 +71,13 @@ function PostSignInGate() {
       );
     default:
       return (
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-signal" />
-        </div>
+        <BootScreen
+          steps={[
+            { label: "signed in", state: "done" },
+            { label: "reading balances", state: balancesRead ? "done" : "active" },
+            { label: "loading goals", state: goalsRead ? "done" : "active" },
+          ]}
+        />
       );
   }
 }

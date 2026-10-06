@@ -101,6 +101,30 @@ export function useVoiceMode({
     listen();
   }
 
+  /** Leave voice mode entirely, cutting off any listening or speech. */
+  function stop() {
+    turnRef.current++;
+    recognizerRef.current?.abort();
+    recognizerRef.current = null;
+    cancelSpeechRef.current?.();
+    cancelSpeechRef.current = null;
+    setVoiceMode(false);
+    setVoiceState("idle");
+  }
+
+  /** Stop listening but stay in voice mode, so the next tap talks again. */
+  function pause() {
+    turnRef.current++;
+    recognizerRef.current?.abort();
+    recognizerRef.current = null;
+    setVoiceState("idle");
+  }
+
+  /** Start a new turn from voice mode's idle state. */
+  function talk() {
+    if (voiceModeRef.current && voiceState === "idle") listen();
+  }
+
   /** Call once a reply arrives -- speaks it if voice mode is on, then
    * resumes listening for the next turn once it's done. No-op otherwise. */
   function speakReply(text: string) {
@@ -115,5 +139,5 @@ export function useVoiceMode({
     });
   }
 
-  return { voiceMode, voiceState, toggle, speakReply };
+  return { voiceMode, voiceState, toggle, stop, pause, talk, speakReply };
 }
