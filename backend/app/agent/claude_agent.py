@@ -130,7 +130,15 @@ say the card shows the rest.
 - A goal or status: amount out of target with the percent, then one sentence \
 on pace or the next step.
 Only "- " bullets and **bold** are allowed: no headers, italics, tables, \
-numbered or nested lists, or emoji. Keep the whole reply to about 6 lines."""
+numbered or nested lists, or emoji. Keep the whole reply to about 6 lines.
+
+Charts: when a picture beats a list -- a breakdown of 3+ items, a \
+this-vs-last comparison, or how something moved across months -- call \
+show_chart once (never more than one per reply), after the tools you \
+need for the answer. Then keep the text to 1-3 lines with the takeaway \
+(the biggest item, the direction of change) instead of repeating every \
+number the chart shows. Don't chart a single number, a goal, or a list of \
+transactions."""
 
 _SPEND_CATEGORIES = ", ".join(name for name, type_, _ in DEFAULT_CATEGORIES if type_ == "expense")
 _WINDOW_PROPS = {
@@ -296,6 +304,49 @@ TOOL_DEFINITIONS = [
         },
     ),
     ToolSpec(
+        name="show_chart",
+        description=(
+            "Show a small chart under your reply. You choose what to chart; the numbers come straight from the "
+            "data. breakdown: horizontal bars of spending by category/subcategory/merchant for one window (top 6 "
+            "plus the rest). compare: two bars, a spending window vs the one before it, optionally one category. "
+            "trend: one value per month for the last N months (spending, income, or net)."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": list(tools.CHART_KINDS)},
+                **_WINDOW_PROPS,
+                "category": _CATEGORY_PROP,
+                "group_by": {
+                    "type": "string",
+                    "enum": ["category", "subcategory", "merchant"],
+                    "description": "breakdown only. Default category.",
+                },
+                "current_window": {
+                    "type": "string",
+                    "enum": list(mq.NAMED_WINDOWS),
+                    "description": "compare only. Default this_month.",
+                },
+                "previous_window": {
+                    "type": "string",
+                    "enum": list(mq.NAMED_WINDOWS),
+                    "description": "compare only. Defaults to the period before current_window.",
+                },
+                "current_start": {"type": "string", "description": "compare only, YYYY-MM-DD; with previous_start/previous_end for months that aren't a named window."},
+                "current_end": {"type": "string"},
+                "previous_start": {"type": "string"},
+                "previous_end": {"type": "string"},
+                "metric": {
+                    "type": "string",
+                    "enum": ["spending", "income", "net"],
+                    "description": "trend only. Default spending.",
+                },
+                "months": {"type": "integer", "description": "trend only. 3-12, default 6."},
+            },
+            "required": ["kind"],
+        },
+    ),
+    ToolSpec(
         name="web_search",
         description=(
             "Search the web for current, time-sensitive information not available from the other tools -- interest "
@@ -324,6 +375,7 @@ _TOOL_DISPATCH = {
     "get_unusual_transactions": lambda db, user_id, **kwargs: tools.get_unusual_transactions(db, user_id),
     "calculate": lambda db, user_id, **kwargs: tools.calculate(**kwargs),
     "propose_goal": tools.propose_goal,
+    "show_chart": tools.show_chart,
     "web_search": lambda db, user_id, **kwargs: tools.web_search(client=_search_client, **kwargs),
 }
 
@@ -375,6 +427,9 @@ def _describe_tool_call(name: str, tool_input: dict, result: dict | None = None)
         return f"Calculated {tool_input.get('expression', '')}"
     if name == "web_search":
         return f"Searched “{tool_input.get('query', '')}”"
+    if name == "show_chart":
+        chart = (result or {}).get("chart")
+        return f"Chart · {chart['title']}" if chart else "Chart"
     if name == "propose_goal":
         kind = tool_input.get("type") or tool_input.get("goal_type")
         if kind == "track_spending":
@@ -410,6 +465,8 @@ def _progress_label(name: str, tool_input: dict) -> str:
         return "Searching the web…"
     if name == "propose_goal":
         return "Drafting a goal…"
+    if name == "show_chart":
+        return "Drawing a chart…"
     return "Working on it…"
 
 
@@ -473,6 +530,8 @@ def run_agent_turn(
             # card without a separate channel. Stripped from the user-facing
             # sources trail in app/api/chat.py.
             entry["proposal"] = result["proposal"]
+        if name == "show_chart" and isinstance(result, dict) and result.get("chart"):
+            entry["chart"] = result["chart"]
         sources.append(entry)
         return result
 

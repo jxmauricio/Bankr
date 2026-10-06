@@ -1,6 +1,7 @@
 import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { sankey, type SankeyNode } from "d3-sankey";
 import { fetchIncomeWindow, fetchNetWorth, fetchSpendingWindow, type ItemizedItem, type NetWorthHistory } from "../lib/api";
+import { colorForCategory } from "../lib/chartColors";
 import { formatMoney } from "../lib/format";
 import { periodInfo, type Period } from "../lib/period";
 import { TransactionSearch } from "./TransactionSearch";
@@ -14,55 +15,6 @@ const CHART_VIEWS: { id: ChartView; label: string }[] = [
   { id: "bars", label: "Bars" },
 ];
 const PIE_SLICE_CAP = 7;
-
-/**
- * Fixed category -> color slot order, matching seed_categories.py's
- * DEFAULT_CATEGORIES. Fixed (not cycled per-render) so a category's color
- * is stable across opens, per the dataviz rule "color follows the entity."
- * Palette is the validated dark-mode categorical set (8 hues, ΔE-checked
- * against this app's #10131C surface).
- */
-const CATEGORY_ORDER = [
-  "Income",
-  "Groceries",
-  "Dining",
-  "Transportation",
-  "Rent & Housing",
-  "Utilities",
-  "Subscriptions",
-  "Entertainment",
-  "Shopping",
-  "Health",
-  "Transfer",
-  "Other",
-  "Restaurants",
-  "Fast Food",
-  "Coffee",
-  "Alcohol & Bars",
-  "Gas",
-  "Rideshare & Taxi",
-  "Public Transit",
-  "Parking & Tolls",
-  "Auto Maintenance",
-  "Travel",
-  "Loan Payments",
-  "Fees",
-];
-const CATEGORY_PALETTE = [
-  "#3987e5",
-  "#d95926",
-  "#199e70",
-  "#c98500",
-  "#d55181",
-  "#008300",
-  "#9085e9",
-  "#e66767",
-];
-
-function colorForCategory(name: string): string {
-  const i = CATEGORY_ORDER.indexOf(name);
-  return i === -1 ? "#565D72" : CATEGORY_PALETTE[i % CATEGORY_PALETTE.length];
-}
 
 interface CategorySlice {
   name: string;

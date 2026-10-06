@@ -199,6 +199,90 @@ def find_transactions(
     )
 
 
+CHART_KINDS = ("breakdown", "compare", "trend")
+_CHART_BREAKDOWN_TOP_N = 6
+
+
+def _short_range(result: dict) -> str:
+    """"Sep 1–14" -- the chart header already sits under a dated reply."""
+    return mq.format_range(date.fromisoformat(result["start"]), date.fromisoformat(result["end"])).rsplit(", ", 1)[0]
+
+
+@_grounded
+def show_chart(
+    db: Session,
+    user_id: UUID,
+    kind: str,
+    window: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    category: str | None = None,
+    group_by: str | None = None,
+    current_window: str = "this_month",
+    previous_window: str | None = None,
+    current_start: str | None = None,
+    current_end: str | None = None,
+    previous_start: str | None = None,
+    previous_end: str | None = None,
+    metric: str = "spending",
+    months: int = 6,
+    **_extra,
+) -> dict:
+    """Builds a small chart from a fresh query -- the model only says *what*
+    to chart, never the numbers, so a chart can't show anything the data
+    doesn't. The spec rides along on the source entry (see run_agent_turn)."""
+    cat = _category(db, category)
+    if kind == "breakdown":
+        result = mq.spend_query(
+            db, user_id, _window(db, user_id, window, start, end), cat, group_by or "category", _CHART_BREAKDOWN_TOP_N
+        )
+        points = [
+            {"label": g["name"], "value": g["amount"], "share": g["share_of_total"]} for g in result["groups"]
+        ]
+        title = f"{result['category']} by {result['group_by']}" if cat else f"Spending by {result['group_by']}"
+        period = _short_range(result)
+        change = None
+    elif kind == "compare":
+        result = compare_spending.__wrapped__(
+            db, user_id, current_window, previous_window, category, current_start, current_end, previous_start, previous_end
+        )
+        previous = result.get("previous_to_same_point") or result["previous"]
+        change = result.get("change_vs_same_point") or result["change"]
+        points = [
+            {"label": _short_range(previous), "value": previous["total_spent"]},
+            {"label": _short_range(result["current"]), "value": result["current"]["total_spent"]},
+        ]
+        title = f"{result['category'] or 'Spending'}: then vs now"
+        period = None
+    elif kind == "trend":
+        result = mq.monthly_series(db, user_id, metric, months, cat)
+        points = [{"label": p["label"], "value": p["value"], "partial": p["partial"]} for p in result["points"]]
+        what = result["category"] or {"spending": "Spending", "income": "Income", "net": "Income minus spending"}[metric]
+        title = f"{what} by month"
+        period = _short_range(result)
+        change = None
+    else:
+        raise mq.QueryError(f"kind must be one of: {', '.join(CHART_KINDS)}")
+
+    # A trend needs at least two months with something in them, or it's just one bar.
+    if sum(1 for p in points if p["value"]) < (2 if kind == "trend" else 1):
+        return {"shown": False, "message": "Nothing to chart in that window -- answer in text instead."}
+    chart = {
+        "kind": kind,
+        "title": title,
+        "period": period,
+        "unit": "usd",
+        "points": points,
+    }
+    if change:
+        chart["change"] = change
+    return {
+        "shown": True,
+        "chart": chart,
+        "message": "The chart is shown under your reply. Give the takeaway in 1-3 lines; don't list every bar.",
+    }
+
+
 def _progress_for(db: Session, user_id: UUID, goal: Goal) -> dict:
     if goal.type == TRACK_SPENDING:
         return _tracker_progress(db, user_id, goal)

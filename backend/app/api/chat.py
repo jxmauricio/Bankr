@@ -59,11 +59,37 @@ class GoalProposal(BaseModel):
     slots_remaining: int = 5
 
 
+class ChartPoint(BaseModel):
+    label: str
+    value: float
+    share: float | None = None
+    partial: bool = False
+
+
+class ChartChange(BaseModel):
+    difference: float
+    percent_change: float | None = None
+    direction: str
+
+
+class ChartSpec(BaseModel):
+    """A small chart under a reply, built server-side from a fresh query (see
+    tools.show_chart). kind: breakdown | compare | trend."""
+
+    kind: str
+    title: str
+    period: str | None = None
+    unit: str = "usd"
+    points: list[ChartPoint]
+    change: ChartChange | None = None
+
+
 class ChatResponse(BaseModel):
     conversation_id: UUID
     reply: str
     sources: list[ChatSource] = []
     goal_proposal: GoalProposal | None = None
+    charts: list[ChartSpec] = []
 
 
 class ConversationSummary(BaseModel):
@@ -78,12 +104,15 @@ class ConversationMessage(BaseModel):
     content: str
     sources: list[ChatSource] = []
     goal_proposal: GoalProposal | None = None
+    charts: list[ChartSpec] = []
     created_at: datetime
 
 
 def _public_sources(raw: list[dict] | None) -> list[dict]:
     public = []
     for entry in raw or []:
+        if entry["tool"] == "show_chart":
+            continue  # drawing a chart isn't a data source; the chart itself shows below the reply
         source = {"tool": entry["tool"], "label": entry["label"]}
         if entry.get("query"):
             source["query"] = entry["query"]
@@ -99,6 +128,12 @@ def _goal_proposal(raw: list[dict] | None) -> dict | None:
     return None
 
 
+def _charts(raw: list[dict] | None) -> list[dict]:
+    """At most one chart per reply (the prompt asks for one); keep the last."""
+    charts = [entry["chart"] for entry in raw or [] if entry.get("chart")]
+    return charts[-1:]
+
+
 @router.post("", response_model=ChatResponse, dependencies=[Depends(limit_chat_by_user)])
 def chat(
     body: ChatRequest,
@@ -112,6 +147,7 @@ def chat(
         reply=reply,
         sources=_public_sources(sources),
         goal_proposal=_goal_proposal(sources),
+        charts=_charts(sources),
     )
 
 
@@ -151,6 +187,7 @@ def chat_stream(
                 reply=reply,
                 sources=_public_sources(sources),
                 goal_proposal=_goal_proposal(sources),
+                charts=_charts(sources),
             )
             events.put(("done", response.model_dump(mode="json")))
         except Exception:
@@ -202,6 +239,7 @@ def get_conversation(
             "content": row["content"],
             "sources": _public_sources(row.get("sources")),
             "goal_proposal": _goal_proposal(row.get("sources")),
+            "charts": _charts(row.get("sources")),
             "created_at": row["created_at"],
         }
         for row in messages

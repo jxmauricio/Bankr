@@ -568,6 +568,59 @@ def month_cash_flow(db: Session, user_id: UUID, month: str) -> dict:
     }
 
 
+MAX_SERIES_MONTHS = 12
+
+
+def monthly_series(
+    db: Session,
+    user_id: UUID,
+    metric: str = "spending",
+    months: int = 6,
+    category: ResolvedCategory | None = None,
+) -> dict:
+    """One value per calendar month, oldest first, ending with the current
+    (in-progress, flagged `partial`) month. Never reaches back before the
+    first transaction, so a new user doesn't get a row of empty months."""
+    if metric not in ("spending", "income", "net"):
+        raise QueryError("metric must be one of: spending, income, net")
+    if category is not None and metric != "spending":
+        raise QueryError("category only applies to metric=spending")
+    months = max(1, min(int(months), MAX_SERIES_MONTHS))
+    today = today_for_user(db, user_id)
+    earliest = _month_start(_earliest_transaction_date(db, user_id) or today)
+
+    windows: list[Window] = []
+    cursor = _month_start(today)
+    while len(windows) < months and cursor >= earliest:
+        windows.append(Window(cursor, min(_month_end(cursor), today), "custom"))
+        cursor = _month_start(cursor - timedelta(days=1))
+    windows.reverse()
+
+    points = []
+    for w in windows:
+        if metric == "spending":
+            value = spend_query(db, user_id, w, category)["total_spent"]
+        else:
+            value = cash_flow(db, user_id, w)[metric]
+        points.append(
+            {
+                "month": w.start.strftime("%Y-%m"),
+                "label": f"{w.start:%b}",
+                "value": value,
+                "partial": w.end < _month_end(w.start),
+            }
+        )
+    start, end = windows[0].start, windows[-1].end
+    return {
+        "metric": metric,
+        "category": category.name if category else None,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "label": format_range(start, end),
+        "points": points,
+    }
+
+
 def compare_spend(
     db: Session,
     user_id: UUID,

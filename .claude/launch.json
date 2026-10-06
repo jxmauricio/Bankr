@@ -4,8 +4,42 @@
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "web"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "web"
+      ],
       "port": 5173
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd backend && export SIGNUP_INVITE_CODES=friends-beta && .venv/bin/alembic upgrade head && .venv/bin/uvicorn app.main:app --port 8000"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "backend-verify",
+      "runtimeExecutable": "sh",
+      "autoPort": false,
+      "runtimeArgs": [
+        "-c",
+        "cd backend && export DATABASE_URL=postgresql://bankr:bankr@localhost:5432/bankr CORS_ALLOWED_ORIGINS=http://localhost:5183 && .venv/bin/alembic upgrade head && .venv/bin/uvicorn app.main:app --port 8010"
+      ],
+      "port": 8010
+    },
+    {
+      "name": "web-verify",
+      "runtimeExecutable": "sh",
+      "autoPort": false,
+      "runtimeArgs": [
+        "-c",
+        "cd web && VITE_API_BASE_URL=http://localhost:8010 npm run dev -- --port 5183 --strictPort"
+      ],
+      "port": 5183
     }
   ]
 }

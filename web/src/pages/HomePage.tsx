@@ -10,6 +10,7 @@ import {
   fetchSpending,
   resyncAccounts,
   streamChatMessage,
+  type ChartSpec,
   type ChatSource,
   type GoalProgress,
   type GoalProposal,
@@ -29,6 +30,7 @@ import { ProfileMenu } from "../components/ProfileMenu";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { loadPeriod, savePeriod, type Period as TimePeriod } from "../lib/period";
 import { RelinkBanner } from "../components/StatusBanners";
+import { ChatChart } from "../components/ChatChart";
 import { SourceBreakdown } from "../components/SourceBreakdown";
 import { SettingsModal } from "../components/SettingsModal";
 import { NetWorthFlowModal } from "../components/NetWorthFlowModal";
@@ -50,7 +52,7 @@ type Period = "week" | "month" | "year";
 type Topic = "spending" | "income";
 
 type StreamItem =
-  | { kind: "assistant-text"; id: string; text: string; sources?: ChatSource[]; goalProposal?: GoalProposal | null }
+  | { kind: "assistant-text"; id: string; text: string; sources?: ChatSource[]; goalProposal?: GoalProposal | null; charts?: ChartSpec[] }
   | { kind: "user-text"; id: string; text: string }
   | { kind: "topic-card"; id: string; topic: Topic; period: Period };
 
@@ -164,6 +166,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
         id: makeId(),
         text: response.reply,
         sources: response.sources,
+        charts: response.charts,
         goalProposal: resolveGoalProposal({
           userText: text,
           assistantText: response.reply,
@@ -203,6 +206,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
             id: makeId(),
             text: m.content,
             sources: m.sources,
+            charts: m.charts,
             goalProposal: resolveGoalProposal({
               userText: previous?.role === "user" ? previous.content : "",
               assistantText: m.content,
@@ -458,6 +462,7 @@ function StreamEntry({
           <div className="max-w-full rounded-[6px_20px_20px_20px] bg-surface px-5 py-[18px] text-[15px] leading-[1.65] text-ink">
             <AssistantText text={item.text} />
           </div>
+          {item.charts?.map((chart, i) => <ChatChart key={i} chart={chart} />)}
           {item.sources && item.sources.length > 0 && (
             <ExpandToggle
               label={`${item.sources.length} source${item.sources.length === 1 ? "" : "s"}`}

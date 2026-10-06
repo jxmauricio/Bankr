@@ -311,11 +311,29 @@ export interface GoalProposal {
   slots_remaining?: number;
 }
 
+export interface ChartPoint {
+  label: string;
+  value: number;
+  share?: number | null;
+  partial?: boolean;
+}
+
+/** A small chart under a reply, built server-side from a fresh query. */
+export interface ChartSpec {
+  kind: "breakdown" | "compare" | "trend";
+  title: string;
+  period?: string | null;
+  unit: "usd";
+  points: ChartPoint[];
+  change?: { difference: number; percent_change: number | null; direction: "up" | "down" | "flat" } | null;
+}
+
 export interface ChatResponse {
   conversation_id: string;
   reply: string;
   sources: ChatSource[];
   goal_proposal: GoalProposal | null;
+  charts?: ChartSpec[];
 }
 
 /**
@@ -374,6 +392,7 @@ export interface ConversationMessage {
   content: string;
   sources: ChatSource[];
   goal_proposal: GoalProposal | null;
+  charts?: ChartSpec[];
   created_at: string;
 }
 
