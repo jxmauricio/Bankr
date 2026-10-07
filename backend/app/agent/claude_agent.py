@@ -132,6 +132,13 @@ on pace or the next step.
 Only "- " bullets and **bold** are allowed: no headers, italics, tables, \
 numbered or nested lists, or emoji. Keep the whole reply to about 6 lines.
 
+Budgets: for "am I over budget", "how much can I still spend", or how a \
+monthly budget is going, call get_budget_status and lead with what's left \
+(available). If a line is over and another has room, offer to cover it and \
+call propose_budget_move so a confirm card appears. Monthly category limits \
+belong in the budget; use a track_spending goal only when the user asks to \
+track or watch a category rather than budget it.
+
 For bills, subscriptions, paychecks and "what's coming up", call \
 get_recurring. Series with status "suggested" were detected but not yet \
 confirmed by the user -- say they look recurring rather than stating it.
@@ -324,6 +331,37 @@ TOOL_DEFINITIONS = [
         },
     ),
     ToolSpec(
+        name="get_budget_status",
+        description=(
+            "The user's monthly budget: each line's budgeted amount, spent, rollover carried in, money moved, "
+            "and what's left, plus status ok / warning (on pace to go over) / over. In flex mode, fixed bills "
+            "have their own lines and everything else shares the Flexible line. Use for \"am I over budget\", "
+            "\"how much can I still spend\", \"how's my budget\"."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {"month": {"type": "string", "description": "YYYY-MM. Default this month."}},
+        },
+    ),
+    ToolSpec(
+        name="propose_budget_move",
+        description=(
+            "Draft moving money from one budget line to another for a month -- usually to cover an overspent "
+            "line from one with room left. The user confirms on a card; nothing moves until then. Lines are "
+            "category names or \"Flexible\"."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "from_line": {"type": "string", "description": "Line with room, e.g. Shopping or Flexible."},
+                "to_line": {"type": "string", "description": "Line to top up, e.g. Dining."},
+                "amount": {"type": "number"},
+                "month": {"type": "string", "description": "YYYY-MM. Default this month."},
+            },
+            "required": ["from_line", "to_line", "amount"],
+        },
+    ),
+    ToolSpec(
         name="propose_rule",
         description=(
             "Draft a categorization rule -- \"always put <merchant> under <category>\" -- for the user to "
@@ -417,6 +455,8 @@ _TOOL_DISPATCH = {
     "propose_goal": tools.propose_goal,
     "propose_rule": tools.propose_rule,
     "get_recurring": tools.get_recurring,
+    "get_budget_status": tools.get_budget_status,
+    "propose_budget_move": tools.propose_budget_move,
     "show_chart": tools.show_chart,
     "web_search": lambda db, user_id, **kwargs: tools.web_search(client=_search_client, **kwargs),
 }
@@ -431,6 +471,7 @@ _STATIC_TOOL_LABELS = {
     "get_recent_transactions": "Recent transactions",
     "get_unusual_transactions": "Unusual transactions",
     "get_recurring": "Recurring bills & subscriptions",
+    "get_budget_status": "Budget",
 }
 
 
@@ -475,6 +516,8 @@ def _describe_tool_call(name: str, tool_input: dict, result: dict | None = None)
         return f"Chart · {chart['title']}" if chart else "Chart"
     if name == "propose_rule":
         return "Proposed a categorization rule"
+    if name == "propose_budget_move":
+        return "Proposed a budget move"
     if name == "propose_goal":
         kind = tool_input.get("type") or tool_input.get("goal_type")
         if kind == "track_spending":
@@ -514,6 +557,10 @@ def _progress_label(name: str, tool_input: dict) -> str:
         return "Drafting a rule…"
     if name == "get_recurring":
         return "Checking your bills and subscriptions…"
+    if name == "get_budget_status":
+        return "Checking your budget…"
+    if name == "propose_budget_move":
+        return "Drafting a budget move…"
     if name == "show_chart":
         return "Drawing a chart…"
     return "Working on it…"

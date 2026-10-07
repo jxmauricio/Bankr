@@ -236,3 +236,50 @@ class RecurringSeries(Base):
     occurrences: Mapped[int] = mapped_column(default=0)
     status: Mapped[str] = mapped_column(String, default="suggested")  # suggested | confirmed | dismissed
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class BudgetSettings(Base):
+    """How a user budgets. "flex" (the default): fixed bills each get a line
+    and everything else shares one Flexible amount. "category": every
+    category gets its own line, YNAB-style."""
+
+    __tablename__ = "budget_settings"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    mode: Mapped[str] = mapped_column(String, default="flex")  # flex | category
+    flex_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    flex_rollover: Mapped[bool] = mapped_column(Boolean, default=False)
+    # First month the Flexible amount applies to; its rollover starts here.
+    start_month: Mapped[date] = mapped_column(Date)
+
+
+class Budget(Base):
+    """A monthly amount for one top-level expense category."""
+
+    __tablename__ = "budgets"
+    __table_args__ = (UniqueConstraint("user_id", "category_id"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    category_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("categories.id"))
+    amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    group: Mapped[str] = mapped_column(String, default="flex")  # fixed | flex (only matters in flex mode)
+    # Leftover (or overspending) carries into next month.
+    rollover: Mapped[bool] = mapped_column(Boolean, default=False)
+    # First month the budget applies to; rollover never reaches before it.
+    start_month: Mapped[date] = mapped_column(Date)
+
+
+class BudgetMove(Base):
+    """Money moved between budget lines for one month -- how overspending
+    gets covered. A null category means the Flexible bucket."""
+
+    __tablename__ = "budget_moves"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    month: Mapped[date] = mapped_column(Date)  # first of the month
+    from_category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
+    to_category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
+    amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

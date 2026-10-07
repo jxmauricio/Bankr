@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { ApiError, createRule, type ActionProposal } from "../lib/api";
+import { ApiError, createRule, moveBudgetMoney, type ActionProposal } from "../lib/api";
+import { formatMoney } from "../lib/format";
 
 type Status = "pending" | "busy" | "done" | "dismissed";
 
@@ -92,6 +93,18 @@ function describe(p: ActionProposal): { eyebrow: string; title: ReactNode; detai
         confirm: "Make rule",
         done: `Rule saved — “${p.merchant_contains}” now goes to ${p.category}.`,
       };
+    case "budget_move":
+      return {
+        eyebrow: "MOVE BUDGET MONEY?",
+        title: (
+          <>
+            Move {formatMoney(p.amount)} from {p.from_name} to {p.to_name}
+          </>
+        ),
+        detail: `For ${p.month}. ${p.from_name} will have that much less to spend.`,
+        confirm: "Move it",
+        done: `Moved ${formatMoney(p.amount)} to ${p.to_name}.`,
+      };
   }
 }
 
@@ -104,5 +117,8 @@ async function perform(token: string, p: ActionProposal): Promise<void> {
         set_merchant_name: p.set_merchant_name ?? undefined,
         apply_to_existing: true,
       });
+      return;
+    case "budget_move":
+      await moveBudgetMoney(token, { month: p.month, from_key: p.from_key, to_key: p.to_key, amount: p.amount });
   }
 }

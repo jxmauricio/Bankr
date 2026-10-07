@@ -1,3 +1,4 @@
+import { BudgetSection } from "../components/BudgetSection";
 import { RecurringSection } from "../components/RecurringSection";
 
 /** Plan: what's coming up and what's left to spend this month. */
@@ -18,6 +19,7 @@ export function PlanView({
           <h1 className="m-0 text-[22px] font-semibold tracking-[-0.02em] text-ink lg:text-[26px]">Plan</h1>
           <span className="text-[13px] text-ink-soft">Your budget for the month and the bills on the way.</span>
         </div>
+        <BudgetSection token={token} refreshKey={refreshKey} focus={focus === "budget"} />
         <RecurringSection token={token} refreshKey={refreshKey} focus={focus === "recurring"} />
       </div>
     </div>

@@ -8,6 +8,7 @@ from app.api.accounts import router as accounts_router
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.dashboard import router as dashboard_router
+from app.api.budgets import router as budgets_router
 from app.api.goals import router as goals_router
 from app.api.recurring import router as recurring_router
 from app.api.rules import router as rules_router
@@ -45,6 +46,7 @@ app.include_router(goals_router)
 app.include_router(transactions_router)
 app.include_router(rules_router)
 app.include_router(recurring_router)
+app.include_router(budgets_router)
 app.include_router(chat_router)
 app.include_router(webhooks_router)
 

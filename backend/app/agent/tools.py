@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Category, Goal, LinkedAccount, NetWorthSnapshot, Transaction
 from app.integrations.web_search import WebSearchClient
+from app.services import budget_service
 from app.services import money_query as mq
 from app.services.goal_service import (
     DEFAULT_TRACKING_WINDOW,
@@ -565,6 +566,64 @@ def get_recurring(db: Session, user_id: UUID, days_ahead: int = 30) -> dict:
             for s in overview["series"]
         ],
         "suggested_count": overview["suggested_count"],
+    }
+
+
+def get_budget_status(db: Session, user_id: UUID, month: str | None = None) -> dict:
+    """This month's budget (or another, YYYY-MM): each line's budgeted,
+    spent, carryover and what's left, plus whether it's over or on pace to go over."""
+    try:
+        status = budget_service.budget_status(
+            db, user_id, budget_service.parse_month(month, mq.today_for_user(db, user_id))
+        )
+    except budget_service.BudgetError as e:
+        return {"error": str(e)}
+    if not status["has_budget"]:
+        return {**status, "message": "The user hasn't set up a budget yet; they can start one in the Plan view."}
+    return status
+
+
+def _budget_line_key(db: Session, user_id: UUID, name: str) -> tuple[str, str]:
+    """(key, display name) for a budget line named in chat: "Flexible" or a category."""
+    if name.strip().lower() in {"flex", "flexible", "flexible spending"}:
+        return budget_service.FLEX, "Flexible"
+    category = mq.resolve_category(db, name)
+    parent = mq.seed_default_categories(db)[category.name]
+    if parent.parent_category_id is not None:  # "Coffee" -> its parent's budget
+        parent = db.get(Category, parent.parent_category_id)
+    return str(parent.id), parent.name
+
+
+def propose_budget_move(
+    db: Session, user_id: UUID, from_line: str, to_line: str, amount: float, month: str | None = None
+) -> dict:
+    """Draft moving money between two budget lines (to cover overspending)
+    for the user to confirm on a card."""
+    if not amount or amount <= 0:
+        return {"error": "amount must be positive"}
+    try:
+        from_key, from_name = _budget_line_key(db, user_id, from_line)
+        to_key, to_name = _budget_line_key(db, user_id, to_line)
+        target = budget_service.parse_month(month, mq.today_for_user(db, user_id))
+    except (mq.QueryError, budget_service.BudgetError) as e:
+        return {"error": str(e)}
+    status = budget_service.budget_status(db, user_id, target)
+    keys = {line["key"] for line in status["lines"]} | ({"flex"} if status["flex"] else set())
+    missing = [n for k, n in ((from_key, from_name), (to_key, to_name)) if k not in keys]
+    if missing:
+        return {"error": f"no budget line for {', '.join(missing)} this month", "budget_lines": sorted(keys)}
+    return {
+        "status": "proposed",
+        "action": {
+            "kind": "budget_move",
+            "month": status["month"],
+            "from_key": from_key,
+            "from_name": from_name,
+            "to_key": to_key,
+            "to_name": to_name,
+            "amount": round(float(amount), 2),
+        },
+        "message": "Drafted a budget move for the user to confirm. Do not claim it is already done.",
     }
 
 

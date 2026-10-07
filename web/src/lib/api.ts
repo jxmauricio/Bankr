@@ -453,6 +453,88 @@ export const fetchRecurring = (token: string) => request<RecurringOverview>("/re
 export const updateRecurring = (token: string, id: string, patch: { status?: RecurringStatus; kind?: RecurringKind; name?: string }) =>
   request<RecurringSeries>(`/recurring/${id}`, { method: "PATCH", token, body: patch });
 
+export type BudgetLineStatus = "ok" | "warning" | "over";
+
+export interface BudgetLine {
+  /** Category id, or "flex" for the Flexible bucket. */
+  key: string;
+  category_id: string | null;
+  name: string;
+  group: "fixed" | "flex" | "category";
+  budgeted: number;
+  carryover: number;
+  moved: number;
+  spent: number;
+  available: number;
+  rollover: boolean;
+  projected_spent: number | null;
+  status: BudgetLineStatus;
+}
+
+export interface BudgetCategorySpend {
+  category_id: string;
+  name: string;
+  spent: number;
+}
+
+export interface BudgetStatus {
+  month: string;
+  label: string;
+  start: string;
+  end: string;
+  today: string;
+  elapsed_fraction: number;
+  mode: "flex" | "category";
+  has_budget: boolean;
+  lines: BudgetLine[];
+  flex: (BudgetLine & { categories: BudgetCategorySpend[] }) | null;
+  unbudgeted: BudgetCategorySpend[];
+  income: { so_far: number; last_month: number };
+  totals: { budgeted: number; spent: number; available: number };
+}
+
+export interface BudgetSuggestionLine {
+  category_id: string;
+  name: string;
+  amount: number;
+  group: "fixed" | "flex";
+  typical_spent: number;
+}
+
+export interface BudgetSuggestion {
+  months: string[];
+  mode: "flex";
+  flex_amount: number;
+  lines: BudgetSuggestionLine[];
+}
+
+export const fetchBudget = (token: string, month?: string) =>
+  request<BudgetStatus>("/budgets", { token, query: month ? { month } : undefined });
+
+export const fetchBudgetSuggestion = (token: string) => request<BudgetSuggestion>("/budgets/suggestion", { token });
+
+export const setupBudget = (
+  token: string,
+  body: { mode: "flex" | "category"; flex_amount: number; lines: { category_id: string; amount: number; group: "fixed" | "flex" }[] },
+) => request<BudgetStatus>("/budgets/setup", { method: "POST", token, body });
+
+export const updateBudgetSettings = (
+  token: string,
+  patch: { mode?: "flex" | "category"; flex_amount?: number; flex_rollover?: boolean },
+) => request<BudgetStatus>("/budgets/settings", { method: "PUT", token, body: patch });
+
+export const upsertBudget = (
+  token: string,
+  categoryId: string,
+  patch: { amount?: number; group?: "fixed" | "flex"; rollover?: boolean },
+) => request<BudgetStatus>(`/budgets/${categoryId}`, { method: "PUT", token, body: patch });
+
+export const deleteBudget = (token: string, categoryId: string) =>
+  request<BudgetStatus>(`/budgets/${categoryId}`, { method: "DELETE", token });
+
+export const moveBudgetMoney = (token: string, move: { month?: string; from_key: string; to_key: string; amount: number }) =>
+  request<BudgetStatus>("/budgets/moves", { method: "POST", token, body: move });
+
 export interface CashFlowBreakdown {
   window: string;
   start: string;
@@ -532,8 +614,18 @@ export interface RuleProposal {
   would_change: number;
 }
 
+export interface BudgetMoveProposal {
+  kind: "budget_move";
+  month: string;
+  from_key: string;
+  from_name: string;
+  to_key: string;
+  to_name: string;
+  amount: number;
+}
+
 /** A confirm card the assistant drafted; nothing is changed until the user confirms. */
-export type ActionProposal = RuleProposal;
+export type ActionProposal = RuleProposal | BudgetMoveProposal;
 
 export interface ChatResponse {
   conversation_id: string;
