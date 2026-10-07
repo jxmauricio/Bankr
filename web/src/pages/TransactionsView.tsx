@@ -35,6 +35,8 @@ export function TransactionsView({
   onAsk,
   onOpenChat,
   onEdited,
+  focusId,
+  onFocusHandled,
 }: {
   token: string;
   period: Period;
@@ -48,6 +50,9 @@ export function TransactionsView({
   onOpenChat: () => void;
   /** A row was edited -- totals elsewhere (goals, money rail) may have moved. */
   onEdited?: () => void;
+  /** Open this transaction's details once it's loaded (e.g. from an insight). */
+  focusId?: string | null;
+  onFocusHandled?: () => void;
 }) {
   const [list, setList] = useState<TransactionList | null>(null);
   const [failed, setFailed] = useState(false);
@@ -72,6 +77,15 @@ export function TransactionsView({
       stale = true;
     };
   }, [token, window_, refreshKey, reloads]);
+
+  useEffect(() => {
+    if (!focusId || !list) return;
+    if (list.transactions.some((t) => t.id === focusId)) {
+      onFilterChange({ category: null, query: "" });
+      setSelectedId(focusId);
+    }
+    onFocusHandled?.();
+  }, [focusId, list, onFilterChange, onFocusHandled]);
 
   // "/" jumps to search, like the hint in the box says.
   useEffect(() => {

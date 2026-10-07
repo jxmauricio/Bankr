@@ -535,6 +535,25 @@ export const deleteBudget = (token: string, categoryId: string) =>
 export const moveBudgetMoney = (token: string, move: { month?: string; from_key: string; to_key: string; amount: number }) =>
   request<BudgetStatus>("/budgets/moves", { method: "POST", token, body: move });
 
+export interface Insight {
+  id: string;
+  type: "budget_overspend" | "goal_drift" | "unusual_transaction" | "price_change" | string;
+  message: string;
+  transaction_ids: string[];
+  /** What it's about: a budget line key, recurring series id, goal id or transaction id. */
+  subject_id: string | null;
+  created_at: string;
+  read: boolean;
+}
+
+export const fetchInsights = (token: string) =>
+  request<{ unread_count: number; insights: Insight[] }>("/insights", { token });
+
+export const markInsightRead = (token: string, id: string) =>
+  request<Insight>(`/insights/${id}/read`, { method: "POST", token });
+
+export const markAllInsightsRead = (token: string) => request<void>("/insights/read-all", { method: "POST", token });
+
 export interface CashFlowBreakdown {
   window: string;
   start: string;

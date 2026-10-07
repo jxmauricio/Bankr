@@ -48,6 +48,7 @@ import { ViewTabBar, ViewTabs } from "../components/ViewSwitcher";
 import { TransactionsView, type TransactionFilter } from "./TransactionsView";
 import { PlanView } from "./PlanView";
 import { UpcomingBills } from "../components/UpcomingBills";
+import { InsightsBell } from "../components/InsightsBell";
 import { CashFlowView } from "./CashFlowView";
 import type { Citation } from "../components/TransactionDetails";
 
@@ -103,6 +104,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   const flow = useCashFlow(token, period, monthRollup);
   const [view, setView] = useView();
   const [planFocus, setPlanFocus] = useState<"budget" | "recurring" | null>(null);
+  const [txFocusId, setTxFocusId] = useState<string | null>(null);
   function openPlan(section: "budget" | "recurring" | null = null) {
     setPlanFocus(section);
     setView("plan");
@@ -371,6 +373,20 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
             <PeriodFilter period={period} onChange={changePeriod} />
           </div>
           {token && (
+            <InsightsBell
+              token={token}
+              refreshKey={monthRollup}
+              onOpenInsight={(insight) => {
+                if (insight.type === "budget_overspend") openPlan("budget");
+                else if (insight.type === "price_change") openPlan("recurring");
+                else if (insight.type === "unusual_transaction" && insight.subject_id) {
+                  setTxFocusId(insight.subject_id);
+                  setView("transactions");
+                }
+              }}
+            />
+          )}
+          {token && (
             <ProfileMenu
               token={token}
               onOpenSettings={() => setShowSettings(true)}
@@ -475,6 +491,8 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
               refreshKey={monthRollup}
               onAsk={askAboutTransaction}
               onOpenChat={() => setView("chat")}
+              focusId={txFocusId}
+              onFocusHandled={() => setTxFocusId(null)}
               onEdited={() => {
                 if (!token) return;
                 refreshGoalProgress();
