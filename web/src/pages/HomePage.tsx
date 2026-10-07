@@ -46,6 +46,8 @@ import { RowAmount } from "../components/TransactionSearch";
 import { useView } from "../lib/useView";
 import { ViewTabBar, ViewTabs } from "../components/ViewSwitcher";
 import { TransactionsView, type TransactionFilter } from "./TransactionsView";
+import { PlanView } from "./PlanView";
+import { UpcomingBills } from "../components/UpcomingBills";
 import { CashFlowView } from "./CashFlowView";
 import type { Citation } from "../components/TransactionDetails";
 
@@ -100,6 +102,11 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   const [moneyOpen, setMoneyOpen] = useState(false);
   const flow = useCashFlow(token, period, monthRollup);
   const [view, setView] = useView();
+  const [planFocus, setPlanFocus] = useState<"budget" | "recurring" | null>(null);
+  function openPlan(section: "budget" | "recurring" | null = null) {
+    setPlanFocus(section);
+    setView("plan");
+  }
   const [txFilter, setTxFilter] = useState<TransactionFilter>({ category: null, query: "" });
   const streamRef = useRef<HTMLDivElement>(null);
   const voice = useVoiceMode({
@@ -451,6 +458,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
           className="hidden w-[320px] shrink-0 flex-col gap-3.5 overflow-y-auto border-r border-line p-5 lg:flex"
         >
           <MoneyCard summary={summary} onNetWorthClick={openFlow} onRefresh={refreshFromBank} />
+          {token && <UpcomingBills token={token} refreshKey={monthRollup} onOpen={() => openPlan("recurring")} />}
           {goalsSection}
         </aside>
 
@@ -484,6 +492,12 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
               onOpenTransactions={openTransactions}
               refreshKey={monthRollup}
             />
+          </main>
+        )}
+
+        {token && view === "plan" && (
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <PlanView token={token} refreshKey={monthRollup} focus={planFocus} />
           </main>
         )}
 

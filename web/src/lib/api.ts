@@ -410,6 +410,49 @@ export const updateRule = (token: string, id: string, patch: Partial<NewRule>) =
 
 export const deleteRule = (token: string, id: string) => request<void>(`/rules/${id}`, { method: "DELETE", token });
 
+export type RecurringKind = "bill" | "subscription" | "income";
+export type RecurringStatus = "suggested" | "confirmed" | "dismissed";
+
+export interface RecurringSeries {
+  id: string;
+  name: string;
+  kind: RecurringKind;
+  cadence: "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+  status: RecurringStatus;
+  category_id: string | null;
+  typical_amount: number;
+  last_amount: number;
+  last_date: string;
+  next_expected_date: string;
+  monthly_amount: number;
+  occurrences: number;
+  is_active: boolean;
+  price_changed: boolean;
+}
+
+export interface UpcomingCharge {
+  series_id: string;
+  name: string;
+  kind: RecurringKind;
+  status: RecurringStatus;
+  date: string;
+  amount: number;
+}
+
+export interface RecurringOverview {
+  today: string;
+  series: RecurringSeries[];
+  upcoming: UpcomingCharge[];
+  /** Confirmed series only, as a monthly amount. */
+  monthly: { subscriptions: number; bills: number; income: number };
+  suggested_count: number;
+}
+
+export const fetchRecurring = (token: string) => request<RecurringOverview>("/recurring", { token });
+
+export const updateRecurring = (token: string, id: string, patch: { status?: RecurringStatus; kind?: RecurringKind; name?: string }) =>
+  request<RecurringSeries>(`/recurring/${id}`, { method: "PATCH", token, body: patch });
+
 export interface CashFlowBreakdown {
   window: string;
   start: string;

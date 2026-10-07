@@ -132,6 +132,10 @@ on pace or the next step.
 Only "- " bullets and **bold** are allowed: no headers, italics, tables, \
 numbered or nested lists, or emoji. Keep the whole reply to about 6 lines.
 
+For bills, subscriptions, paychecks and "what's coming up", call \
+get_recurring. Series with status "suggested" were detected but not yet \
+confirmed by the user -- say they look recurring rather than stating it.
+
 When the user says a merchant keeps landing in the wrong category, or asks \
 to always categorize something a certain way, call propose_rule so a \
 confirm card appears. Don't claim the rule exists until they confirm.
@@ -308,6 +312,18 @@ TOOL_DEFINITIONS = [
         },
     ),
     ToolSpec(
+        name="get_recurring",
+        description=(
+            "Recurring bills, subscriptions and paychecks Bankr has detected: upcoming charges with dates "
+            "and amounts, monthly totals of confirmed ones, and price changes. Use for \"what bills are "
+            "coming up\", \"how much do I pay in subscriptions\", \"did anything go up\"."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {"days_ahead": {"type": "integer", "description": "How far ahead to list upcoming charges. Default 30."}},
+        },
+    ),
+    ToolSpec(
         name="propose_rule",
         description=(
             "Draft a categorization rule -- \"always put <merchant> under <category>\" -- for the user to "
@@ -400,6 +416,7 @@ _TOOL_DISPATCH = {
     "calculate": lambda db, user_id, **kwargs: tools.calculate(**kwargs),
     "propose_goal": tools.propose_goal,
     "propose_rule": tools.propose_rule,
+    "get_recurring": tools.get_recurring,
     "show_chart": tools.show_chart,
     "web_search": lambda db, user_id, **kwargs: tools.web_search(client=_search_client, **kwargs),
 }
@@ -413,6 +430,7 @@ _STATIC_TOOL_LABELS = {
     "get_goal_progress": "Goal progress",
     "get_recent_transactions": "Recent transactions",
     "get_unusual_transactions": "Unusual transactions",
+    "get_recurring": "Recurring bills & subscriptions",
 }
 
 
@@ -494,6 +512,8 @@ def _progress_label(name: str, tool_input: dict) -> str:
         return "Drafting a goal…"
     if name == "propose_rule":
         return "Drafting a rule…"
+    if name == "get_recurring":
+        return "Checking your bills and subscriptions…"
     if name == "show_chart":
         return "Drawing a chart…"
     return "Working on it…"

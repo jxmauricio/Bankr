@@ -34,6 +34,7 @@ from app.services.goal_service import (
     normalize_goal_kind,
     spend_for_tracker,
 )
+from app.services.recurring_service import recurring_overview
 from app.services.rules_service import preview_rule
 from app.services.sync_service import LIABILITY_ACCOUNT_TYPES
 
@@ -546,6 +547,24 @@ def propose_rule(
             f"Drafted a rule for the user to confirm; it would recategorize {would_change} past "
             "transactions. Do not claim it is already created."
         ),
+    }
+
+
+def get_recurring(db: Session, user_id: UUID, days_ahead: int = 30) -> dict:
+    """Recurring bills, subscriptions and paychecks: what's coming up, monthly
+    totals, and any price changes. Suggested series aren't confirmed by the
+    user yet -- say so when mentioning them."""
+    overview = recurring_overview(db, user_id, days_ahead=max(1, min(days_ahead, 90)))
+    return {
+        "today": overview["today"],
+        "monthly_totals_confirmed": overview["monthly"],
+        "upcoming": overview["upcoming"][:25],
+        "series": [
+            {k: s[k] for k in ("name", "kind", "cadence", "status", "last_amount", "typical_amount",
+                               "next_expected_date", "monthly_amount", "price_changed", "is_active")}
+            for s in overview["series"]
+        ],
+        "suggested_count": overview["suggested_count"],
     }
 
 

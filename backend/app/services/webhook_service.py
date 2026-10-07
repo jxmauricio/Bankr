@@ -35,7 +35,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import LinkedAccount
 from app.integrations.bank_aggregator import BankAggregatorClient
-from app.jobs.insights_job import run_insights_job_safely
+from app.jobs.post_sync import run_post_sync_jobs
 from app.services.crypto import decrypt_token
 from app.services.sync_service import sync_user_accounts
 
@@ -92,4 +92,4 @@ def handle_plaid_webhook(db: Session, payload: dict, aggregator: BankAggregatorC
 def _sync(db: Session, user_id: UUID, an_account: LinkedAccount, item_id: str, aggregator: BankAggregatorClient) -> None:
     access_token = decrypt_token(an_account.access_token_ref)
     sync_user_accounts(db, user_id, access_token, aggregator=aggregator, item_id=item_id)
-    run_insights_job_safely(db, user_id)
+    run_post_sync_jobs(db, user_id)

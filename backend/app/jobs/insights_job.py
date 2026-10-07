@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.agent import tools
 from app.agent.agent_client import build_agent_client
 from app.db.models import InsightLog
+from app.services.recurring_service import price_changes
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ _client = build_agent_client()
 
 @dataclass
 class InsightCandidate:
-    type: str  # overspend | goal_drift | unusual_transaction
+    type: str  # budget_overspend | goal_drift | unusual_transaction | price_change
     data: dict
 
 
@@ -46,6 +47,20 @@ def detect_candidates(db: Session, user_id: UUID) -> list[InsightCandidate]:
     unusual = tools.get_unusual_transactions(db, user_id)
     for txn in unusual.get("unusual_transactions", []):
         candidates.append(InsightCandidate(type="unusual_transaction", data=txn))
+
+    for series in price_changes(db, user_id):
+        candidates.append(
+            InsightCandidate(
+                type="price_change",
+                data={
+                    "series_id": str(series.id),
+                    "merchant": series.display_name,
+                    "usual_amount": float(series.typical_amount),
+                    "new_amount": float(series.last_amount),
+                    "charged_on": series.last_date.isoformat(),
+                },
+            )
+        )
 
     this_month = tools.get_spending(db, user_id, window="this_month", group_by="category")
     # NOTE: a real overspend check needs a trailing multi-month baseline per
@@ -75,6 +90,8 @@ def _dedupe_key(candidate: InsightCandidate, today: date) -> str | None:
     ever; an off-pace goal gets one per ISO week while it stays off pace."""
     if candidate.type == "unusual_transaction":
         return f"unusual_transaction:{candidate.data['transaction_id']}"
+    if candidate.type == "price_change":
+        return f"price_change:{candidate.data['series_id']}:{candidate.data['charged_on']}"
     if candidate.type == "goal_drift":
         year, week, _ = today.isocalendar()
         return f"goal_drift:{candidate.data['id']}:{year}-W{week:02d}"

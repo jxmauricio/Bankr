@@ -9,6 +9,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -160,7 +161,7 @@ class InsightLog(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    type: Mapped[str] = mapped_column(String)  # overspend | goal_drift | unusual_transaction | weekly_summary
+    type: Mapped[str] = mapped_column(String)  # budget_overspend | goal_drift | unusual_transaction | price_change
     message: Mapped[str] = mapped_column(Text)
     related_transaction_ids: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     # Identifies the event an insight is about (see insights_job._dedupe_key)
@@ -208,3 +209,30 @@ class Rule(Base):
     # Higher wins when several rules match; ties go to the newest.
     priority: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class RecurringSeries(Base):
+    """A charge (or paycheck) that repeats on a schedule, found by
+    app/services/recurring_service.py. Detection re-runs after every sync
+    and refreshes the numbers, but never changes the user's status or kind."""
+
+    __tablename__ = "recurring_series"
+    __table_args__ = (UniqueConstraint("user_id", "merchant_key", "direction"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    merchant_key: Mapped[str] = mapped_column(String)  # normalized merchant name
+    direction: Mapped[str] = mapped_column(String)  # out | in
+    display_name: Mapped[str] = mapped_column(String)
+    category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
+    kind: Mapped[str] = mapped_column(String)  # bill | subscription | income
+    cadence: Mapped[str] = mapped_column(String)  # weekly | biweekly | monthly | quarterly | yearly
+    # Sizes are positive. typical_amount is the median of every charge
+    # before the latest, so a price change shows as last != typical.
+    typical_amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    last_amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    last_date: Mapped[date] = mapped_column(Date)
+    next_expected_date: Mapped[date] = mapped_column(Date)
+    occurrences: Mapped[int] = mapped_column(default=0)
+    status: Mapped[str] = mapped_column(String, default="suggested")  # suggested | confirmed | dismissed
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
