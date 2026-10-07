@@ -46,6 +46,9 @@ export function BudgetSection({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [covering, setCovering] = useState<BudgetLine | null>(null);
+  // Show the editor before anything is budgeted (to build one by hand).
+  const [manual, setManual] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let stale = false;
@@ -84,7 +87,33 @@ export function BudgetSection({
   const budgetedIds = new Set(status.lines.map((l) => l.category_id));
   const addable = categories.filter((c) => c.type === "expense" && !budgetedIds.has(c.id));
 
-  if (!status.has_budget) {
+  async function startFromHistory() {
+    setBusy(true);
+    setError(null);
+    try {
+      const s = await fetchBudgetSuggestion(token);
+      if (!s.lines.length) {
+        setNotice("There isn't enough spending history to suggest amounts yet. Add your own lines below.");
+        setManual(true);
+        return;
+      }
+      setStatus(await setupBudget(token, { mode: "flex", flex_amount: s.flex_amount, lines: s.lines }));
+      if (s.months.length < 3) {
+        setNotice(
+          s.months.length === 1 && s.months[0] === status?.month
+            ? "Based on this month so far, since there's no full month of spending yet. Adjust as you go."
+            : `Based on ${s.months.length} month${s.months.length === 1 ? "" : "s"} of spending, all the history there is so far.`,
+        );
+      }
+      onChanged?.();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't set up your budget. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!status.has_budget && !manual) {
     return (
       <Shell focus={focus}>
         <Header status={status} onMonth={setMonth} />
@@ -97,15 +126,13 @@ export function BudgetSection({
           <button
             type="button"
             disabled={busy}
-            onClick={() =>
-              run(async () => {
-                const s = await fetchBudgetSuggestion(token);
-                return setupBudget(token, { mode: "flex", flex_amount: s.flex_amount, lines: s.lines });
-              })
-            }
+            onClick={startFromHistory}
             className="h-11 cursor-pointer rounded-[14px] bg-signal px-4 text-sm font-semibold text-bg hover:bg-signal-hi disabled:opacity-60"
           >
             {busy ? "Setting up…" : "Start from my last 3 months"}
+          </button>
+          <button type="button" onClick={() => setManual(true)} className="cursor-pointer text-xs text-ink-soft hover:text-ink">
+            Or set it up myself
           </button>
           {error && <p className="m-0 text-xs text-negative">{error}</p>}
         </div>
@@ -132,6 +159,15 @@ export function BudgetSection({
           ))}
         </div>
       </Header>
+
+      {notice && (
+        <p className="m-0 flex items-start justify-between gap-3 rounded-[14px] bg-signal-wash px-3.5 py-2.5 text-[13px] text-ink">
+          {notice}
+          <button type="button" aria-label="Dismiss" onClick={() => setNotice(null)} className="cursor-pointer text-ink-faint hover:text-ink">
+            ✕
+          </button>
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat label="Income so far" value={whole(status.income.so_far)} hint={`${whole(status.income.last_month)} last month`} />

@@ -67,11 +67,13 @@ def test_no_budget_yet(client, ledger):
 def test_suggestion_and_flex_setup(client, db, ledger):
     s = client.get("/budgets/suggestion").json()
     lines = {line["name"]: line for line in s["lines"]}
-    # Median of Jun (0), Jul, Aug, rounded up to $10.
+    # History starts in July, so June doesn't count: median of Jul and Aug,
+    # rounded up to $10.
+    assert s["months"] == ["2026-08", "2026-07"]
     assert lines["Rent & Housing"] == {**lines["Rent & Housing"], "amount": 1800.0, "group": "fixed"}
-    assert lines["Dining"]["amount"] == 250.0 and lines["Dining"]["group"] == "flex"
-    assert lines["Groceries"]["amount"] == 380.0
-    assert s["flex_amount"] == 630.0
+    assert lines["Dining"]["amount"] == 280.0 and lines["Dining"]["group"] == "flex"
+    assert lines["Groceries"]["amount"] == 390.0
+    assert s["flex_amount"] == 670.0
 
     status = client.post("/budgets/setup", json={"mode": "flex", "flex_amount": 600, "lines": s["lines"]}).json()
     rent = _line(status, "Rent & Housing")
@@ -173,3 +175,20 @@ def test_overspend_insight_once_per_line_month_and_state(client, db, ledger, mon
     logs = db.query(InsightLog).filter(InsightLog.type == "budget_overspend").all()
     assert len(logs) == 1
     assert logs[0].dedupe_key.endswith(":2026-09:over")
+
+
+def test_suggestion_with_only_this_months_history(client, db, user):
+    """A card linked mid-month has no full month yet: project this month."""
+    fake = FakeAggregatorClient(
+        transactions_by_account={"acc_checking": [_t("food", date(2026, 9, 10), -150.0, "Ramen", "FOOD_AND_DRINK_RESTAURANT")]}
+    )
+    sync_user_accounts(db, user.id, "fake-token", aggregator=fake)
+    s = client.get("/budgets/suggestion").json()
+    assert s["months"] == ["2026-09"]
+    # $150 by Sep 15 projects to $300 for the month.
+    assert [(line["name"], line["amount"]) for line in s["lines"]] == [("Dining", 300.0)]
+
+
+def test_suggestion_with_no_spending(client, db, user):
+    s = client.get("/budgets/suggestion").json()
+    assert s["lines"] == [] and s["months"] == []

@@ -17,9 +17,10 @@ from decimal import ROUND_CEILING, Decimal
 from statistics import median
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.db.models import Budget, BudgetMove, BudgetSettings, Category, RecurringSeries
+from app.db.models import Budget, BudgetMove, BudgetSettings, Category, LinkedAccount, RecurringSeries, Transaction
 from app.services import money_query as mq
 
 FLEX = "flex"
@@ -383,16 +384,40 @@ def _round_up(value: float, step: int = 10) -> float:
     return float((Decimal(str(value)) / step).to_integral_value(ROUND_CEILING) * step)
 
 
+def _first_spend_month(db: Session, user_id: UUID) -> date | None:
+    first = (
+        db.query(func.min(Transaction.date))
+        .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
+        .join(Category, Transaction.bankr_category_id == Category.id)
+        .filter(LinkedAccount.user_id == user_id, Category.type == "expense", *mq.counted_filters())
+        .scalar()
+    )
+    return month_start(first) if first else None
+
+
 def suggest_budget(db: Session, user_id: UUID) -> dict:
     """A starting budget from the last three full months: each category's
     median spend, rounded up to $10. Categories with confirmed recurring
-    bills (and rent, utilities, loans, subscriptions) are proposed as fixed."""
+    bills (and rent, utilities, loans, subscriptions) are proposed as fixed.
+
+    Only months since spending history begins count -- a card linked in
+    September would otherwise have its September median-ed against two
+    empty months into $0. With no full month yet, this month's spending so
+    far is projected to a full month."""
     today = mq.today_for_user(db, user_id)
     ledger = _ledger(db, user_id, today)
-    months = [previous_month(month_start(today))]
-    for _ in range(2):
-        months.append(previous_month(months[-1]))
+    first = _first_spend_month(db, user_id)
+    months = []
+    candidate = previous_month(month_start(today))
+    while first is not None and candidate >= first and len(months) < 3:
+        months.append(candidate)
+        candidate = previous_month(candidate)
     per_month = [ledger.spend(m) for m in months]
+    if not months and first is not None:
+        this_month = month_start(today)
+        elapsed = _elapsed(this_month, today) or 1.0
+        months = [this_month]
+        per_month = [{cid: v / elapsed for cid, v in ledger.spend(this_month).items()}]
 
     recurring_categories = set()
     for series in db.query(RecurringSeries).filter(
@@ -407,7 +432,7 @@ def suggest_budget(db: Session, user_id: UUID) -> dict:
 
     lines = []
     for cid, category in ledger.categories.items():
-        typical = median([m.get(cid, 0.0) for m in per_month])
+        typical = median([m.get(cid, 0.0) for m in per_month]) if per_month else 0.0
         if typical <= 0:
             continue
         fixed = cid in recurring_categories or category.name in FIXED_BY_DEFAULT
