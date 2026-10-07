@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Category, Goal, LinkedAccount, NetWorthSnapshot, Transaction
 from app.integrations.web_search import WebSearchClient
 from app.services import budget_service
+from app.services import answer_charts
 from app.services import money_query as mq
 from app.services.goal_service import (
     DEFAULT_TRACKING_WINDOW,
@@ -188,27 +189,69 @@ def find_transactions(
     min_amount: float | None = None,
     max_amount: float | None = None,
     limit: int = 50,
+    kind: str | None = None,
     **_extra,
 ) -> dict:
-    return mq.find_transactions(
+    """kind="income" lists money in (paychecks, interest) instead of spending."""
+    if kind not in (None, "spending", "income"):
+        raise mq.QueryError("kind must be spending or income")
+    income = kind == "income"
+    result = mq.find_transactions(
         db,
         user_id,
         _window(db, user_id, window, start, end),
-        _category(db, category),
+        None if income else _category(db, category),
         merchant,
         min_amount,
         max_amount,
         limit,
+        category_type="income" if income else "expense",
     )
+    if income:
+        # find_transactions sums spending as money out; for income that's the wrong sign.
+        result["kind"] = "income"
+        result["total_income"] = -result.pop("total_spent")
+    return result
 
 
-CHART_KINDS = ("breakdown", "compare", "trend")
+CHART_KINDS = ("breakdown", "compare", "trend", "daily", "merchant", "recurring", "net_worth")
+# Previous period a breakdown's "vs" column compares against.
+_PREVIOUS_WINDOW = {"this_week": "last_week", "this_month": "last_month", "this_year": "last_year"}
+_WINDOW_NAMES = {
+    "this_week": "This week",
+    "last_week": "Last week",
+    "this_month": "This month",
+    "last_month": "Last month",
+    "this_year": "This year",
+    "last_year": "Last year",
+}
 _CHART_BREAKDOWN_TOP_N = 6
 
 
 def _short_range(result: dict) -> str:
     """"Sep 1–14" -- the chart header already sits under a dated reply."""
     return mq.format_range(date.fromisoformat(result["start"]), date.fromisoformat(result["end"])).rsplit(", ", 1)[0]
+
+
+def _chart_query(window: dict, category: str | None, kind: str | None = None, merchant: str | None = None) -> dict:
+    """The transaction filter behind a chart or one of its bars -- the same
+    shape as a source chip's query (claude_agent._source_query), so the chat
+    can list exactly the rows a bar is drawn from."""
+    query = {"start": window["start"], "end": window["end"], "category": category, "merchant": merchant}
+    if kind:
+        query["kind"] = kind
+    return query
+
+
+def _group_query(result: dict, name: str) -> dict | None:
+    """One breakdown bar's rows. The rolled-up "N others" bar has no single filter."""
+    if name.endswith(" others") and name.split(" ", 1)[0].isdigit():
+        return None
+    if result["group_by"] == "merchant" and name == "Unknown merchant":
+        return None  # rows with no merchant name; a name filter can't select them
+    if result["group_by"] == "merchant":
+        return _chart_query(result, result["category"], merchant=name)
+    return _chart_query(result, name)
 
 
 @_grounded
@@ -228,23 +271,68 @@ def show_chart(
     previous_start: str | None = None,
     previous_end: str | None = None,
     metric: str = "spending",
-    months: int = 6,
+    months: int | None = None,
+    merchant: str | None = None,
+    recurring: str | None = None,
     **_extra,
 ) -> dict:
     """Builds a small chart from a fresh query -- the model only says *what*
     to chart, never the numbers, so a chart can't show anything the data
-    doesn't. The spec rides along on the source entry (see run_agent_turn)."""
+    doesn't. The spec rides along on the source entry (see run_agent_turn).
+    The answer-shaped kinds (daily, merchant, recurring, net_worth) live in
+    app/services/answer_charts.py."""
+    if kind in ("daily", "merchant", "recurring", "net_worth"):
+        if kind == "daily":
+            chart = answer_charts.daily(db, user_id, _window(db, user_id, window, start, end), _category(db, category))
+        elif kind == "merchant":
+            chart = answer_charts.merchant(db, user_id, merchant, months)
+        elif kind == "recurring":
+            chart = answer_charts.recurring(db, user_id, recurring)
+        else:
+            chart = answer_charts.net_worth(db, user_id, _window(db, user_id, window or "last_30_days", start, end))
+        if not chart.pop("_count"):
+            return {"shown": False, "message": "Nothing to chart there -- answer in text instead."}
+        return {"shown": True, "chart": {**chart, "unit": "usd"}, "message": _CHART_SHOWN}
+
+    months = months or 6
     cat = _category(db, category)
+    query = None
+    top = None
     if kind == "breakdown":
-        result = mq.spend_query(
-            db, user_id, _window(db, user_id, window, start, end), cat, group_by or "category", _CHART_BREAKDOWN_TOP_N
-        )
+        w = _window(db, user_id, window, start, end)
+        result = mq.spend_query(db, user_id, w, cat, group_by or "category", _CHART_BREAKDOWN_TOP_N)
+        query = _chart_query(result, result["category"])
+        before, before_label = _previous_groups(db, user_id, w, cat, result["group_by"], window)
         points = [
-            {"label": g["name"], "value": g["amount"], "share": g["share_of_total"]} for g in result["groups"]
+            {
+                "label": g["name"],
+                "value": g["amount"],
+                "share": g["share_of_total"],
+                "query": _group_query(result, g["name"]),
+            }
+            for g in result["groups"]
         ]
+        if before is not None:
+            named = {p["label"] for p in points}
+            for p in points:
+                if p["label"] in before:
+                    p["previous"] = before[p["label"]]
+                elif p["label"].endswith(" others"):
+                    p["previous"] = mq._money(sum(v for k, v in before.items() if k not in named))
+                else:
+                    p["previous"] = 0.0
         title = f"{result['category']} by {result['group_by']}" if cat else f"Spending by {result['group_by']}"
         period = _short_range(result)
         change = None
+        n_groups = len(mq.spend_query(db, user_id, w, cat, result["group_by"])["groups"])
+        noun = {"category": ("category", "categories"), "subcategory": ("subcategory", "subcategories")}.get(
+            result["group_by"], ("merchant", "merchants")
+        )
+        top = answer_charts.headline(
+            " · ".join(part for part in (_WINDOW_NAMES.get(w.name), _short_range(result)) if part),
+            result["total_spent"],
+            f"across {n_groups} {noun[0] if n_groups == 1 else noun[1]}",
+        )
     elif kind == "compare":
         result = compare_spending.__wrapped__(
             db, user_id, current_window, previous_window, category, current_start, current_end, previous_start, previous_end
@@ -252,14 +340,27 @@ def show_chart(
         previous = result.get("previous_to_same_point") or result["previous"]
         change = result.get("change_vs_same_point") or result["change"]
         points = [
-            {"label": _short_range(previous), "value": previous["total_spent"]},
-            {"label": _short_range(result["current"]), "value": result["current"]["total_spent"]},
+            {"label": _short_range(w), "value": w["total_spent"], "query": _chart_query(w, result["category"])}
+            for w in (previous, result["current"])
         ]
+        query = points[-1]["query"]
         title = f"{result['category'] or 'Spending'}: then vs now"
         period = None
     elif kind == "trend":
         result = mq.monthly_series(db, user_id, metric, months, cat)
-        points = [{"label": p["label"], "value": p["value"], "partial": p["partial"]} for p in result["points"]]
+        # Net is income minus spending: two lists, which is Cash flow's job, not a chart's.
+        list_kind = {"spending": None, "income": "income"}.get(metric, "none")
+        points = [
+            {
+                "label": p["label"],
+                "value": p["value"],
+                "partial": p["partial"],
+                "query": None if list_kind == "none" else _chart_query(p, result["category"], list_kind),
+            }
+            for p in result["points"]
+        ]
+        if list_kind != "none":
+            query = _chart_query(result, result["category"], list_kind)
         what = result["category"] or {"spending": "Spending", "income": "Income", "net": "Income minus spending"}[metric]
         title = f"{what} by month"
         period = _short_range(result)
@@ -276,13 +377,68 @@ def show_chart(
         "period": period,
         "unit": "usd",
         "points": points,
+        "query": query,
     }
+    if kind == "breakdown":
+        chart["group_by"] = result["group_by"]
+        chart["headline"] = top
+        if before_label:
+            chart["previous_label"] = before_label
     if change:
         chart["change"] = change
+    return {"shown": True, "chart": chart, "message": _CHART_SHOWN}
+
+
+_CHART_SHOWN = "The chart is shown under your reply. Give the takeaway in 1-3 lines; don't list every bar."
+
+
+def _previous_groups(db, user_id, current: mq.Window, cat, group_by: str, window_name: str | None):
+    """A breakdown's groups in the period before, to the same point when the
+    current one is still in progress, for its "vs last month" column.
+    (None, None) for a custom range, which has no obvious "before"."""
+    previous_name = _PREVIOUS_WINDOW.get(window_name or "")
+    if not previous_name:
+        return None, None
+    previous = _window(db, user_id, previous_name)
+    cut = mq.same_point_in(previous, current) if window_name in mq._IN_PROGRESS_PREVIOUS else previous
+    groups = mq.spend_query(db, user_id, cut, cat, group_by)["groups"]
+    return {g["name"]: g["amount"] for g in groups}, f"vs {_short_range(cut.as_dict())}"
+
+
+MAX_CLARIFY_CHOICES = 4
+
+
+def ask_clarifying_question(db: Session, user_id: UUID, question: str = "", choices=None, **_extra) -> dict:
+    """Ask instead of guessing when a question could mean more than one
+    thing. Each choice can carry a window or start/end; the resolved dates
+    are added to its label here ("Last weekend · Sep 19–20"), so a choice
+    never shows dates the model worked out itself. The choices ride along
+    on the source entry (see run_agent_turn) and render as buttons; tapping
+    one sends its label as the user's next message."""
+    question = (question or "").strip()
+    if not question:
+        return {"error": "question is required"}
+    if not isinstance(choices, list) or not 2 <= len(choices) <= MAX_CLARIFY_CHOICES:
+        return {"error": f"give 2-{MAX_CLARIFY_CHOICES} choices"}
+    resolved = []
+    for choice in choices:
+        if isinstance(choice, str):
+            choice = {"label": choice}
+        label = str((choice or {}).get("label") or "").strip()
+        if not label:
+            return {"error": "every choice needs a label"}
+        if choice.get("window") or choice.get("start"):
+            try:
+                w = _window(db, user_id, choice.get("window"), choice.get("start"), choice.get("end"))
+            except mq.QueryError as e:
+                return {"error": str(e), **e.extra}
+            label = f"{label} · {_short_range(w.as_dict())}"
+        resolved.append({"label": label})
     return {
-        "shown": True,
-        "chart": chart,
-        "message": "The chart is shown under your reply. Give the takeaway in 1-3 lines; don't list every bar.",
+        "asked": True,
+        "clarify": {"question": question, "choices": resolved},
+        "message": "The choices are shown as buttons under your reply. Reply with just the question in one "
+        "short line; don't list the choices or answer yet.",
     }
 
 

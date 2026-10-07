@@ -146,6 +146,12 @@ class Window:
         return {"window": self.name, "start": self.start.isoformat(), "end": self.end.isoformat(), "label": self.label}
 
 
+def account_label(account: LinkedAccount) -> str:
+    """"Total Checking •••• 1111" -- how an account is named in answers."""
+    name = account.name or account.institution_name
+    return f"{name} •••• {account.mask}" if account.mask else name
+
+
 def format_range(start: date, end: date) -> str:
     """"Sep 8–14, 2026", "Aug 28 – Sep 3, 2026", "Dec 29, 2025 – Jan 4, 2026"."""
     if start == end:
@@ -552,7 +558,7 @@ def spending_pace(db: Session, user_id: UUID) -> dict:
 MAX_LISTED_TRANSACTIONS = 2000
 
 
-def list_transactions(db: Session, user_id: UUID, window: Window) -> dict:
+def list_transactions(db: Session, user_id: UUID, window: Window, account_id: UUID | None = None) -> dict:
     """Every transaction in the window -- income, spending and transfers --
     newest first, with its account, for the Transactions view. Split rows
     are nested under their parent rather than listed on their own."""
@@ -569,6 +575,8 @@ def list_transactions(db: Session, user_id: UUID, window: Window) -> dict:
             Transaction.split_parent_id.is_(None),
         )
     )
+    if account_id is not None:
+        q = q.filter(LinkedAccount.id == account_id)
     total_count = q.count()
     rows = q.order_by(Transaction.date.desc(), Transaction.created_at.desc()).limit(MAX_LISTED_TRANSACTIONS).all()
     splits = _splits_for(db, [txn.id for txn, *_ in rows if txn.is_split])
@@ -775,6 +783,8 @@ def monthly_series(
         points.append(
             {
                 "month": w.start.strftime("%Y-%m"),
+                "start": w.start.isoformat(),
+                "end": w.end.isoformat(),
                 "label": f"{w.start:%b}",
                 "value": value,
                 "partial": w.end < _month_end(w.start),
@@ -865,7 +875,7 @@ def find_transactions(
 
     total_count = q.count()
     rows = (
-        q.with_entities(Transaction, Category.name)
+        q.with_entities(Transaction, Category.name, LinkedAccount)
         .order_by(Transaction.date.desc(), Transaction.amount)
         .limit(max(1, min(limit, 1000)))
         .all()
@@ -885,8 +895,9 @@ def find_transactions(
                 "merchant_name": txn.merchant_name,
                 "category": category_name,
                 "is_pending": txn.is_pending,
+                "account": account_label(account),
             }
-            for txn, category_name in rows
+            for txn, category_name, account in rows
         ],
     }
 

@@ -53,7 +53,7 @@ def test_bad_kind_and_empty_windows_fall_back_to_text(db, ledger):
     assert tools.show_chart(db, ledger.id, kind="trend", months=1)["shown"] is False
 
 
-def test_chart_rides_on_the_source_but_not_the_public_trail(db, ledger, monkeypatch):
+def test_a_drawn_chart_is_a_numbered_source(db, ledger, monkeypatch):
     monkeypatch.setattr(
         claude_agent,
         "_client",
@@ -71,7 +71,8 @@ def test_chart_rides_on_the_source_but_not_the_public_trail(db, ledger, monkeypa
     )
     _, sources = run_agent_turn(db, ledger.id, [{"role": "user", "content": "where did it go?"}])
 
-    assert [s["tool"] for s in _public_sources(sources)] == ["get_spending"]
+    # Its figures can back the text, so it's numbered like any source.
+    assert [s["tool"] for s in _public_sources(sources)] == ["get_spending", "show_chart"]
     charts = _charts(sources)
     assert len(charts) == 1 and charts[0]["kind"] == "breakdown"
 

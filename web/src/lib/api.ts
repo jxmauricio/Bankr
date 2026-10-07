@@ -275,12 +275,17 @@ export interface ItemizedTransactions {
   as_of: string | null;
 }
 
-/** The exact filter behind a chat answer's figure (ChatSource.query). */
+/** The exact filter behind a chat answer's figure (ChatSource.query), or
+ * behind a chart or one of its bars. kind "income" lists income rows. */
 export interface SourceQuery {
   start: string;
   end: string;
   category: string | null;
   merchant: string | null;
+  /** "income" lists money in; "all" every row, narrowed by account_id or recurring_id. */
+  kind?: "income" | "all" | null;
+  account_id?: string | null;
+  recurring_id?: string | null;
 }
 
 export const fetchSpending = (token: string, period: string | SourceQuery) => {
@@ -292,6 +297,41 @@ export const fetchSpending = (token: string, period: string | SourceQuery) => {
 
 export const fetchIncome = (token: string, period: string) =>
   request<ItemizedTransactions>("/dashboard/income", { token, query: { period } });
+
+/** The rows behind a SourceQuery, from whichever list it filters. */
+export const fetchQuery = async (token: string, query: SourceQuery): Promise<ItemizedTransactions> => {
+  const range = { start: query.start, end: query.end };
+  if (query.kind === "income") {
+    return request<ItemizedTransactions>("/dashboard/income", {
+      token,
+      query: query.merchant ? { ...range, merchant: query.merchant } : range,
+    });
+  }
+  if (query.kind === "all") {
+    const filter: Record<string, string> = { ...range };
+    if (query.account_id) filter.account_id = query.account_id;
+    if (query.recurring_id) filter.recurring_id = query.recurring_id;
+    const list = await request<TransactionList>("/dashboard/transactions", { token, query: filter });
+    return {
+      period: null,
+      start: list.start,
+      end: list.end,
+      label: list.label,
+      category: null,
+      total: list.transactions.reduce((sum, t) => sum + t.amount, 0),
+      transaction_count: list.transaction_count,
+      items: list.transactions.map((t) => ({
+        date: t.date,
+        amount: t.amount,
+        merchant_name: t.merchant_name,
+        category: t.category,
+        is_pending: t.is_pending,
+      })),
+      as_of: list.as_of,
+    };
+  }
+  return fetchSpending(token, { ...query, kind: null });
+};
 
 export interface TransactionAccount {
   id: string;
@@ -588,10 +628,60 @@ export const fetchSpendingPace = (token: string) => request<SpendingPace>("/dash
 
 // --- Chat ---
 
+/** What an empty search looked through, so "$0" comes with its working. */
+export interface Searched {
+  what: string;
+  range: string;
+  accounts: string[];
+}
+
 export interface ChatSource {
   tool: string;
   label: string;
   query?: SourceQuery | null;
+  searched?: Searched | null;
+}
+
+/** A dollar figure in the reply and the 1-based number of its source. */
+export interface Citation {
+  text: string;
+  source: number;
+}
+
+/** A picture that didn't fit in the answer's one chart. */
+export interface ViewLink {
+  view: "transactions" | "cash_flow";
+  label: string;
+  query?: SourceQuery | null;
+}
+
+/** One row a short lookup found, shown as a card under the reply. */
+export interface TransactionRecord {
+  date: string;
+  amount: number;
+  merchant_name: string | null;
+  category: string | null;
+  is_pending: boolean;
+  account: string | null;
+  kind: "spending" | "income";
+}
+
+/** Bankr asking which meaning was intended; tapping a choice sends its label. */
+export interface Clarify {
+  question: string;
+  choices: { label: string }[];
+}
+
+/** Everything that renders around a reply's text. */
+export interface AnswerParts {
+  sources: ChatSource[];
+  citations?: Citation[];
+  goal_proposal: GoalProposal | null;
+  action_proposal?: ActionProposal | null;
+  charts?: ChartSpec[];
+  links?: ViewLink[];
+  clarify?: Clarify | null;
+  records?: TransactionRecord[];
 }
 
 export interface GoalProposal {
@@ -612,16 +702,53 @@ export interface ChartPoint {
   value: number;
   share?: number | null;
   partial?: boolean;
+  /** The rows this bar is drawn from. */
+  query?: SourceQuery | null;
+  /** breakdown: the same group in the period before. */
+  previous?: number | null;
+  /** daily / merchant: how many rows the bar is. */
+  count?: number | null;
+  weekday?: string | null;
+  /** recurring */
+  next_date?: string | null;
+  cadence?: string | null;
+  last_amount?: number | null;
+  typical_amount?: number | null;
+  price_changed?: boolean;
+  suggested?: boolean;
+  /** net_worth: the part of the change transactions don't explain. */
+  note?: boolean;
+}
+
+/** The answer first: a small label, one big number, one line of context. */
+export interface ChartHeadline {
+  eyebrow: string;
+  value: number;
+  detail?: string | null;
+  tone?: "pos" | "neg" | null;
 }
 
 /** A small chart under a reply, built server-side from a fresh query. */
 export interface ChartSpec {
-  kind: "breakdown" | "compare" | "trend";
+  kind: "breakdown" | "compare" | "trend" | "daily" | "merchant" | "recurring" | "net_worth";
   title: string;
   period?: string | null;
   unit: "usd";
   points: ChartPoint[];
   change?: { difference: number; percent_change: number | null; direction: "up" | "down" | "flat" } | null;
+  /** The rows the whole chart is drawn from; null for a net trend (that's Cash flow). */
+  query?: SourceQuery | null;
+  group_by?: "category" | "subcategory" | "merchant" | null;
+  headline?: ChartHeadline | null;
+  /** breakdown: what the "vs" column compares against, e.g. "vs Aug 1–19". */
+  previous_label?: string | null;
+  /** merchant: the monthly average line. */
+  average?: number | null;
+  stats?: { label: string; value: number; unit: "usd" | "count"; date?: string | null }[];
+  /** recurring: the next 30 days. */
+  upcoming?: { label: string; date: string; value: number }[];
+  today?: string | null;
+  horizon?: string | null;
 }
 
 export interface RuleProposal {
@@ -646,13 +773,9 @@ export interface BudgetMoveProposal {
 /** A confirm card the assistant drafted; nothing is changed until the user confirms. */
 export type ActionProposal = RuleProposal | BudgetMoveProposal;
 
-export interface ChatResponse {
+export interface ChatResponse extends AnswerParts {
   conversation_id: string;
   reply: string;
-  sources: ChatSource[];
-  goal_proposal: GoalProposal | null;
-  action_proposal?: ActionProposal | null;
-  charts?: ChartSpec[];
 }
 
 /**
@@ -706,13 +829,9 @@ export interface ConversationSummary {
   message_count: number;
 }
 
-export interface ConversationMessage {
+export interface ConversationMessage extends AnswerParts {
   role: string;
   content: string;
-  sources: ChatSource[];
-  goal_proposal: GoalProposal | null;
-  action_proposal?: ActionProposal | null;
-  charts?: ChartSpec[];
   created_at: string;
 }
 

@@ -43,14 +43,18 @@ def test_chat_resolves_a_tool_call_before_replying(client, db, user, monkeypatch
     assert response.status_code == 200
     body = response.json()
     assert body["reply"] == "Your net worth is $2,100."
-    assert body["sources"] == [{"tool": "get_net_worth", "label": "Net worth · 2 accounts", "query": None}]
+    assert body["sources"] == [{"tool": "get_net_worth", "label": "Net worth · 2 accounts", "query": None, "searched": None}]
 
     # Only the final resolved text turns are persisted, not the intermediate
     # tool_use/tool_result pair -- see chat_service.py. The source labels
-    # (not the raw tool call/result) ride along on the assistant row.
+    # (not the raw tool call/result) ride along on the assistant row, with
+    # the dollar amounts the reply's figures are cited against.
     messages = db.query(ChatMessage).filter(ChatMessage.user_id == user.id).order_by(ChatMessage.created_at).all()
     assert len(messages) == 2
-    assert messages[1].tool_calls == [{"tool": "get_net_worth", "label": "Net worth · 2 accounts"}]
+    assert messages[1].tool_calls == [
+        {"tool": "get_net_worth", "label": "Net worth · 2 accounts", "figures": [400.0, 2100.0, 2500.0]}
+    ]
+    assert body["citations"] == [{"text": "$2,100", "source": 1}]
 
 
 def test_chat_resolves_a_web_search_call_before_replying(client, db, monkeypatch):
@@ -75,7 +79,7 @@ def test_chat_resolves_a_web_search_call_before_replying(client, db, monkeypatch
     body = response.json()
     assert body["reply"] == "Savings rates are running around 4.5% APY right now."
     assert body["sources"] == [
-        {"tool": "web_search", "label": "Searched “current high yield savings rates”", "query": None}
+        {"tool": "web_search", "label": "Searched “current high yield savings rates”", "query": None, "searched": None}
     ]
     assert fake_search.queries == ["current high yield savings rates"]
 
@@ -123,7 +127,7 @@ def test_chat_propose_goal_returns_a_confirmable_proposal_without_writing(client
 
     assert response.status_code == 200
     body = response.json()
-    assert body["sources"] == [{"tool": "propose_goal", "label": "Proposed a savings goal", "query": None}]
+    assert body["sources"] == [{"tool": "propose_goal", "label": "Proposed a savings goal", "query": None, "searched": None}]
     assert body["goal_proposal"]["type"] == "save"
     assert body["goal_proposal"]["name"] == "Savings"
     assert body["goal_proposal"]["target_amount"] == 5000.0
@@ -138,7 +142,7 @@ def test_chat_propose_goal_returns_a_confirmable_proposal_without_writing(client
 
     history = client.get(f"/chat/conversations/{body['conversation_id']}").json()
     assert history[1]["goal_proposal"]["target_amount"] == 5000.0
-    assert history[1]["sources"] == [{"tool": "propose_goal", "label": "Proposed a savings goal", "query": None}]
+    assert history[1]["sources"] == [{"tool": "propose_goal", "label": "Proposed a savings goal", "query": None, "searched": None}]
 
 
 def test_chat_propose_spending_tracker_returns_category_and_window(client, db, user, monkeypatch):
@@ -166,7 +170,7 @@ def test_chat_propose_spending_tracker_returns_category_and_window(client, db, u
 
     assert response.status_code == 200
     body = response.json()
-    assert body["sources"] == [{"tool": "propose_goal", "label": "Proposed a spending tracker", "query": None}]
+    assert body["sources"] == [{"tool": "propose_goal", "label": "Proposed a spending tracker", "query": None, "searched": None}]
     assert body["goal_proposal"]["type"] == "track_spending"
     assert body["goal_proposal"]["category"] == "Dining"
     assert body["goal_proposal"]["window"] == "this_month"

@@ -1,6 +1,8 @@
 import json
 import logging
+import math
 import queue
+import re
 import threading
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -38,12 +40,64 @@ class SourceQuery(BaseModel):
     end: str
     category: str | None = None
     merchant: str | None = None
+    # "income" lists income rows, "all" every row (filtered by account_id or
+    # recurring_id); default spending.
+    kind: str | None = None
+    account_id: str | None = None
+    recurring_id: str | None = None
+
+
+class Searched(BaseModel):
+    """What an empty search looked through (claude_agent._searched)."""
+
+    what: str
+    range: str
+    accounts: list[str] = []
 
 
 class ChatSource(BaseModel):
     tool: str
     label: str
     query: SourceQuery | None = None
+    searched: Searched | None = None
+
+
+class Citation(BaseModel):
+    """A dollar figure in the reply text and the number of the source
+    (1-based, in `sources` order) it was found in."""
+
+    text: str
+    source: int
+
+
+class ViewLink(BaseModel):
+    """A picture that didn't fit in the answer's one chart, as a link.
+    view: transactions | cash_flow."""
+
+    view: str
+    label: str
+    query: SourceQuery | None = None
+
+
+class TransactionRecord(BaseModel):
+    """One row a short lookup found, shown as a card under the reply."""
+
+    date: str
+    amount: float
+    merchant_name: str | None = None
+    category: str | None = None
+    is_pending: bool = False
+    account: str | None = None
+    kind: str = "spending"
+
+
+class ClarifyChoice(BaseModel):
+    label: str
+
+
+class Clarify(BaseModel):
+    question: str
+    choices: list[ClarifyChoice]
 
 
 class GoalProposal(BaseModel):
@@ -64,6 +118,41 @@ class ChartPoint(BaseModel):
     value: float
     share: float | None = None
     partial: bool = False
+    query: SourceQuery | None = None
+    # breakdown: the same group in the period before
+    previous: float | None = None
+    # daily / merchant: how many rows the bar is
+    count: int | None = None
+    weekday: str | None = None
+    # recurring
+    next_date: str | None = None
+    cadence: str | None = None
+    last_amount: float | None = None
+    typical_amount: float | None = None
+    price_changed: bool = False
+    suggested: bool = False
+    # net_worth: the "not from transactions" remainder
+    note: bool = False
+
+
+class ChartHeadline(BaseModel):
+    eyebrow: str
+    value: float
+    detail: str | None = None
+    tone: str | None = None  # pos | neg
+
+
+class ChartStat(BaseModel):
+    label: str
+    value: float
+    unit: str  # usd | count
+    date: str | None = None
+
+
+class UpcomingCharge(BaseModel):
+    label: str
+    date: str
+    value: float
 
 
 class ChartChange(BaseModel):
@@ -74,7 +163,8 @@ class ChartChange(BaseModel):
 
 class ChartSpec(BaseModel):
     """A small chart under a reply, built server-side from a fresh query (see
-    tools.show_chart). kind: breakdown | compare | trend."""
+    tools.show_chart and services/answer_charts.py). kind: breakdown |
+    compare | trend | daily | merchant | recurring | net_worth."""
 
     kind: str
     title: str
@@ -82,16 +172,37 @@ class ChartSpec(BaseModel):
     unit: str = "usd"
     points: list[ChartPoint]
     change: ChartChange | None = None
+    # The transactions the whole chart is drawn from (None for a net trend,
+    # which links to Cash flow instead).
+    query: SourceQuery | None = None
+    group_by: str | None = None
+    headline: ChartHeadline | None = None
+    previous_label: str | None = None
+    average: float | None = None
+    stats: list[ChartStat] = []
+    upcoming: list[UpcomingCharge] = []
+    today: str | None = None
+    horizon: str | None = None
 
 
-class ChatResponse(BaseModel):
-    conversation_id: UUID
-    reply: str
+class AnswerParts(BaseModel):
+    """Everything that renders around a reply's text, derived from the
+    turn's persisted tool calls (see _answer_parts)."""
+
     sources: list[ChatSource] = []
+    citations: list[Citation] = []
     goal_proposal: GoalProposal | None = None
     # A confirm card for something other than a goal: {"kind": "rule" | "budget_move", ...}.
     action_proposal: dict | None = None
     charts: list[ChartSpec] = []
+    links: list[ViewLink] = []
+    clarify: Clarify | None = None
+    records: list[TransactionRecord] = []
+
+
+class ChatResponse(AnswerParts):
+    conversation_id: UUID
+    reply: str
 
 
 class ConversationSummary(BaseModel):
@@ -101,27 +212,69 @@ class ConversationSummary(BaseModel):
     message_count: int
 
 
-class ConversationMessage(BaseModel):
+class ConversationMessage(AnswerParts):
     role: str
     content: str
-    sources: list[ChatSource] = []
-    goal_proposal: GoalProposal | None = None
-    # A confirm card for something other than a goal: {"kind": "rule" | "budget_move", ...}.
-    action_proposal: dict | None = None
-    charts: list[ChartSpec] = []
     created_at: datetime
+
+
+def _public_entries(raw: list[dict] | None) -> list[dict]:
+    """The sources a reply's footnotes number. A clarifying question isn't
+    one (it shows as its choices), nor is a chart that became a link; a chart
+    that was drawn is, since its figures can back the text."""
+    return [
+        entry
+        for entry in raw or []
+        if entry["tool"] != "ask_clarifying_question" and (entry["tool"] != "show_chart" or entry.get("chart"))
+    ]
 
 
 def _public_sources(raw: list[dict] | None) -> list[dict]:
     public = []
-    for entry in raw or []:
-        if entry["tool"] == "show_chart":
-            continue  # drawing a chart isn't a data source; the chart itself shows below the reply
+    for entry in _public_entries(raw):
         source = {"tool": entry["tool"], "label": entry["label"]}
-        if entry.get("query"):
-            source["query"] = entry["query"]
+        for key in ("query", "searched"):
+            if entry.get(key):
+                source[key] = entry[key]
         public.append(source)
     return public
+
+
+# Same pattern the web client splits figures out of the text with
+# (AssistantText.tsx), so both sides agree on what one figure is.
+_MONEY = re.compile(r"-?\$[\d,]+(?:\.\d+)?")
+
+
+def _citations(reply: str, raw: list[dict] | None) -> list[dict]:
+    """Number every dollar figure in the reply to the source it came from:
+    the first source (in call order) whose result holds that exact amount,
+    else one that rounds to it when the figure has no cents ("about $71").
+    A figure no source holds stays uncited, and the client shows it plainly
+    rather than as a checked number."""
+    entries = _public_entries(raw)
+    citations, seen = [], set()
+    for match in _MONEY.finditer(reply or ""):
+        text = match.group()
+        if text in seen:
+            continue
+        seen.add(text)
+        amount = abs(float(text.replace("$", "").replace(",", "")))
+        has_cents = "." in text
+        for exact in (True, False):
+            if not exact and has_cents:
+                break
+            number = next(
+                (
+                    i + 1
+                    for i, entry in enumerate(entries)
+                    if any((f == round(amount, 2)) if exact else (math.floor(f + 0.5) == amount) for f in entry.get("figures", []))
+                ),
+                None,
+            )
+            if number:
+                citations.append({"text": text, "source": number})
+                break
+    return citations
 
 
 def _goal_proposal(raw: list[dict] | None) -> dict | None:
@@ -140,9 +293,50 @@ def _action_proposal(raw: list[dict] | None) -> dict | None:
 
 
 def _charts(raw: list[dict] | None) -> list[dict]:
-    """At most one chart per reply (the prompt asks for one); keep the last."""
+    """At most one chart per reply (run_agent_turn turns any second one
+    into a link); keep the last in case older rows had more."""
     charts = [entry["chart"] for entry in raw or [] if entry.get("chart")]
     return charts[-1:]
+
+
+def _links(raw: list[dict] | None) -> list[dict]:
+    links = []
+    for entry in raw or []:
+        link = entry.get("link")
+        if link and link not in links:
+            links.append(link)
+    return links
+
+
+def _records(raw: list[dict] | None) -> list[dict]:
+    """The rows of a 1-3 result lookup, unless the answer has a chart (which
+    already lists its rows)."""
+    if any(entry.get("chart") for entry in raw or []):
+        return []
+    for entry in reversed(raw or []):
+        if entry.get("records"):
+            return entry["records"]
+    return []
+
+
+def _clarify(raw: list[dict] | None) -> dict | None:
+    for entry in reversed(raw or []):
+        if entry.get("clarify"):
+            return entry["clarify"]
+    return None
+
+
+def _answer_parts(reply: str, raw: list[dict] | None) -> dict:
+    return {
+        "sources": _public_sources(raw),
+        "citations": _citations(reply, raw),
+        "goal_proposal": _goal_proposal(raw),
+        "action_proposal": _action_proposal(raw),
+        "charts": _charts(raw),
+        "links": _links(raw),
+        "clarify": _clarify(raw),
+        "records": _records(raw),
+    }
 
 
 @router.post("", response_model=ChatResponse, dependencies=[Depends(limit_chat_by_user)])
@@ -153,14 +347,7 @@ def chat(
 ) -> ChatResponse:
     conversation_id = body.conversation_id or uuid4()
     reply, sources = chat_service.send_message(db, user.id, conversation_id, body.message)
-    return ChatResponse(
-        conversation_id=conversation_id,
-        reply=reply,
-        sources=_public_sources(sources),
-        goal_proposal=_goal_proposal(sources),
-        action_proposal=_action_proposal(sources),
-        charts=_charts(sources),
-    )
+    return ChatResponse(conversation_id=conversation_id, reply=reply, **_answer_parts(reply, sources))
 
 
 @router.post("/stream", dependencies=[Depends(limit_chat_by_user)])
@@ -194,14 +381,7 @@ def chat_stream(
                     body.message,
                     on_status=lambda label: events.put(("status", {"label": label})),
                 )
-            response = ChatResponse(
-                conversation_id=conversation_id,
-                reply=reply,
-                sources=_public_sources(sources),
-                goal_proposal=_goal_proposal(sources),
-                action_proposal=_action_proposal(sources),
-                charts=_charts(sources),
-            )
+            response = ChatResponse(conversation_id=conversation_id, reply=reply, **_answer_parts(reply, sources))
             events.put(("done", response.model_dump(mode="json")))
         except Exception:
             logger.exception("Streaming chat turn failed")
@@ -250,11 +430,8 @@ def get_conversation(
         {
             "role": row["role"],
             "content": row["content"],
-            "sources": _public_sources(row.get("sources")),
-            "goal_proposal": _goal_proposal(row.get("sources")),
-            "action_proposal": _action_proposal(row.get("sources")),
-            "charts": _charts(row.get("sources")),
             "created_at": row["created_at"],
+            **_answer_parts(row["content"], row.get("sources")),
         }
         for row in messages
     ]

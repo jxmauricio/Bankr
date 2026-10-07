@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchIncome, fetchSpending, type ItemizedTransactions, type SourceQuery } from "../lib/api";
+import { fetchIncome, fetchQuery, fetchSpending, type ItemizedTransactions, type SourceQuery } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { TransactionSearch } from "./TransactionSearch";
 
@@ -30,11 +30,15 @@ export function TransactionSearchModal({
 
   useEffect(() => {
     setResult(null);
-    if (query) fetchSpending(token, query).then(setResult);
+    if (query) fetchQuery(token, query).then(setResult);
     else (group === "income" ? fetchIncome : fetchSpending)(token, period).then(setResult);
   }, [token, group, period, query]);
 
-  const title = query ? (query.category ?? (query.merchant ? `“${query.merchant}”` : "Spending")) : `${group} transactions`;
+  // A chat answer's income lookup lists money in, whatever tile opened the modal.
+  const listGroup = query?.kind === "income" ? "income" : group;
+  const title = query
+    ? (query.category ?? (query.merchant ? `“${query.merchant}”` : listGroup === "income" ? "Income" : "Spending"))
+    : `${group} transactions`;
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -55,7 +59,7 @@ export function TransactionSearchModal({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label={`${group === "income" ? "Income" : "Spending"} transactions`}
+        aria-label={`${listGroup === "income" ? "Income" : "Spending"} transactions`}
       >
         <div className="flex items-start justify-between">
           <div>
@@ -102,7 +106,7 @@ export function TransactionSearchModal({
           {result === null ? (
             <div className="flex h-32 items-center justify-center text-sm text-ink-faint">Loading…</div>
           ) : (
-            <TransactionSearch items={result.items} group={group} />
+            <TransactionSearch items={result.items} group={listGroup} />
           )}
         </div>
       </div>
