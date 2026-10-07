@@ -605,6 +605,8 @@ def monthly_series(
         points.append(
             {
                 "month": w.start.strftime("%Y-%m"),
+                "start": w.start.isoformat(),
+                "end": w.end.isoformat(),
                 "label": f"{w.start:%b}",
                 "value": value,
                 "partial": w.end < _month_end(w.start),

@@ -272,12 +272,14 @@ export interface ItemizedTransactions {
   as_of: string | null;
 }
 
-/** The exact filter behind a chat answer's figure (ChatSource.query). */
+/** The exact filter behind a chat answer's figure (ChatSource.query), or
+ * behind a chart or one of its bars. kind "income" lists income rows. */
 export interface SourceQuery {
   start: string;
   end: string;
   category: string | null;
   merchant: string | null;
+  kind?: "income" | null;
 }
 
 export const fetchSpending = (token: string, period: string | SourceQuery) => {
@@ -290,12 +292,55 @@ export const fetchSpending = (token: string, period: string | SourceQuery) => {
 export const fetchIncome = (token: string, period: string) =>
   request<ItemizedTransactions>("/dashboard/income", { token, query: { period } });
 
+/** The rows behind a SourceQuery, from whichever list it filters. */
+export const fetchQuery = (token: string, query: SourceQuery) => {
+  if (query.kind !== "income") return fetchSpending(token, { ...query, kind: null });
+  return request<ItemizedTransactions>("/dashboard/income", { token, query: { start: query.start, end: query.end } });
+};
+
 // --- Chat ---
+
+/** What an empty search looked through, so "$0" comes with its working. */
+export interface Searched {
+  what: string;
+  range: string;
+  accounts: string[];
+}
 
 export interface ChatSource {
   tool: string;
   label: string;
   query?: SourceQuery | null;
+  searched?: Searched | null;
+}
+
+/** A dollar figure in the reply and the 1-based number of its source. */
+export interface Citation {
+  text: string;
+  source: number;
+}
+
+/** A picture that didn't fit in the answer's one chart. */
+export interface ViewLink {
+  view: "transactions" | "cash_flow";
+  label: string;
+  query?: SourceQuery | null;
+}
+
+/** Bankr asking which meaning was intended; tapping a choice sends its label. */
+export interface Clarify {
+  question: string;
+  choices: { label: string }[];
+}
+
+/** Everything that renders around a reply's text. */
+export interface AnswerParts {
+  sources: ChatSource[];
+  citations?: Citation[];
+  goal_proposal: GoalProposal | null;
+  charts?: ChartSpec[];
+  links?: ViewLink[];
+  clarify?: Clarify | null;
 }
 
 export interface GoalProposal {
@@ -316,6 +361,8 @@ export interface ChartPoint {
   value: number;
   share?: number | null;
   partial?: boolean;
+  /** The rows this bar is drawn from. */
+  query?: SourceQuery | null;
 }
 
 /** A small chart under a reply, built server-side from a fresh query. */
@@ -326,14 +373,14 @@ export interface ChartSpec {
   unit: "usd";
   points: ChartPoint[];
   change?: { difference: number; percent_change: number | null; direction: "up" | "down" | "flat" } | null;
+  /** The rows the whole chart is drawn from; null for a net trend (that's Cash flow). */
+  query?: SourceQuery | null;
+  group_by?: "category" | "subcategory" | "merchant" | null;
 }
 
-export interface ChatResponse {
+export interface ChatResponse extends AnswerParts {
   conversation_id: string;
   reply: string;
-  sources: ChatSource[];
-  goal_proposal: GoalProposal | null;
-  charts?: ChartSpec[];
 }
 
 /**
@@ -387,12 +434,9 @@ export interface ConversationSummary {
   message_count: number;
 }
 
-export interface ConversationMessage {
+export interface ConversationMessage extends AnswerParts {
   role: string;
   content: string;
-  sources: ChatSource[];
-  goal_proposal: GoalProposal | null;
-  charts?: ChartSpec[];
   created_at: string;
 }
 

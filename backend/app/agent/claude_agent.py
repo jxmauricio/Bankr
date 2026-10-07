@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from app.agent import tools
 from app.agent.agent_client import ToolSpec, build_agent_client
+from app.db.models import LinkedAccount
 from app.db.seed_categories import DEFAULT_CATEGORIES
 from app.integrations.web_search import build_web_search_client
 from app.services import money_query as mq
@@ -109,12 +110,26 @@ group_by="category".
 - For "this month vs last month", use compare_spending. When the result \
 includes previous_to_same_point, the current month isn't over yet: lead \
 with that like-for-like comparison and mention the full last month too.
-- If transaction_count is 0, say you found no transactions in that window \
-rather than implying they spent nothing. If pending_amount is non-zero, \
-say how much of the total is still pending. If refunds are non-zero, \
-mention that the total is net of them.
+- If transaction_count is 0, lead with $0 and say exactly what you \
+searched: the merchant or category, the dates, and the linked accounts \
+(the result's "searched" field), e.g. "$0 — I didn't find any Target \
+purchases in your 4 linked accounts this year." Never answer with a vague \
+"I couldn't find anything". A box under your reply lists what was \
+searched, so don't repeat every account name. If pending_amount is \
+non-zero, say how much of the total is still pending. If refunds are \
+non-zero, mention that the total is net of them.
 - If a tool returns an error with did_you_mean or valid options, retry with \
-one of those instead of giving up or guessing.
+one of those instead of giving up or guessing. \
+- Every dollar figure you write is checked against the tool results and \
+numbered to the one it came from, so only write figures a tool returned \
+(or that calculate worked out). Never round a figure into one that isn't \
+there, and never estimate one.
+
+When a money question could mean more than one thing -- "the weekend" (which \
+one?), "my card" when there are several, a merchant name that matches more \
+than one -- don't guess. Call ask_clarifying_question with 2-4 short choices \
+(give each a window or start/end when it's about dates, so the exact dates \
+are shown) and reply with just the question. The choices appear as buttons.
 
 Write like a text message from a sharp friend, and make it easy to scan. \
 Lead with the answer on the first line, not a preamble ("Let me check..."). \
@@ -134,8 +149,11 @@ numbered or nested lists, or emoji. Keep the whole reply to about 6 lines.
 
 Charts: when a picture beats a list -- a breakdown of 3+ items, a \
 this-vs-last comparison, or how something moved across months -- call \
-show_chart once (never more than one per reply), after the tools you \
-need for the answer. Then keep the text to 1-3 lines with the takeaway \
+show_chart once, after the tools you need for the answer. An answer has \
+only one picture: if the question needs more, chart the one that answers \
+it best; any second show_chart becomes a link to Transactions or Cash flow \
+under the reply, so point to it in a few words ("the month-by-month is in \
+Cash flow"). The chart comes with the list of transactions behind it. Then keep the text to 1-3 lines with the takeaway \
 (the biggest item, the direction of change) instead of repeating every \
 number the chart shows. Don't chart a single number, a goal, or a list of \
 transactions."""
@@ -347,6 +365,34 @@ TOOL_DEFINITIONS = [
         },
     ),
     ToolSpec(
+        name="ask_clarifying_question",
+        description=(
+            "Ask the user which of 2-4 meanings they want instead of guessing, e.g. which weekend. The choices "
+            "render as buttons; tapping one sends its label back as their next message. Give a choice a window "
+            "or start/end when it's a date range, and its exact dates are added to the label."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "One short line, e.g. \"Which weekend do you mean?\""},
+                "choices": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": tools.MAX_CLARIFY_CHOICES,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "label": {"type": "string", "description": "A few words, e.g. \"Last weekend\"."},
+                            **_WINDOW_PROPS,
+                        },
+                        "required": ["label"],
+                    },
+                },
+            },
+            "required": ["question", "choices"],
+        },
+    ),
+    ToolSpec(
         name="web_search",
         description=(
             "Search the web for current, time-sensitive information not available from the other tools -- interest "
@@ -376,6 +422,7 @@ _TOOL_DISPATCH = {
     "calculate": lambda db, user_id, **kwargs: tools.calculate(**kwargs),
     "propose_goal": tools.propose_goal,
     "show_chart": tools.show_chart,
+    "ask_clarifying_question": tools.ask_clarifying_question,
     "web_search": lambda db, user_id, **kwargs: tools.web_search(client=_search_client, **kwargs),
 }
 
@@ -430,6 +477,8 @@ def _describe_tool_call(name: str, tool_input: dict, result: dict | None = None)
     if name == "show_chart":
         chart = (result or {}).get("chart")
         return f"Chart · {chart['title']}" if chart else "Chart"
+    if name == "ask_clarifying_question":
+        return "Asked which one you meant"
     if name == "propose_goal":
         kind = tool_input.get("type") or tool_input.get("goal_type")
         if kind == "track_spending":
@@ -467,6 +516,8 @@ def _progress_label(name: str, tool_input: dict) -> str:
         return "Drafting a goal…"
     if name == "show_chart":
         return "Drawing a chart…"
+    if name == "ask_clarifying_question":
+        return "Checking what you meant…"
     return "Working on it…"
 
 
@@ -486,6 +537,98 @@ def _source_query(name: str, tool_input: dict, result: dict) -> dict | None:
         "category": result.get("category"),
         "merchant": tool_input.get("merchant") if name == "find_transactions" else None,
     }
+
+
+# Result fields that hold dollar amounts. A "$" figure in a reply is cited to
+# the first source whose result has that amount in one of these -- an
+# allowlist, so a transaction_count of 14 can never back a "$14".
+_MONEY_KEYS = frozenset(
+    {
+        "amount",
+        "balance",
+        "current_progress_amount",
+        "difference",
+        "gross_spent",
+        "income",
+        "net",
+        "net_worth",
+        "pending_amount",
+        "pending_spending",
+        "refunds",
+        "refunds_exceeding_spend",
+        "remaining_amount",
+        "result",
+        "spending",
+        "target_amount",
+        "total_assets",
+        "total_income",
+        "total_liabilities",
+        "total_spent",
+        "value",
+    }
+)
+# Tools whose results hold the user's numbers (or calculate's arithmetic on them).
+_CITABLE_TOOLS = frozenset(
+    {
+        "calculate",
+        "compare_spending",
+        "find_transactions",
+        "get_cash_flow",
+        "get_goal_progress",
+        "get_net_worth",
+        "get_recent_transactions",
+        "get_spending",
+        "get_unusual_transactions",
+    }
+)
+
+
+def _money_figures(value, key: str | None = None) -> list[float]:
+    """Every dollar amount in a tool result, as absolute cents-rounded values
+    (a reply says "$54.20", not "-$54.20", for a charge stored negative)."""
+    found: list[float] = []
+    if isinstance(value, dict):
+        for k, v in value.items():
+            found += _money_figures(v, k)
+    elif isinstance(value, list):
+        for v in value:
+            found += _money_figures(v, key)
+    elif key in _MONEY_KEYS and isinstance(value, (int, float)) and not isinstance(value, bool):
+        found.append(round(abs(float(value)), 2))
+    return sorted(set(found))
+
+
+def _searched(db: Session, user_id: UUID, name: str, tool_input: dict, result: dict) -> dict | None:
+    """What an empty search looked through -- the merchant or category, the
+    dates and the accounts -- so "$0" comes with its working instead of a
+    vague "couldn't find anything"."""
+    if name not in ("get_spending", "find_transactions") or not isinstance(result, dict) or "error" in result:
+        return None
+    if result.get("transaction_count"):
+        return None
+    merchant = (tool_input.get("merchant") or "").strip() if name == "find_transactions" else ""
+    accounts = (
+        db.query(LinkedAccount)
+        .filter(LinkedAccount.user_id == user_id, LinkedAccount.status == "active")
+        .order_by(LinkedAccount.institution_name, LinkedAccount.mask)
+        .all()
+    )
+    return {
+        "what": f"“{merchant}”" if merchant else result.get("category") or "All spending",
+        "range": result["label"],
+        "accounts": [
+            " ".join(part for part in (a.name or a.institution_name, f"•••• {a.mask}" if a.mask else None) if part)
+            for a in accounts
+        ],
+    }
+
+
+def _view_link(chart: dict) -> dict:
+    """Where a picture that didn't fit goes instead: month-by-month movement
+    is Cash flow's job; everything else is a filtered Transactions list."""
+    if chart["kind"] == "trend":
+        return {"view": "cash_flow", "label": "Open Cash flow"}
+    return {"view": "transactions", "label": f"{chart['title']} in Transactions", "query": chart.get("query")}
 
 
 def _date_context(db: Session, user_id: UUID) -> str:
@@ -521,7 +664,16 @@ def run_agent_turn(
         if on_status:
             on_status(_progress_label(name, tool_input))
         result = _TOOL_DISPATCH[name](db, user_id, **tool_input)
+        searched = _searched(db, user_id, name, tool_input, result)
+        if searched:
+            result["searched"] = searched
         entry: dict = {"tool": name, "label": _describe_tool_call(name, tool_input, result)}
+        if name in _CITABLE_TOOLS and isinstance(result, dict) and "error" not in result:
+            figures = _money_figures(result)
+            if figures:
+                entry["figures"] = figures
+        if searched:
+            entry["searched"] = searched
         query = _source_query(name, tool_input, result)
         if query:
             entry["query"] = query
@@ -531,7 +683,18 @@ def run_agent_turn(
             # sources trail in app/api/chat.py.
             entry["proposal"] = result["proposal"]
         if name == "show_chart" and isinstance(result, dict) and result.get("chart"):
-            entry["chart"] = result["chart"]
+            if any("chart" in s for s in sources):
+                # One picture per answer: a second chart becomes a link.
+                entry["link"] = _view_link(result["chart"])
+                result = {
+                    "shown": False,
+                    "message": "This answer already has its one chart, so this one is a link under your reply "
+                    f"instead (\"{entry['link']['label']}\"). Point to it in a few words.",
+                }
+            else:
+                entry["chart"] = result["chart"]
+        if name == "ask_clarifying_question" and isinstance(result, dict) and result.get("clarify"):
+            entry["clarify"] = result["clarify"]
         sources.append(entry)
         return result
 

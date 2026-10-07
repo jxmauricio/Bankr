@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ApiError,
   fetchConversation,
@@ -12,12 +12,15 @@ import {
   streamChatMessage,
   type ChartSpec,
   type ChatSource,
+  type Citation,
+  type Clarify,
   type GoalProgress,
   type GoalProposal,
   type LinkedBank,
   type ItemizedTransactions,
   type PeriodRollup,
   type SourceQuery,
+  type ViewLink,
 } from "../lib/api";
 import { resolveGoalProposal } from "../lib/goalProposal";
 import { GoalsSection } from "../components/GoalsSection";
@@ -31,7 +34,6 @@ import { PeriodFilter } from "../components/PeriodFilter";
 import { loadPeriod, savePeriod, type Period as TimePeriod } from "../lib/period";
 import { RelinkBanner } from "../components/StatusBanners";
 import { ChatChart } from "../components/ChatChart";
-import { SourceBreakdown } from "../components/SourceBreakdown";
 import { SettingsModal } from "../components/SettingsModal";
 import { NetWorthFlowModal } from "../components/NetWorthFlowModal";
 import { TransactionSearchModal } from "../components/TransactionSearchModal";
@@ -52,7 +54,17 @@ type Period = "week" | "month" | "year";
 type Topic = "spending" | "income";
 
 type StreamItem =
-  | { kind: "assistant-text"; id: string; text: string; sources?: ChatSource[]; goalProposal?: GoalProposal | null; charts?: ChartSpec[] }
+  | {
+      kind: "assistant-text";
+      id: string;
+      text: string;
+      sources?: ChatSource[];
+      citations?: Citation[];
+      goalProposal?: GoalProposal | null;
+      charts?: ChartSpec[];
+      links?: ViewLink[];
+      clarify?: Clarify | null;
+    }
   | { kind: "user-text"; id: string; text: string }
   | { kind: "topic-card"; id: string; topic: Topic; period: Period };
 
@@ -184,7 +196,10 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
         id: makeId(),
         text: response.reply,
         sources: response.sources,
+        citations: response.citations,
         charts: response.charts,
+        links: response.links,
+        clarify: response.clarify,
         goalProposal: resolveGoalProposal({
           userText: text,
           assistantText: response.reply,
@@ -238,7 +253,10 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
             id: makeId(),
             text: m.content,
             sources: m.sources,
+            citations: m.citations,
             charts: m.charts,
+            links: m.links,
+            clarify: m.clarify,
             goalProposal: resolveGoalProposal({
               userText: previous?.role === "user" ? previous.content : "",
               assistantText: m.content,
@@ -438,6 +456,9 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                   token={token}
                   onGoalCreated={refreshGoalProgress}
                   onOpenSource={setSourceQuery}
+                  onOpenCashFlow={openFlow}
+                  onLinkAccount={() => setShowSettings(true)}
+                  onAsk={ask}
                   isLast={item.id === lastAssistantId && !item.id.startsWith(GREETING_ID) && !isSending}
                 />
               ))}
@@ -520,57 +541,52 @@ function StreamEntry({
   token,
   onGoalCreated,
   onOpenSource,
+  onOpenCashFlow,
+  onLinkAccount,
+  onAsk,
   isLast,
 }: {
   item: StreamItem;
   token: string | null;
   onGoalCreated: () => void | Promise<void>;
   onOpenSource: (query: SourceQuery) => void;
+  onOpenCashFlow: () => void;
+  onLinkAccount: () => void;
+  onAsk: (text: string) => void;
   isLast: boolean;
 }) {
   switch (item.kind) {
     case "assistant-text": {
-      const breakdownQuery = item.sources?.find((s) => s.query && !s.query.merchant)?.query ?? null;
+      const sources = item.sources ?? [];
+      const searched = sources.filter((s) => s.searched);
       return (
-        <div className="flex items-start gap-3">
+        <article className="flex items-start gap-3">
          <BotMark />
          <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
-          <div className="max-w-full rounded-[6px_20px_20px_20px] bg-surface px-5 py-[18px] text-[15px] leading-[1.65] text-ink">
-            <AssistantText text={item.text} />
+          <div className="flex max-w-full flex-col gap-3 rounded-[6px_20px_20px_20px] bg-surface px-5 py-[18px] text-[15px] leading-[1.65] text-ink">
+            <AssistantText text={item.text} figures={{ citations: item.citations ?? [], sources, onOpen: onOpenSource }} />
+            {searched.map((s, i) => (
+              <SearchedBox key={i} source={s} onLinkAccount={onLinkAccount} />
+            ))}
+            {item.clarify && isLast && <ClarifyChoices clarify={item.clarify} onAsk={onAsk} />}
           </div>
-          {item.charts?.map((chart, i) => <ChatChart key={i} chart={chart} />)}
-          {item.sources && item.sources.length > 0 && (
-            <ExpandToggle
-              label={`${item.sources.length} source${item.sources.length === 1 ? "" : "s"}`}
-              title="Grounded in your real account data via these lookups"
-            >
-              <div className="flex flex-wrap items-center gap-2 text-xs text-ink-soft">
-                {item.sources.map((source, i) =>
-                  source.query ? (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => onOpenSource(source.query!)}
-                      title="See the transactions behind this number"
-                      className="flex min-h-8 items-center gap-2 rounded-full bg-raised px-3 text-xs transition-colors hover:text-ink cursor-pointer"
-                    >
-                      <span className="font-mono text-signal">{i + 1}</span>
-                      {source.label}
-                    </button>
-                  ) : (
-                    <span key={i} className="flex min-h-8 items-center gap-2 rounded-full bg-raised px-3">
-                      <span className="font-mono text-signal">{i + 1}</span>
-                      {source.label}
-                    </span>
-                  ),
-                )}
-              </div>
-              {isLast && breakdownQuery && (
-                <div className="mt-2">
-                  <SourceBreakdown token={token} query={breakdownQuery} onOpen={onOpenSource} />
-                </div>
-              )}
-            </ExpandToggle>
+          {item.charts?.map((chart, i) => (
+            <ChatChart key={i} chart={chart} token={token} onOpenSource={onOpenSource} onOpenCashFlow={onOpenCashFlow} />
+          ))}
+          {sources.length > 0 && <SourceTrail sources={sources} onOpenSource={onOpenSource} />}
+          {item.links && item.links.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {item.links.map((link, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => (link.view === "cash_flow" || !link.query ? onOpenCashFlow() : onOpenSource(link.query))}
+                  className="flex min-h-11 items-center gap-2 rounded-full border border-line-strong px-4 text-[13px] text-ink-soft transition-colors hover:border-signal hover:text-ink cursor-pointer"
+                >
+                  {link.label} <span aria-hidden>→</span>
+                </button>
+              ))}
+            </div>
           )}
           {item.goalProposal && (
             <GoalProposalCard
@@ -580,7 +596,7 @@ function StreamEntry({
             />
           )}
          </div>
-        </div>
+        </article>
       );
     }
     case "user-text":
@@ -677,8 +693,14 @@ function SkeletonLine() {
 }
 
 /** Follow-ups worth asking next, from what the answer was grounded in. */
-function followUpsFor(item: { sources?: ChatSource[]; goalProposal?: GoalProposal | null }): string[] {
-  if (item.goalProposal) return [];
+function followUpsFor(item: {
+  sources?: ChatSource[];
+  goalProposal?: GoalProposal | null;
+  clarify?: Clarify | null;
+}): string[] {
+  // A question's choices are the follow-ups.
+  if (item.goalProposal || item.clarify) return [];
+  if (item.sources?.some((s) => s.searched)) return ["Search the last 12 months instead", "What did I spend this month?"];
   const spending = item.sources?.find((s) => s.query);
   if (spending?.query) {
     const category = spending.query.category;
@@ -692,41 +714,96 @@ function followUpsFor(item: { sources?: ChatSource[]; goalProposal?: GoalProposa
   return [];
 }
 
-function ExpandToggle({
-  label,
-  title,
-  children,
-}: {
-  label: string;
-  title?: string;
-  children: ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
+/** Every source behind an answer, numbered to match the footnotes on its
+ * figures. Ones that sum transactions open the exact rows. */
+function SourceTrail({ sources, onOpenSource }: { sources: ChatSource[]; onOpenSource: (query: SourceQuery) => void }) {
   return (
-    <div>
+    <div className="flex flex-wrap items-center gap-2 text-xs text-ink-soft" aria-label="Sources">
+      <span className="flex items-center gap-1.5" title="Grounded in your real account data via these lookups">
+        <ShieldIcon />
+        {sources.length} source{sources.length === 1 ? "" : "s"}
+      </span>
+      {sources.map((source, i) =>
+        source.query ? (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onOpenSource(source.query!)}
+            title="See the transactions behind this number"
+            className="flex min-h-9 items-center gap-2 rounded-full bg-raised px-3 text-xs transition-colors hover:text-ink cursor-pointer"
+          >
+            <span className="font-mono text-signal">{i + 1}</span>
+            {source.label}
+          </button>
+        ) : (
+          <span key={i} className="flex min-h-9 items-center gap-2 rounded-full bg-raised px-3">
+            <span className="font-mono text-signal">{i + 1}</span>
+            {source.label}
+          </span>
+        ),
+      )}
+    </div>
+  );
+}
+
+/** An empty search's working: what was looked for, when, and where. */
+function SearchedBox({ source, onLinkAccount }: { source: ChatSource; onLinkAccount: () => void }) {
+  const searched = source.searched!;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5 rounded-[14px] border border-dashed border-line-strong px-3.5 py-3">
+        <span className="font-mono text-[11px] tracking-[0.06em] text-ink-faint">SEARCHED</span>
+        <span className="text-[13px] leading-normal text-ink-soft">
+          {searched.what} · {searched.range}
+          {searched.accounts.length > 0 && ` · ${searched.accounts.join(", ")}`}
+        </span>
+      </div>
+      <p className="m-0 text-sm leading-relaxed text-ink-soft">
+        If you paid with a card that isn't linked, it won't show up here.
+      </p>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        title={title}
-        className="flex items-center gap-1 text-xs text-ink-faint transition-colors hover:text-ink-soft cursor-pointer"
+        onClick={onLinkAccount}
+        className="self-start min-h-11 rounded-full border border-line-strong px-4 text-[13px] text-ink-soft transition-colors hover:border-signal hover:text-ink cursor-pointer"
       >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
-          aria-hidden
-        >
-          <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        {label}
+        Link another account
       </button>
-      {open && <div className="mt-2">{children}</div>}
     </div>
+  );
+}
+
+/** Bankr asking which meaning was intended, as choices to tap rather than a
+ * paragraph to answer. The first is highlighted as the likeliest. */
+function ClarifyChoices({ clarify, onAsk }: { clarify: Clarify; onAsk: (text: string) => void }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div role="group" aria-label={clarify.question} className="flex flex-wrap gap-2">
+        {clarify.choices.map((choice, i) => (
+          <button
+            key={choice.label}
+            type="button"
+            onClick={() => onAsk(choice.label)}
+            className={`min-h-11 rounded-[14px] px-4 text-[13px] font-medium transition-colors cursor-pointer ${
+              i === 0
+                ? "bg-signal-wash text-signal ring-1 ring-inset ring-signal/45 hover:bg-signal/15"
+                : "border border-line-strong text-ink-soft hover:border-signal hover:text-ink"
+            }`}
+          >
+            {choice.label}
+          </button>
+        ))}
+      </div>
+      <span className="text-xs text-ink-faint">Or just type it.</span>
+    </div>
+  );
+}
+
+function ShieldIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-signal)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6l-7-3Z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
   );
 }
 
