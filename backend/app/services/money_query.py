@@ -329,8 +329,15 @@ def _base_query(db: Session, user_id: UUID, window: Window, category_type: str):
             Category.type == category_type,
             Transaction.date >= window.start,
             Transaction.date <= window.end,
+            *counted_filters(),
         )
     )
+
+
+def counted_filters() -> tuple:
+    """Rows that count toward money totals: not excluded by the user, and
+    not a split parent (its split rows count instead)."""
+    return (Transaction.is_excluded.is_(False), Transaction.is_split.is_(False))
 
 
 def spend_query(
@@ -457,6 +464,169 @@ def cash_flow(db: Session, user_id: UUID, window: Window) -> dict:
         "spending_transaction_count": spend["transaction_count"],
         "pending_spending": spend["pending_amount"],
     }
+
+
+INCOME_SOURCE_LIMIT = 3
+
+
+def cash_flow_breakdown(db: Session, user_id: UUID, window: Window) -> dict:
+    """Where the window's money came from (income by payer, biggest
+    INCOME_SOURCE_LIMIT plus the rest) and where it went (spending by
+    top-level category). Both sides sum exactly to cash_flow's totals."""
+    flow = cash_flow(db, user_id, window)
+    spend = spend_query(db, user_id, window, group_by="category")
+
+    payers = (
+        _base_query(db, user_id, window, "income")
+        .with_entities(func.coalesce(Transaction.merchant_name, "Other income"), func.sum(Transaction.amount))
+        .group_by(func.coalesce(Transaction.merchant_name, "Other income"))
+        .all()
+    )
+    sources = sorted(
+        ({"name": name, "amount": _money(amount)} for name, amount in payers if (amount or 0) > 0),
+        key=lambda s: s["amount"],
+        reverse=True,
+    )
+    if len(sources) > INCOME_SOURCE_LIMIT:
+        head = sources[: INCOME_SOURCE_LIMIT - 1]
+        rest = sources[INCOME_SOURCE_LIMIT - 1 :]
+        sources = head + [{"name": f"{len(rest)} other sources", "amount": _money(sum(s["amount"] for s in rest))}]
+    # Refunds or reversals can net a payer negative; scale so the side still
+    # adds up to the income headline.
+    listed = sum(s["amount"] for s in sources)
+    if sources and listed and abs(listed - flow["income"]) > 0.005:
+        diff = _money(flow["income"] - listed)
+        sources[0]["amount"] = _money(sources[0]["amount"] + diff)
+
+    return {
+        **window.as_dict(),
+        "income": flow["income"],
+        "spending": flow["spending"],
+        "net": flow["net"],
+        "sources": sources,
+        "categories": [{"name": g["name"], "amount": g["amount"]} for g in spend.get("groups", [])],
+    }
+
+
+def spending_pace(db: Session, user_id: UUID) -> dict:
+    """Running spending total by day of month, this month (to today) against
+    all of last month. Each day nets outflows against refunds, like
+    spend_query; the last point can differ from total_spent only when a
+    category's refunds exceed its spending."""
+    today = today_for_user(db, user_id)
+    this_start = _month_start(today)
+    last_end = this_start - timedelta(days=1)
+    last_start = _month_start(last_end)
+
+    def running(start: date, end: date) -> list[float]:
+        rows = (
+            _base_query(db, user_id, Window(start, end, "custom"), "expense")
+            .with_entities(Transaction.date, func.sum(-Transaction.amount))
+            .group_by(Transaction.date)
+            .all()
+        )
+        by_day = {d: float(v or 0) for d, v in rows}
+        total, out = 0.0, []
+        for offset in range((end - start).days + 1):
+            total += by_day.get(start + timedelta(days=offset), 0.0)
+            out.append(_money(max(total, 0)))
+        return out
+
+    return {
+        "today": today.isoformat(),
+        "this_month": {
+            "start": this_start.isoformat(),
+            "days_in_month": _month_end(today).day,
+            "running": running(this_start, today),
+            "label": f"{this_start:%B}",
+        },
+        "last_month": {
+            "start": last_start.isoformat(),
+            "days_in_month": last_end.day,
+            "running": running(last_start, last_end),
+            "label": f"{last_start:%B}",
+        },
+    }
+
+
+MAX_LISTED_TRANSACTIONS = 2000
+
+
+def list_transactions(db: Session, user_id: UUID, window: Window) -> dict:
+    """Every transaction in the window -- income, spending and transfers --
+    newest first, with its account, for the Transactions view. Split rows
+    are nested under their parent rather than listed on their own."""
+    parent = aliased(Category)
+    q = (
+        db.query(Transaction, Category.name, Category.type, parent.name, LinkedAccount)
+        .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
+        .outerjoin(Category, Transaction.bankr_category_id == Category.id)
+        .outerjoin(parent, Category.parent_category_id == parent.id)
+        .filter(
+            LinkedAccount.user_id == user_id,
+            Transaction.date >= window.start,
+            Transaction.date <= window.end,
+            Transaction.split_parent_id.is_(None),
+        )
+    )
+    total_count = q.count()
+    rows = q.order_by(Transaction.date.desc(), Transaction.created_at.desc()).limit(MAX_LISTED_TRANSACTIONS).all()
+    splits = _splits_for(db, [txn.id for txn, *_ in rows if txn.is_split])
+    return {
+        **window.as_dict(),
+        "transaction_count": total_count,
+        "truncated": total_count > len(rows),
+        "transactions": [
+            {
+                **transaction_row(txn, category_name, category_type, parent_name),
+                "splits": splits.get(txn.id, []),
+                "account": {
+                    "id": str(account.id),
+                    "institution": account.institution_name,
+                    "name": account.name,
+                    "mask": account.mask,
+                    "type": account.account_type,
+                },
+            }
+            for txn, category_name, category_type, parent_name, account in rows
+        ],
+    }
+
+
+def transaction_row(txn: Transaction, category_name, category_type, parent_name) -> dict:
+    return {
+        "id": str(txn.id),
+        "date": txn.date.isoformat(),
+        "amount": _money(txn.amount),
+        "merchant_name": txn.merchant_name,
+        "original_merchant_name": txn.original_merchant_name,
+        "category_id": str(txn.bankr_category_id) if txn.bankr_category_id else None,
+        "category": category_name,
+        "parent_category": parent_name,
+        "category_type": category_type,
+        "is_pending": txn.is_pending,
+        "notes": txn.notes,
+        "is_excluded": txn.is_excluded,
+        "is_split": txn.is_split,
+    }
+
+
+def _splits_for(db: Session, parent_ids: list[UUID]) -> dict[UUID, list[dict]]:
+    if not parent_ids:
+        return {}
+    parent = aliased(Category)
+    rows = (
+        db.query(Transaction, Category.name, Category.type, parent.name)
+        .outerjoin(Category, Transaction.bankr_category_id == Category.id)
+        .outerjoin(parent, Category.parent_category_id == parent.id)
+        .filter(Transaction.split_parent_id.in_(parent_ids))
+        .order_by(Transaction.aggregator_transaction_id)
+        .all()
+    )
+    out: dict[UUID, list[dict]] = {}
+    for txn, name, ctype, parent_name in rows:
+        out.setdefault(txn.split_parent_id, []).append(transaction_row(txn, name, ctype, parent_name))
+    return out
 
 
 MAX_AVERAGE_MONTHS = 12

@@ -13,12 +13,13 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.db.models import LinkedAccount, NetWorthSnapshot, Transaction
+from app.db.models import LinkedAccount, NetWorthSnapshot, Rule, Transaction
 from app.db.seed_categories import seed_default_categories
 from app.integrations.bank_aggregator import AggregatorTransaction, BankAggregatorClient
 from app.services.category_mapper import map_raw_category
 from app.services.crypto import encrypt_token
 from app.services.goal_service import recompute_goal_progress
+from app.services.rules_service import apply_rules, user_rules
 
 LIABILITY_ACCOUNT_TYPES = {"credit", "loan"}
 
@@ -86,12 +87,13 @@ def sync_user_accounts(
     cursor = next((la.sync_cursor for la in linked_accounts if la.sync_cursor), None)
     changes = aggregator.sync_transactions(access_token, cursor)
 
+    rules = user_rules(db, user_id)
     transactions_synced = 0
     for txn in [*changes.added, *changes.modified]:
         linked = linked_by_aggregator_id.get(txn.aggregator_account_id)
         if linked is None:
             continue  # an account the user didn't grant access to
-        _upsert_transaction(db, txn, linked.id, linked.account_type, categories)
+        _upsert_transaction(db, txn, linked.id, linked.account_type, categories, rules)
         transactions_synced += 1
 
     # Deleting pending rows that were replaced by their posted version is
@@ -167,26 +169,64 @@ def refresh_net_worth(db: Session, user_id: UUID) -> NetWorthSnapshot:
 
 
 def _upsert_transaction(
-    db: Session, txn: AggregatorTransaction, linked_account_id: UUID, account_type: str, categories: dict
+    db: Session,
+    txn: AggregatorTransaction,
+    linked_account_id: UUID,
+    account_type: str,
+    categories: dict,
+    rules: list[Rule] = (),
 ) -> None:
     existing = (
         db.query(Transaction)
         .filter(Transaction.aggregator_transaction_id == txn.aggregator_transaction_id)
         .one_or_none()
     )
-    if existing is None:
+    is_new = existing is None
+    if is_new:
         existing = Transaction(aggregator_transaction_id=txn.aggregator_transaction_id)
         db.add(existing)
 
-    category = categories[map_raw_category(txn.raw_category, txn.amount, account_type)]
     existing.linked_account_id = linked_account_id
     existing.amount = txn.amount
     existing.date = txn.date
-    existing.merchant_name = txn.merchant_name
+    existing.original_merchant_name = txn.merchant_name
     existing.raw_aggregator_category = txn.raw_category
-    existing.bankr_category_id = category.id
     existing.is_pending = txn.is_pending
     existing.pending_transaction_id = txn.pending_transaction_id
+    if is_new and txn.pending_transaction_id:
+        db.flush()
+        _carry_over_edits(db, txn.pending_transaction_id, existing)
+    # A re-sync reports every modified row again; it must not undo a
+    # rename or recategorization the user made.
+    if not existing.merchant_overridden:
+        existing.merchant_name = txn.merchant_name
+    if not existing.category_overridden:
+        existing.bankr_category_id = categories[map_raw_category(txn.raw_category, txn.amount, account_type)].id
+        apply_rules(existing, rules)  # the user's own rules beat the default mapping
+
+
+def _carry_over_edits(db: Session, pending_aggregator_id: str, posted: Transaction) -> None:
+    """When a pending charge posts, the bank issues a new id and the pending
+    row is deleted -- so move the user's edits (and any split) onto the
+    posted row first, or they'd silently vanish."""
+    pending = (
+        db.query(Transaction).filter(Transaction.aggregator_transaction_id == pending_aggregator_id).one_or_none()
+    )
+    if pending is None:
+        return
+    for field in (
+        "merchant_name",
+        "merchant_overridden",
+        "bankr_category_id",
+        "category_overridden",
+        "notes",
+        "is_excluded",
+        "is_split",
+    ):
+        setattr(posted, field, getattr(pending, field))
+    for child in db.query(Transaction).filter(Transaction.split_parent_id == pending.id):
+        child.split_parent_id = posted.id
+    db.flush()
 
 
 def _balance_totals(db: Session, user_id: UUID) -> tuple[float, float]:

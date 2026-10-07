@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Category, Goal, LinkedAccount, NetWorthSnapshot, Transaction
 from app.integrations.web_search import WebSearchClient
+from app.services import budget_service
 from app.services import money_query as mq
 from app.services.goal_service import (
     DEFAULT_TRACKING_WINDOW,
@@ -34,6 +35,8 @@ from app.services.goal_service import (
     normalize_goal_kind,
     spend_for_tracker,
 )
+from app.services.recurring_service import merchant_key, recurring_merchant_keys, recurring_overview
+from app.services.rules_service import preview_rule
 from app.services.sync_service import LIABILITY_ACCOUNT_TYPES
 
 
@@ -589,12 +592,129 @@ def propose_goal(
     }
 
 
+def _any_category(db: Session, name: str):
+    """A category of any type (income and transfers too) by name or alias."""
+    categories = mq.seed_default_categories(db)
+    by_lower = {c.lower(): c for c in categories}
+    query = name.strip().lower()
+    canonical = by_lower.get(query) or mq.CATEGORY_ALIASES.get(query)
+    if canonical is None:
+        raise mq.QueryError(f"no category called {name!r}", valid_categories=sorted(categories))
+    return categories[canonical]
+
+
+def propose_rule(
+    db: Session, user_id: UUID, merchant: str, category: str, rename_to: str | None = None
+) -> dict:
+    """Draft "always categorize <merchant> as <category>" for the user to
+    confirm. Doesn't create anything -- the confirm card does."""
+    merchant = (merchant or "").strip()
+    if len(merchant) < 2:
+        return {"error": "merchant needs at least 2 characters"}
+    try:
+        target = _any_category(db, category)
+    except mq.QueryError as e:
+        return {"error": str(e), **e.extra}
+    would_change = preview_rule(db, user_id, merchant, target.id)
+    return {
+        "status": "proposed",
+        "action": {
+            "kind": "rule",
+            "merchant_contains": merchant,
+            "category_id": str(target.id),
+            "category": target.name,
+            "set_merchant_name": (rename_to or "").strip() or None,
+            "would_change": would_change,
+        },
+        "message": (
+            f"Drafted a rule for the user to confirm; it would recategorize {would_change} past "
+            "transactions. Do not claim it is already created."
+        ),
+    }
+
+
+def get_recurring(db: Session, user_id: UUID, days_ahead: int = 30) -> dict:
+    """Recurring bills, subscriptions and paychecks: what's coming up, monthly
+    totals, and any price changes. Suggested series aren't confirmed by the
+    user yet -- say so when mentioning them."""
+    overview = recurring_overview(db, user_id, days_ahead=max(1, min(days_ahead, 90)))
+    return {
+        "today": overview["today"],
+        "monthly_totals_confirmed": overview["monthly"],
+        "upcoming": overview["upcoming"][:25],
+        "series": [
+            {k: s[k] for k in ("name", "kind", "cadence", "status", "last_amount", "typical_amount",
+                               "next_expected_date", "monthly_amount", "price_changed", "is_active")}
+            for s in overview["series"]
+        ],
+        "suggested_count": overview["suggested_count"],
+    }
+
+
+def get_budget_status(db: Session, user_id: UUID, month: str | None = None) -> dict:
+    """This month's budget (or another, YYYY-MM): each line's budgeted,
+    spent, carryover and what's left, plus whether it's over or on pace to go over."""
+    try:
+        status = budget_service.budget_status(
+            db, user_id, budget_service.parse_month(month, mq.today_for_user(db, user_id))
+        )
+    except budget_service.BudgetError as e:
+        return {"error": str(e)}
+    if not status["has_budget"]:
+        return {**status, "message": "The user hasn't set up a budget yet; they can start one in the Plan view."}
+    return status
+
+
+def _budget_line_key(db: Session, user_id: UUID, name: str) -> tuple[str, str]:
+    """(key, display name) for a budget line named in chat: "Flexible" or a category."""
+    if name.strip().lower() in {"flex", "flexible", "flexible spending"}:
+        return budget_service.FLEX, "Flexible"
+    category = mq.resolve_category(db, name)
+    parent = mq.seed_default_categories(db)[category.name]
+    if parent.parent_category_id is not None:  # "Coffee" -> its parent's budget
+        parent = db.get(Category, parent.parent_category_id)
+    return str(parent.id), parent.name
+
+
+def propose_budget_move(
+    db: Session, user_id: UUID, from_line: str, to_line: str, amount: float, month: str | None = None
+) -> dict:
+    """Draft moving money between two budget lines (to cover overspending)
+    for the user to confirm on a card."""
+    if not amount or amount <= 0:
+        return {"error": "amount must be positive"}
+    try:
+        from_key, from_name = _budget_line_key(db, user_id, from_line)
+        to_key, to_name = _budget_line_key(db, user_id, to_line)
+        target = budget_service.parse_month(month, mq.today_for_user(db, user_id))
+    except (mq.QueryError, budget_service.BudgetError) as e:
+        return {"error": str(e)}
+    status = budget_service.budget_status(db, user_id, target)
+    keys = {line["key"] for line in status["lines"]} | ({"flex"} if status["flex"] else set())
+    missing = [n for k, n in ((from_key, from_name), (to_key, to_name)) if k not in keys]
+    if missing:
+        return {"error": f"no budget line for {', '.join(missing)} this month", "budget_lines": sorted(keys)}
+    return {
+        "status": "proposed",
+        "action": {
+            "kind": "budget_move",
+            "month": status["month"],
+            "from_key": from_key,
+            "from_name": from_name,
+            "to_key": to_key,
+            "to_name": to_name,
+            "amount": round(float(amount), 2),
+        },
+        "message": "Drafted a budget move for the user to confirm. Do not claim it is already done.",
+    }
+
+
 def get_recent_transactions(db: Session, user_id: UUID, limit: int = 20) -> dict:
     rows = (
         db.query(Transaction, Category.name)
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
         .outerjoin(Category, Transaction.bankr_category_id == Category.id)
-        .filter(LinkedAccount.user_id == user_id)
+        .filter(LinkedAccount.user_id == user_id, Transaction.is_split.is_(False))
         .order_by(Transaction.date.desc())
         .limit(limit)
         .all()
@@ -629,6 +749,7 @@ def get_unusual_transactions(db: Session, user_id: UUID, stddev_threshold: float
             Category.type == "expense",
             Transaction.amount < 0,
             Transaction.date >= since,
+            *mq.counted_filters(),
         )
         .all()
     )
@@ -638,10 +759,14 @@ def get_unusual_transactions(db: Session, user_id: UUID, stddev_threshold: float
 
     avg, std = mean(amounts), pstdev(amounts) or 1.0
     recent_since = date.today() - timedelta(days=7)
+    # Rent and other known bills are big but expected -- never "unusual".
+    expected = recurring_merchant_keys(db, user_id)
     unusual = [
         t
         for t in rows
-        if t.date >= recent_since and abs(float(t.amount) - avg) > stddev_threshold * std
+        if t.date >= recent_since
+        and abs(float(t.amount) - avg) > stddev_threshold * std
+        and merchant_key(t.merchant_name) not in expected
     ]
     return {
         "unusual_transactions": [

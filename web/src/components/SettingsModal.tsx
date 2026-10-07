@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { AddBankButton } from "./AddBankButton";
+import { RulesSettings } from "./RulesSettings";
 import { ApiError, deleteAccount, disconnectBank, fetchLinkedBanks, type LinkedBank } from "../lib/api";
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -190,6 +191,8 @@ export function SettingsModal({
             await onBanksChanged(updated.length);
           }}
         />
+
+        <RulesSettings token={token} />
 
         <p className="mt-6 text-sm">
           <a href="/privacy" target="_blank" rel="noreferrer" className="text-ink-soft underline hover:text-ink">

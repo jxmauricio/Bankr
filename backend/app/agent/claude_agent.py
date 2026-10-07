@@ -147,6 +147,21 @@ on pace or the next step.
 Only "- " bullets and **bold** are allowed: no headers, italics, tables, \
 numbered or nested lists, or emoji. Keep the whole reply to about 6 lines.
 
+Budgets: for "am I over budget", "how much can I still spend", or how a \
+monthly budget is going, call get_budget_status and lead with what's left \
+(available). If a line is over and another has room, offer to cover it and \
+call propose_budget_move so a confirm card appears. Monthly category limits \
+belong in the budget; use a track_spending goal only when the user asks to \
+track or watch a category rather than budget it.
+
+For bills, subscriptions, paychecks and "what's coming up", call \
+get_recurring. Series with status "suggested" were detected but not yet \
+confirmed by the user -- say they look recurring rather than stating it.
+
+When the user says a merchant keeps landing in the wrong category, or asks \
+to always categorize something a certain way, call propose_rule so a \
+confirm card appears. Don't claim the rule exists until they confirm.
+
 Charts: when a picture beats a list -- a breakdown of 3+ items, a \
 this-vs-last comparison, or how something moved across months -- call \
 show_chart once, after the tools you need for the answer. An answer has \
@@ -322,6 +337,69 @@ TOOL_DEFINITIONS = [
         },
     ),
     ToolSpec(
+        name="get_recurring",
+        description=(
+            "Recurring bills, subscriptions and paychecks Bankr has detected: upcoming charges with dates "
+            "and amounts, monthly totals of confirmed ones, and price changes. Use for \"what bills are "
+            "coming up\", \"how much do I pay in subscriptions\", \"did anything go up\"."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {"days_ahead": {"type": "integer", "description": "How far ahead to list upcoming charges. Default 30."}},
+        },
+    ),
+    ToolSpec(
+        name="get_budget_status",
+        description=(
+            "The user's monthly budget: each line's budgeted amount, spent, rollover carried in, money moved, "
+            "and what's left, plus status ok / warning (on pace to go over) / over. In flex mode, fixed bills "
+            "have their own lines and everything else shares the Flexible line. Use for \"am I over budget\", "
+            "\"how much can I still spend\", \"how's my budget\"."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {"month": {"type": "string", "description": "YYYY-MM. Default this month."}},
+        },
+    ),
+    ToolSpec(
+        name="propose_budget_move",
+        description=(
+            "Draft moving money from one budget line to another for a month -- usually to cover an overspent "
+            "line from one with room left. The user confirms on a card; nothing moves until then. Lines are "
+            "category names or \"Flexible\"."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "from_line": {"type": "string", "description": "Line with room, e.g. Shopping or Flexible."},
+                "to_line": {"type": "string", "description": "Line to top up, e.g. Dining."},
+                "amount": {"type": "number"},
+                "month": {"type": "string", "description": "YYYY-MM. Default this month."},
+            },
+            "required": ["from_line", "to_line", "amount"],
+        },
+    ),
+    ToolSpec(
+        name="propose_rule",
+        description=(
+            "Draft a categorization rule -- \"always put <merchant> under <category>\" -- for the user to "
+            "confirm on a card. Call it when they say a merchant is in the wrong category and want that "
+            "to stick, or ask to always categorize something a certain way. Does not create the rule."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "merchant": {
+                    "type": "string",
+                    "description": "Text to match in the merchant name, as it appears on transactions (\"Costco\").",
+                },
+                "category": {"type": "string", "description": "Category to assign, any type (Groceries, Income, Transfer)."},
+                "rename_to": {"type": "string", "description": "Optional cleaner merchant name to show."},
+            },
+            "required": ["merchant", "category"],
+        },
+    ),
+    ToolSpec(
         name="show_chart",
         description=(
             "Show a small chart under your reply. You choose what to chart; the numbers come straight from the "
@@ -421,6 +499,10 @@ _TOOL_DISPATCH = {
     "get_unusual_transactions": lambda db, user_id, **kwargs: tools.get_unusual_transactions(db, user_id),
     "calculate": lambda db, user_id, **kwargs: tools.calculate(**kwargs),
     "propose_goal": tools.propose_goal,
+    "propose_rule": tools.propose_rule,
+    "get_recurring": tools.get_recurring,
+    "get_budget_status": tools.get_budget_status,
+    "propose_budget_move": tools.propose_budget_move,
     "show_chart": tools.show_chart,
     "ask_clarifying_question": tools.ask_clarifying_question,
     "web_search": lambda db, user_id, **kwargs: tools.web_search(client=_search_client, **kwargs),
@@ -435,6 +517,8 @@ _STATIC_TOOL_LABELS = {
     "get_goal_progress": "Goal progress",
     "get_recent_transactions": "Recent transactions",
     "get_unusual_transactions": "Unusual transactions",
+    "get_recurring": "Recurring bills & subscriptions",
+    "get_budget_status": "Budget",
 }
 
 
@@ -479,6 +563,10 @@ def _describe_tool_call(name: str, tool_input: dict, result: dict | None = None)
         return f"Chart · {chart['title']}" if chart else "Chart"
     if name == "ask_clarifying_question":
         return "Asked which one you meant"
+    if name == "propose_rule":
+        return "Proposed a categorization rule"
+    if name == "propose_budget_move":
+        return "Proposed a budget move"
     if name == "propose_goal":
         kind = tool_input.get("type") or tool_input.get("goal_type")
         if kind == "track_spending":
@@ -514,6 +602,14 @@ def _progress_label(name: str, tool_input: dict) -> str:
         return "Searching the web…"
     if name == "propose_goal":
         return "Drafting a goal…"
+    if name == "propose_rule":
+        return "Drafting a rule…"
+    if name == "get_recurring":
+        return "Checking your bills and subscriptions…"
+    if name == "get_budget_status":
+        return "Checking your budget…"
+    if name == "propose_budget_move":
+        return "Drafting a budget move…"
     if name == "show_chart":
         return "Drawing a chart…"
     if name == "ask_clarifying_question":
@@ -682,6 +778,8 @@ def run_agent_turn(
             # card without a separate channel. Stripped from the user-facing
             # sources trail in app/api/chat.py.
             entry["proposal"] = result["proposal"]
+        if isinstance(result, dict) and result.get("action"):
+            entry["action"] = result["action"]  # a confirm card, like proposal above
         if name == "show_chart" and isinstance(result, dict) and result.get("chart"):
             if any("chart" in s for s in sources):
                 # One picture per answer: a second chart becomes a link.

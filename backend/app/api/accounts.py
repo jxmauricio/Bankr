@@ -9,7 +9,7 @@ from app.auth import get_current_user
 from app.db.base import get_db
 from app.db.models import LinkedAccount, User
 from app.integrations.bank_aggregator import BankAggregatorClient
-from app.jobs.insights_job import run_insights_job_safely
+from app.jobs.post_sync import run_post_sync_jobs
 from app.services.account_removal import BankNotFound, RemovalError, disconnect_bank, list_bank_logins
 from app.services.crypto import decrypt_token
 from app.services.sync_service import sync_user_accounts
@@ -54,7 +54,7 @@ def link_account(
 ) -> LinkAccountResponse:
     access_token = aggregator.exchange_public_token(body.public_token)
     result = sync_user_accounts(db, user.id, access_token, aggregator=aggregator)
-    run_insights_job_safely(db, user.id)
+    run_post_sync_jobs(db, user.id)
     return LinkAccountResponse(
         linked_account_count=len(result.linked_accounts),
         transactions_synced=result.transactions_synced,
@@ -84,7 +84,7 @@ def resync_all_accounts(
     if latest_result is None:
         return LinkAccountResponse(linked_account_count=0, transactions_synced=0, net_worth=0.0)
 
-    run_insights_job_safely(db, user.id)
+    run_post_sync_jobs(db, user.id)
     return LinkAccountResponse(
         linked_account_count=len(linked_accounts),
         transactions_synced=total_transactions,

@@ -10,6 +10,15 @@ export default defineConfig({
   // Plaid webhooks arrive on the same tunnel; forward them to the backend.
   server: {
     allowedHosts: ['.ngrok-free.dev'],
-    proxy: { '/webhooks': 'http://localhost:8000' },
+    proxy: {
+      '/webhooks': 'http://localhost:8000',
+      // Sharing dev over one tunnel: with API_PROXY_TARGET set (and
+      // VITE_API_BASE_URL empty), API calls go same-origin and are forwarded.
+      ...(process.env.API_PROXY_TARGET
+        ? Object.fromEntries(
+            ['/auth', '/linked-accounts', '/goals', '/dashboard', '/chat', '/categories', '/transactions', '/rules', '/recurring', '/budgets', '/insights'].map((path) => [path, process.env.API_PROXY_TARGET!]),
+          )
+        : {}),
+    },
   },
 })

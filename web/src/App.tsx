@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchGoalProgress, fetchNetWorth } from "./lib/api";
+import { ApiError, fetchGoalProgress, fetchNetWorth } from "./lib/api";
 import { useSession } from "./lib/session";
 import { AuthPage } from "./pages/AuthPage";
 import { LinkBankPage } from "./pages/LinkBankPage";
@@ -17,7 +17,7 @@ export function App() {
 }
 
 function PostSignInGate() {
-  const { token } = useSession();
+  const { token, signOut } = useSession();
   const [step, setStep] = useState<OnboardingStep>("loading");
   const [balancesRead, setBalancesRead] = useState(false);
   const [goalsRead, setGoalsRead] = useState(false);
@@ -39,7 +39,10 @@ function PostSignInGate() {
       } else {
         setStep("home");
       }
-    } catch {
+    } catch (err) {
+      // A token the backend no longer accepts (expired, or from another
+      // database) can't be retried into working: go back to sign-in.
+      if (err instanceof ApiError && err.status === 401) return signOut();
       setStep("load-failed");
     }
   }

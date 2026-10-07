@@ -1,4 +1,7 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+// Empty string means same origin (dev shared through a tunnel, see vite.config.ts).
+const BASE_URL = import.meta.env.VITE_API_BASE_URL === ""
+  ? window.location.origin
+  : (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000");
 
 // FastAPI's own HTTPException(detail=...) sends a plain string, but Pydantic
 // validation errors send a list of {msg, loc, ...} objects instead.
@@ -298,6 +301,299 @@ export const fetchQuery = (token: string, query: SourceQuery) => {
   return request<ItemizedTransactions>("/dashboard/income", { token, query: { start: query.start, end: query.end } });
 };
 
+export interface TransactionAccount {
+  id: string;
+  institution: string;
+  name: string | null;
+  mask: string | null;
+  type: string;
+}
+
+/** One split of a transaction: same shape as a row, minus its account. */
+export interface TransactionSplit {
+  id: string;
+  date: string;
+  amount: number;
+  merchant_name: string | null;
+  original_merchant_name: string | null;
+  category_id: string | null;
+  category: string | null;
+  parent_category: string | null;
+  category_type: "income" | "expense" | "transfer" | null;
+  is_pending: boolean;
+  notes: string | null;
+  is_excluded: boolean;
+  is_split: boolean;
+}
+
+/** One row of the Transactions view. amount < 0 is money out. */
+export interface TransactionRow extends TransactionSplit {
+  splits: TransactionSplit[];
+  account: TransactionAccount;
+}
+
+export interface CategoryOption {
+  id: string;
+  name: string;
+  type: "income" | "expense" | "transfer";
+}
+
+export interface CategoryNode extends CategoryOption {
+  children: CategoryOption[];
+}
+
+export const fetchCategories = (token: string) =>
+  request<{ categories: CategoryNode[] }>("/categories", { token }).then((r) => r.categories);
+
+export interface TransactionEdit {
+  category_id?: string;
+  /** "" restores the bank's name. */
+  merchant_name?: string;
+  /** "" clears the note. */
+  notes?: string;
+  excluded?: boolean;
+}
+
+/** Returns the edited row without its account (the caller keeps that). */
+export const updateTransaction = (token: string, id: string, edit: TransactionEdit) =>
+  request<Omit<TransactionRow, "account">>(`/transactions/${id}`, { method: "PATCH", token, body: edit });
+
+/** amounts use the transaction's sign and must sum to it; [] removes the split. */
+export const setTransactionSplits = (
+  token: string,
+  id: string,
+  splits: { amount: number; category_id: string; note?: string }[],
+) => request<Omit<TransactionRow, "account">>(`/transactions/${id}/splits`, { method: "PUT", token, body: { splits } });
+
+export interface TransactionList {
+  window: string;
+  start: string;
+  end: string;
+  label: string;
+  transaction_count: number;
+  truncated: boolean;
+  transactions: TransactionRow[];
+  as_of: string | null;
+}
+
+export const fetchTransactions = (token: string, window: string) =>
+  request<TransactionList>("/dashboard/transactions", { token, query: { window } });
+
+export interface Rule {
+  id: string;
+  merchant_contains: string;
+  amount_min: number | null;
+  amount_max: number | null;
+  linked_account_id: string | null;
+  set_category_id: string;
+  set_category: string | null;
+  set_merchant_name: string | null;
+  priority: number;
+  created_at: string | null;
+  /** Only on create with apply_to_existing. */
+  applied_to?: number;
+}
+
+export interface NewRule {
+  merchant_contains: string;
+  set_category_id: string;
+  set_merchant_name?: string;
+  amount_min?: number;
+  amount_max?: number;
+  apply_to_existing?: boolean;
+}
+
+export const fetchRules = (token: string) => request<{ rules: Rule[] }>("/rules", { token }).then((r) => r.rules);
+
+export const previewRule = (token: string, merchant: string, categoryId: string) =>
+  request<{ would_change: number }>("/rules/preview", {
+    token,
+    query: { merchant_contains: merchant, category_id: categoryId },
+  }).then((r) => r.would_change);
+
+export const createRule = (token: string, rule: NewRule) => request<Rule>("/rules", { method: "POST", token, body: rule });
+
+export const updateRule = (token: string, id: string, patch: Partial<NewRule>) =>
+  request<Rule>(`/rules/${id}`, { method: "PATCH", token, body: patch });
+
+export const deleteRule = (token: string, id: string) => request<void>(`/rules/${id}`, { method: "DELETE", token });
+
+export type RecurringKind = "bill" | "subscription" | "income";
+export type RecurringStatus = "suggested" | "confirmed" | "dismissed";
+
+export interface RecurringSeries {
+  id: string;
+  name: string;
+  kind: RecurringKind;
+  cadence: "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+  status: RecurringStatus;
+  category_id: string | null;
+  typical_amount: number;
+  last_amount: number;
+  last_date: string;
+  next_expected_date: string;
+  monthly_amount: number;
+  occurrences: number;
+  is_active: boolean;
+  price_changed: boolean;
+}
+
+export interface UpcomingCharge {
+  series_id: string;
+  name: string;
+  kind: RecurringKind;
+  status: RecurringStatus;
+  date: string;
+  amount: number;
+}
+
+export interface RecurringOverview {
+  today: string;
+  series: RecurringSeries[];
+  upcoming: UpcomingCharge[];
+  /** Confirmed series only, as a monthly amount. */
+  monthly: { subscriptions: number; bills: number; income: number };
+  suggested_count: number;
+}
+
+export const fetchRecurring = (token: string) => request<RecurringOverview>("/recurring", { token });
+
+export const updateRecurring = (token: string, id: string, patch: { status?: RecurringStatus; kind?: RecurringKind; name?: string }) =>
+  request<RecurringSeries>(`/recurring/${id}`, { method: "PATCH", token, body: patch });
+
+export type BudgetLineStatus = "ok" | "warning" | "over";
+
+export interface BudgetLine {
+  /** Category id, or "flex" for the Flexible bucket. */
+  key: string;
+  category_id: string | null;
+  name: string;
+  group: "fixed" | "flex" | "category";
+  budgeted: number;
+  carryover: number;
+  moved: number;
+  spent: number;
+  available: number;
+  rollover: boolean;
+  projected_spent: number | null;
+  status: BudgetLineStatus;
+}
+
+export interface BudgetCategorySpend {
+  category_id: string;
+  name: string;
+  spent: number;
+}
+
+export interface BudgetStatus {
+  month: string;
+  label: string;
+  start: string;
+  end: string;
+  today: string;
+  elapsed_fraction: number;
+  mode: "flex" | "category";
+  has_budget: boolean;
+  lines: BudgetLine[];
+  flex: (BudgetLine & { categories: BudgetCategorySpend[] }) | null;
+  unbudgeted: BudgetCategorySpend[];
+  income: { so_far: number; last_month: number };
+  totals: { budgeted: number; spent: number; available: number };
+}
+
+export interface BudgetSuggestionLine {
+  category_id: string;
+  name: string;
+  amount: number;
+  group: "fixed" | "flex";
+  typical_spent: number;
+}
+
+export interface BudgetSuggestion {
+  months: string[];
+  mode: "flex";
+  flex_amount: number;
+  lines: BudgetSuggestionLine[];
+}
+
+export const fetchBudget = (token: string, month?: string) =>
+  request<BudgetStatus>("/budgets", { token, query: month ? { month } : undefined });
+
+export const fetchBudgetSuggestion = (token: string) => request<BudgetSuggestion>("/budgets/suggestion", { token });
+
+export const setupBudget = (
+  token: string,
+  body: { mode: "flex" | "category"; flex_amount: number; lines: { category_id: string; amount: number; group: "fixed" | "flex" }[] },
+) => request<BudgetStatus>("/budgets/setup", { method: "POST", token, body });
+
+export const updateBudgetSettings = (
+  token: string,
+  patch: { mode?: "flex" | "category"; flex_amount?: number; flex_rollover?: boolean },
+) => request<BudgetStatus>("/budgets/settings", { method: "PUT", token, body: patch });
+
+export const upsertBudget = (
+  token: string,
+  categoryId: string,
+  patch: { amount?: number; group?: "fixed" | "flex"; rollover?: boolean },
+) => request<BudgetStatus>(`/budgets/${categoryId}`, { method: "PUT", token, body: patch });
+
+export const deleteBudget = (token: string, categoryId: string) =>
+  request<BudgetStatus>(`/budgets/${categoryId}`, { method: "DELETE", token });
+
+export const moveBudgetMoney = (token: string, move: { month?: string; from_key: string; to_key: string; amount: number }) =>
+  request<BudgetStatus>("/budgets/moves", { method: "POST", token, body: move });
+
+export interface Insight {
+  id: string;
+  type: "budget_overspend" | "goal_drift" | "unusual_transaction" | "price_change" | string;
+  message: string;
+  transaction_ids: string[];
+  /** What it's about: a budget line key, recurring series id, goal id or transaction id. */
+  subject_id: string | null;
+  created_at: string;
+  read: boolean;
+}
+
+export const fetchInsights = (token: string) =>
+  request<{ unread_count: number; insights: Insight[] }>("/insights", { token });
+
+export const markInsightRead = (token: string, id: string) =>
+  request<Insight>(`/insights/${id}/read`, { method: "POST", token });
+
+export const markAllInsightsRead = (token: string) => request<void>("/insights/read-all", { method: "POST", token });
+
+export interface CashFlowBreakdown {
+  window: string;
+  start: string;
+  end: string;
+  label: string;
+  income: number;
+  spending: number;
+  net: number;
+  sources: { name: string; amount: number }[];
+  categories: { name: string; amount: number }[];
+  as_of: string | null;
+}
+
+export const fetchCashFlow = (token: string, window: string) =>
+  request<CashFlowBreakdown>("/dashboard/cash-flow", { token, query: { window } });
+
+export interface SpendingPaceMonth {
+  start: string;
+  days_in_month: number;
+  /** Running total, one entry per day from the 1st. */
+  running: number[];
+  label: string;
+}
+
+export interface SpendingPace {
+  today: string;
+  this_month: SpendingPaceMonth;
+  last_month: SpendingPaceMonth;
+}
+
+export const fetchSpendingPace = (token: string) => request<SpendingPace>("/dashboard/spending-pace", { token });
+
 // --- Chat ---
 
 /** What an empty search looked through, so "$0" comes with its working. */
@@ -338,6 +634,7 @@ export interface AnswerParts {
   sources: ChatSource[];
   citations?: Citation[];
   goal_proposal: GoalProposal | null;
+  action_proposal?: ActionProposal | null;
   charts?: ChartSpec[];
   links?: ViewLink[];
   clarify?: Clarify | null;
@@ -377,6 +674,28 @@ export interface ChartSpec {
   query?: SourceQuery | null;
   group_by?: "category" | "subcategory" | "merchant" | null;
 }
+
+export interface RuleProposal {
+  kind: "rule";
+  merchant_contains: string;
+  category_id: string;
+  category: string;
+  set_merchant_name: string | null;
+  would_change: number;
+}
+
+export interface BudgetMoveProposal {
+  kind: "budget_move";
+  month: string;
+  from_key: string;
+  from_name: string;
+  to_key: string;
+  to_name: string;
+  amount: number;
+}
+
+/** A confirm card the assistant drafted; nothing is changed until the user confirms. */
+export type ActionProposal = RuleProposal | BudgetMoveProposal;
 
 export interface ChatResponse extends AnswerParts {
   conversation_id: string;

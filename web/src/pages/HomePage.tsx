@@ -12,9 +12,10 @@ import {
   streamChatMessage,
   type ChartSpec,
   type ChatSource,
-  type Citation,
+  type Citation as FigureCitation,
   type Clarify,
   type GoalProgress,
+  type ActionProposal,
   type GoalProposal,
   type LinkedBank,
   type ItemizedTransactions,
@@ -25,6 +26,7 @@ import {
 import { resolveGoalProposal } from "../lib/goalProposal";
 import { GoalsSection } from "../components/GoalsSection";
 import { GoalProposalCard } from "../components/GoalProposalCard";
+import { ActionProposalCard } from "../components/ActionProposalCard";
 import { CreateGoalModal } from "../components/CreateGoalModal";
 import { isOAuthReturn } from "../lib/plaidOAuth";
 import { MoneyCard, MoneyPill, type MoneySummary } from "../components/MoneyRail";
@@ -43,6 +45,14 @@ import { useVoiceMode, type VoiceState } from "../lib/useVoiceMode";
 import { formatDate, formatMoney } from "../lib/format";
 import { AssistantText } from "../components/AssistantText";
 import { RowAmount } from "../components/TransactionSearch";
+import { useView } from "../lib/useView";
+import { ViewTabBar, ViewTabs } from "../components/ViewSwitcher";
+import { TransactionsView, type TransactionFilter } from "./TransactionsView";
+import { PlanView } from "./PlanView";
+import { UpcomingBills } from "../components/UpcomingBills";
+import { InsightsBell } from "../components/InsightsBell";
+import { CashFlowView } from "./CashFlowView";
+import type { Citation } from "../components/TransactionDetails";
 
 const GREETING = "Ask me anything about your money — what you've spent, what's coming in, or whether you're on pace for your goal.";
 // Not scoped to a user/token: a different account landing on a stale id
@@ -59,8 +69,9 @@ type StreamItem =
       id: string;
       text: string;
       sources?: ChatSource[];
-      citations?: Citation[];
+      citations?: FigureCitation[];
       goalProposal?: GoalProposal | null;
+      actionProposal?: ActionProposal | null;
       charts?: ChartSpec[];
       links?: ViewLink[];
       clarify?: Clarify | null;
@@ -104,6 +115,16 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   // Phones: the money rail collapses into the top bar and drops down on tap.
   const [moneyOpen, setMoneyOpen] = useState(false);
   const flow = useCashFlow(token, period, monthRollup);
+  const [view, setView] = useView();
+  const [planFocus, setPlanFocus] = useState<"budget" | "recurring" | null>(null);
+  const [txFocusId, setTxFocusId] = useState<string | null>(null);
+  // Bumped by Plan edits so the rail's bills line catches up.
+  const [planVersion, setPlanVersion] = useState(0);
+  function openPlan(section: "budget" | "recurring" | null = null) {
+    setPlanFocus(section);
+    setView("plan");
+  }
+  const [txFilter, setTxFilter] = useState<TransactionFilter>({ category: null, query: "" });
   const streamRef = useRef<HTMLDivElement>(null);
   const voice = useVoiceMode({
     onFinalTranscript: (text) => ask(text),
@@ -200,7 +221,9 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
         charts: response.charts,
         links: response.links,
         clarify: response.clarify,
-        goalProposal: resolveGoalProposal({
+        actionProposal: response.action_proposal,
+        // A reply with its own confirm card is about that, not a goal -- skip the goal-card fallback.
+        goalProposal: response.action_proposal ? null : resolveGoalProposal({
           userText: text,
           assistantText: response.reply,
           apiProposal: response.goal_proposal,
@@ -257,7 +280,8 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
             charts: m.charts,
             links: m.links,
             clarify: m.clarify,
-            goalProposal: resolveGoalProposal({
+            actionProposal: m.action_proposal,
+            goalProposal: m.action_proposal ? null : resolveGoalProposal({
               userText: previous?.role === "user" ? previous.content : "",
               assistantText: m.content,
               apiProposal: m.goal_proposal,
@@ -332,6 +356,23 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
     setMoneyOpen(false);
     setShowFlow(true);
   };
+  // Every sourced figure in this conversation, so a transaction can show which answers relied on it.
+  const citations: Citation[] = items.flatMap((item, index) => {
+    if (item.kind !== "assistant-text" || !item.sources) return [];
+    const question = items.slice(0, index).reverse().find((i) => i.kind === "user-text");
+    return item.sources.flatMap((source, i) =>
+      source.query ? [{ question: question?.kind === "user-text" ? question.text : source.label, footnote: i + 1, query: source.query }] : [],
+    );
+  });
+  const openTransactions = (filter: TransactionFilter) => {
+    setTxFilter(filter);
+    setView("transactions");
+  };
+  const askAboutTransaction = (text: string) => {
+    setView("chat");
+    setDraft(text);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
 
   return (
     <div className="relative flex h-dvh flex-col">
@@ -343,6 +384,9 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
           </span>
           <span className="hidden rounded-full bg-signal-wash px-2.5 py-1 font-mono text-[10px] tracking-[0.12em] text-signal md:inline">PRIVATE BETA</span>
         </div>
+        <div className="absolute left-1/2 hidden -translate-x-1/2 lg:block">
+          <ViewTabs view={view} onChange={setView} />
+        </div>
         <div className="flex min-w-0 max-w-[420px] flex-1 lg:hidden">
           <MoneyPill summary={summary} open={moneyOpen} onToggle={() => setMoneyOpen((o) => !o)} />
         </div>
@@ -350,6 +394,20 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
           <div className="hidden lg:block">
             <PeriodFilter period={period} onChange={changePeriod} />
           </div>
+          {token && (
+            <InsightsBell
+              token={token}
+              refreshKey={monthRollup}
+              onOpenInsight={(insight) => {
+                if (insight.type === "budget_overspend") openPlan("budget");
+                else if (insight.type === "price_change") openPlan("recurring");
+                else if (insight.type === "unusual_transaction" && insight.subject_id) {
+                  setTxFocusId(insight.subject_id);
+                  setView("transactions");
+                }
+              }}
+            />
+          )}
           {token && (
             <ProfileMenu
               token={token}
@@ -383,7 +441,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                 onClick={() => setMoneyOpen(false)}
                 className="h-11 shrink-0 cursor-pointer rounded-[14px] bg-raised text-sm text-ink"
               >
-                Back to chat
+                Close
               </button>
             </section>
           </div>
@@ -438,10 +496,53 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
           className="hidden w-[320px] shrink-0 flex-col gap-3.5 overflow-y-auto border-r border-line p-5 lg:flex"
         >
           <MoneyCard summary={summary} onNetWorthClick={openFlow} onRefresh={refreshFromBank} />
+          {token && <UpcomingBills token={token} refreshKey={monthRollup} version={planVersion} onOpen={() => openPlan("recurring")} />}
           {goalsSection}
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {token && view === "transactions" && (
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <TransactionsView
+              token={token}
+              period={period}
+              onPeriodChange={changePeriod}
+              filter={txFilter}
+              onFilterChange={setTxFilter}
+              goals={goals}
+              citations={citations}
+              refreshKey={monthRollup}
+              onAsk={askAboutTransaction}
+              onOpenChat={() => setView("chat")}
+              focusId={txFocusId}
+              onFocusHandled={() => setTxFocusId(null)}
+              onEdited={() => {
+                if (!token) return;
+                refreshGoalProgress();
+                fetchRollup(token, "month").then(setMonthRollup);
+              }}
+            />
+          </main>
+        )}
+        {token && view === "cashflow" && (
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <CashFlowView
+              token={token}
+              period={period}
+              onPeriodChange={changePeriod}
+              onOpenTransactions={openTransactions}
+              refreshKey={monthRollup}
+            />
+          </main>
+        )}
+
+        {token && view === "plan" && (
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <PlanView token={token} refreshKey={monthRollup} focus={planFocus} onChanged={() => setPlanVersion((n) => n + 1)} />
+          </main>
+        )}
+
+        {/* Chat stays mounted while hidden so its scroll position and draft survive a view switch. */}
+        <main hidden={view !== "chat"} className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div
             ref={streamRef}
             className="flex-1 overflow-y-auto px-4 py-3 [mask-image:linear-gradient(to_bottom,transparent_0,#000_28px)] sm:px-7"
@@ -455,8 +556,9 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                   item={item}
                   token={token}
                   onGoalCreated={refreshGoalProgress}
+                  onActionDone={async () => void (await loadStandingState())}
                   onOpenSource={setSourceQuery}
-                  onOpenCashFlow={openFlow}
+                  onOpenCashFlow={() => setView("cashflow")}
                   onLinkAccount={() => setShowSettings(true)}
                   onAsk={ask}
                   isLast={item.id === lastAssistantId && !item.id.startsWith(GREETING_ID) && !isSending}
@@ -530,8 +632,9 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
               Answers come from your linked accounts only. Bankr can read — it can’t move money.
             </p>
           </form>
-        </div>
+        </main>
       </div>
+      <ViewTabBar view={view} onChange={setView} />
     </div>
   );
 }
@@ -540,6 +643,7 @@ function StreamEntry({
   item,
   token,
   onGoalCreated,
+  onActionDone,
   onOpenSource,
   onOpenCashFlow,
   onLinkAccount,
@@ -549,6 +653,7 @@ function StreamEntry({
   item: StreamItem;
   token: string | null;
   onGoalCreated: () => void | Promise<void>;
+  onActionDone: () => void | Promise<void>;
   onOpenSource: (query: SourceQuery) => void;
   onOpenCashFlow: () => void;
   onLinkAccount: () => void;
@@ -559,6 +664,8 @@ function StreamEntry({
     case "assistant-text": {
       const sources = item.sources ?? [];
       const searched = sources.filter((s) => s.searched);
+      const breakdownQuery = sources.find((s) => s.query && !s.query.merchant)?.query ?? null;
+      const linksToCashFlow = item.links?.some((l) => l.view === "cash_flow") ?? false;
       return (
         <article className="flex items-start gap-3">
          <BotMark />
@@ -588,6 +695,15 @@ function StreamEntry({
               ))}
             </div>
           )}
+          {isLast && breakdownQuery && !linksToCashFlow && (
+            <button
+              type="button"
+              onClick={onOpenCashFlow}
+              className="h-11 cursor-pointer rounded-full bg-signal-wash px-4 text-[13px] font-medium text-signal ring-1 ring-inset ring-signal/40 hover:text-signal-hi"
+            >
+              Open in Cash flow →
+            </button>
+          )}
           {item.goalProposal && (
             <GoalProposalCard
               token={token}
@@ -595,6 +711,7 @@ function StreamEntry({
               onCreated={onGoalCreated}
             />
           )}
+          {item.actionProposal && <ActionProposalCard token={token} proposal={item.actionProposal} onDone={onActionDone} />}
          </div>
         </article>
       );

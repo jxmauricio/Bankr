@@ -134,6 +134,8 @@ class AnswerParts(BaseModel):
     sources: list[ChatSource] = []
     citations: list[Citation] = []
     goal_proposal: GoalProposal | None = None
+    # A confirm card for something other than a goal: {"kind": "rule" | "budget_move", ...}.
+    action_proposal: dict | None = None
     charts: list[ChartSpec] = []
     links: list[ViewLink] = []
     clarify: Clarify | None = None
@@ -222,6 +224,13 @@ def _goal_proposal(raw: list[dict] | None) -> dict | None:
     return None
 
 
+def _action_proposal(raw: list[dict] | None) -> dict | None:
+    for entry in reversed(raw or []):
+        if entry.get("action"):
+            return entry["action"]
+    return None
+
+
 def _charts(raw: list[dict] | None) -> list[dict]:
     """At most one chart per reply (run_agent_turn turns any second one
     into a link); keep the last in case older rows had more."""
@@ -250,6 +259,7 @@ def _answer_parts(reply: str, raw: list[dict] | None) -> dict:
         "sources": _public_sources(raw),
         "citations": _citations(reply, raw),
         "goal_proposal": _goal_proposal(raw),
+        "action_proposal": _action_proposal(raw),
         "charts": _charts(raw),
         "links": _links(raw),
         "clarify": _clarify(raw),
