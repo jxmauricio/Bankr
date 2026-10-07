@@ -459,6 +459,7 @@ function AmountField({ value, label, disabled, onCommit }: { value: number; labe
   return (
     <input
       autoFocus
+      onFocus={(e) => e.currentTarget.select()}
       aria-label={label}
       inputMode="decimal"
       value={draft}

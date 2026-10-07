@@ -5,7 +5,18 @@ import { formatMoney } from "../lib/format";
 const WEEK_MS = 7 * 86_400_000;
 
 /** Money rail line: bills due in the next 7 days. Opens Plan. */
-export function UpcomingBills({ token, refreshKey, onOpen }: { token: string; refreshKey?: unknown; onOpen: () => void }) {
+export function UpcomingBills({
+  token,
+  refreshKey,
+  version,
+  onOpen,
+}: {
+  token: string;
+  refreshKey?: unknown;
+  /** Bump to refetch after a change elsewhere. */
+  version?: number;
+  onOpen: () => void;
+}) {
   const [data, setData] = useState<RecurringOverview | null>(null);
 
   useEffect(() => {
@@ -16,7 +27,7 @@ export function UpcomingBills({ token, refreshKey, onOpen }: { token: string; re
     return () => {
       stale = true;
     };
-  }, [token, refreshKey]);
+  }, [token, refreshKey, version]);
 
   if (!data) return null;
   const [y, m, d] = data.today.split("-").map(Number);

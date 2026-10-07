@@ -6,9 +6,12 @@ export function PlanView({
   token,
   refreshKey,
   focus,
+  onChanged,
 }: {
   token: string;
   refreshKey?: unknown;
+  /** Budget or recurring changed; other surfaces may show it. */
+  onChanged?: () => void;
   /** Section to scroll to on open. */
   focus?: "budget" | "recurring" | null;
 }) {
@@ -19,8 +22,8 @@ export function PlanView({
           <h1 className="m-0 text-[22px] font-semibold tracking-[-0.02em] text-ink lg:text-[26px]">Plan</h1>
           <span className="text-[13px] text-ink-soft">Your budget for the month and the bills on the way.</span>
         </div>
-        <BudgetSection token={token} refreshKey={refreshKey} focus={focus === "budget"} />
-        <RecurringSection token={token} refreshKey={refreshKey} focus={focus === "recurring"} />
+        <BudgetSection token={token} refreshKey={refreshKey} focus={focus === "budget"} onChanged={onChanged} />
+        <RecurringSection token={token} refreshKey={refreshKey} focus={focus === "recurring"} onChanged={onChanged} />
       </div>
     </div>
   );

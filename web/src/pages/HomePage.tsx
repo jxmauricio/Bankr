@@ -105,6 +105,8 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   const [view, setView] = useView();
   const [planFocus, setPlanFocus] = useState<"budget" | "recurring" | null>(null);
   const [txFocusId, setTxFocusId] = useState<string | null>(null);
+  // Bumped by Plan edits so the rail's bills line catches up.
+  const [planVersion, setPlanVersion] = useState(0);
   function openPlan(section: "budget" | "recurring" | null = null) {
     setPlanFocus(section);
     setView("plan");
@@ -204,7 +206,8 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
         sources: response.sources,
         charts: response.charts,
         actionProposal: response.action_proposal,
-        goalProposal: resolveGoalProposal({
+        // A reply with its own confirm card is about that, not a goal -- skip the goal-card fallback.
+        goalProposal: response.action_proposal ? null : resolveGoalProposal({
           userText: text,
           assistantText: response.reply,
           apiProposal: response.goal_proposal,
@@ -259,7 +262,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
             sources: m.sources,
             charts: m.charts,
             actionProposal: m.action_proposal,
-            goalProposal: resolveGoalProposal({
+            goalProposal: m.action_proposal ? null : resolveGoalProposal({
               userText: previous?.role === "user" ? previous.content : "",
               assistantText: m.content,
               apiProposal: m.goal_proposal,
@@ -474,7 +477,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
           className="hidden w-[320px] shrink-0 flex-col gap-3.5 overflow-y-auto border-r border-line p-5 lg:flex"
         >
           <MoneyCard summary={summary} onNetWorthClick={openFlow} onRefresh={refreshFromBank} />
-          {token && <UpcomingBills token={token} refreshKey={monthRollup} onOpen={() => openPlan("recurring")} />}
+          {token && <UpcomingBills token={token} refreshKey={monthRollup} version={planVersion} onOpen={() => openPlan("recurring")} />}
           {goalsSection}
         </aside>
 
@@ -515,7 +518,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
 
         {token && view === "plan" && (
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <PlanView token={token} refreshKey={monthRollup} focus={planFocus} />
+            <PlanView token={token} refreshKey={monthRollup} focus={planFocus} onChanged={() => setPlanVersion((n) => n + 1)} />
           </main>
         )}
 

@@ -217,18 +217,30 @@ def detect_recurring_safely(db: Session, user_id: UUID) -> None:
 
 
 def price_changes(db: Session, user_id: UUID) -> list[RecurringSeries]:
-    """Confirmed bills and subscriptions whose latest charge moved more than
-    PRICE_CHANGE_THRESHOLD from what it usually is."""
+    """Confirmed subscriptions whose latest charge moved more than
+    PRICE_CHANGE_THRESHOLD from what it usually is. Bills are left out:
+    utilities move with usage every month, so a change isn't news."""
     return [
         s
         for s in db.query(RecurringSeries).filter(
             RecurringSeries.user_id == user_id,
             RecurringSeries.status == "confirmed",
-            RecurringSeries.direction == "out",
+            RecurringSeries.kind == "subscription",
         )
         if float(s.typical_amount)
         and abs(float(s.last_amount) - float(s.typical_amount)) / float(s.typical_amount) > PRICE_CHANGE_THRESHOLD
     ]
+
+
+def recurring_merchant_keys(db: Session, user_id: UUID) -> set[str]:
+    """Merchants with a non-dismissed recurring series: their charges are
+    expected, however large."""
+    return {
+        key
+        for (key,) in db.query(RecurringSeries.merchant_key).filter(
+            RecurringSeries.user_id == user_id, RecurringSeries.status != "dismissed"
+        )
+    }
 
 
 def series_dict(s: RecurringSeries, today: date) -> dict:
@@ -246,7 +258,8 @@ def series_dict(s: RecurringSeries, today: date) -> dict:
         "monthly_amount": mq._money(monthly_amount(s)),
         "occurrences": s.occurrences,
         "is_active": is_active(s, today),
-        "price_changed": abs(float(s.last_amount) - float(s.typical_amount)) > PRICE_CHANGE_THRESHOLD * float(s.typical_amount),
+        "price_changed": s.kind == "subscription"
+        and abs(float(s.last_amount) - float(s.typical_amount)) > PRICE_CHANGE_THRESHOLD * float(s.typical_amount),
     }
 
 

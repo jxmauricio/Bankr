@@ -35,7 +35,7 @@ from app.services.goal_service import (
     normalize_goal_kind,
     spend_for_tracker,
 )
-from app.services.recurring_service import recurring_overview
+from app.services.recurring_service import merchant_key, recurring_merchant_keys, recurring_overview
 from app.services.rules_service import preview_rule
 from app.services.sync_service import LIABILITY_ACCOUNT_TYPES
 
@@ -677,10 +677,14 @@ def get_unusual_transactions(db: Session, user_id: UUID, stddev_threshold: float
 
     avg, std = mean(amounts), pstdev(amounts) or 1.0
     recent_since = date.today() - timedelta(days=7)
+    # Rent and other known bills are big but expected -- never "unusual".
+    expected = recurring_merchant_keys(db, user_id)
     unusual = [
         t
         for t in rows
-        if t.date >= recent_since and abs(float(t.amount) - avg) > stddev_threshold * std
+        if t.date >= recent_since
+        and abs(float(t.amount) - avg) > stddev_threshold * std
+        and merchant_key(t.merchant_name) not in expected
     ]
     return {
         "unusual_transactions": [

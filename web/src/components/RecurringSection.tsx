@@ -34,9 +34,12 @@ export function RecurringSection({
   token,
   refreshKey,
   focus,
+  onChanged,
 }: {
   token: string;
   refreshKey?: unknown;
+  /** A series was confirmed, dismissed or retyped. */
+  onChanged?: () => void;
   /** Scroll here and highlight it (e.g. from a price-change insight). */
   focus?: boolean;
 }) {
@@ -66,6 +69,7 @@ export function RecurringSection({
     try {
       await updateRecurring(token, series.id, { status });
       setData(await fetchRecurring(token));
+      onChanged?.();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't save that. Try again.");
     } finally {
@@ -78,6 +82,7 @@ export function RecurringSection({
     try {
       await updateRecurring(token, series.id, { kind });
       setData(await fetchRecurring(token));
+      onChanged?.();
     } finally {
       setBusyId(null);
     }

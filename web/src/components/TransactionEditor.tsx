@@ -130,7 +130,10 @@ export function TransactionEditor({
 
       <button
         type="button"
-        onClick={() => setSplitting(true)}
+        onClick={() => {
+          setChangedTo(null); // the rule offer was about the old single category
+          setSplitting(true);
+        }}
         className="h-10 cursor-pointer rounded-xl bg-raised text-[13px] text-ink hover:text-signal-hi"
       >
         {txn.is_split ? "Edit split" : "Split across categories"}

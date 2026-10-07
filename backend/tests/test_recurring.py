@@ -137,3 +137,19 @@ def test_resync_runs_detection(client, db, user):
     app.dependency_overrides[get_aggregator] = lambda: fake
     assert client.post("/linked-accounts", json={"public_token": "public-x"}).status_code == 200
     assert "netflix" in _by_name(db, user)
+
+
+def test_bills_never_raise_price_changes_and_arent_unusual(client, db, user):
+    from app.agent import tools
+    from app.services.recurring_service import price_changes
+
+    txns = _monthly("pge", "PG&E", -80.0, "RENT_AND_UTILITIES_GAS_AND_ELECTRICITY", last_amount=-120.0)
+    _sync(db, user, txns)
+    detect_recurring(db, user.id)
+    series = _by_name(db, user)["pg e"]
+    client.patch(f"/recurring/{series.id}", json={"status": "confirmed"})
+    assert series.kind == "bill"
+    assert price_changes(db, user.id) == []
+
+    expected = tools.recurring_merchant_keys(db, user.id)
+    assert "pg e" in expected
