@@ -301,18 +301,61 @@ export interface TransactionAccount {
   type: string;
 }
 
-/** One row of the Transactions view. amount < 0 is money out. */
-export interface TransactionRow {
+/** One split of a transaction: same shape as a row, minus its account. */
+export interface TransactionSplit {
   id: string;
   date: string;
   amount: number;
   merchant_name: string | null;
+  original_merchant_name: string | null;
+  category_id: string | null;
   category: string | null;
   parent_category: string | null;
   category_type: "income" | "expense" | "transfer" | null;
   is_pending: boolean;
+  notes: string | null;
+  is_excluded: boolean;
+  is_split: boolean;
+}
+
+/** One row of the Transactions view. amount < 0 is money out. */
+export interface TransactionRow extends TransactionSplit {
+  splits: TransactionSplit[];
   account: TransactionAccount;
 }
+
+export interface CategoryOption {
+  id: string;
+  name: string;
+  type: "income" | "expense" | "transfer";
+}
+
+export interface CategoryNode extends CategoryOption {
+  children: CategoryOption[];
+}
+
+export const fetchCategories = (token: string) =>
+  request<{ categories: CategoryNode[] }>("/categories", { token }).then((r) => r.categories);
+
+export interface TransactionEdit {
+  category_id?: string;
+  /** "" restores the bank's name. */
+  merchant_name?: string;
+  /** "" clears the note. */
+  notes?: string;
+  excluded?: boolean;
+}
+
+/** Returns the edited row without its account (the caller keeps that). */
+export const updateTransaction = (token: string, id: string, edit: TransactionEdit) =>
+  request<Omit<TransactionRow, "account">>(`/transactions/${id}`, { method: "PATCH", token, body: edit });
+
+/** amounts use the transaction's sign and must sum to it; [] removes the split. */
+export const setTransactionSplits = (
+  token: string,
+  id: string,
+  splits: { amount: number; category_id: string; note?: string }[],
+) => request<Omit<TransactionRow, "account">>(`/transactions/${id}/splits`, { method: "PUT", token, body: { splits } });
 
 export interface TransactionList {
   window: string;

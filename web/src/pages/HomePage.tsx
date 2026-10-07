@@ -463,6 +463,11 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
               refreshKey={monthRollup}
               onAsk={askAboutTransaction}
               onOpenChat={() => setView("chat")}
+              onEdited={() => {
+                if (!token) return;
+                refreshGoalProgress();
+                fetchRollup(token, "month").then(setMonthRollup);
+              }}
             />
           </main>
         )}

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchTransactions, type GoalProgress, type TransactionList } from "../lib/api";
+import { fetchTransactions, type GoalProgress, type TransactionList, type TransactionRow } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { periodInfo, type Period } from "../lib/period";
 import { isTyping } from "../lib/useView";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { TransactionDetails, type Citation } from "../components/TransactionDetails";
-import { accountLabel, merchantOf, signedAmount, topCategory } from "../lib/transactions";
+import { accountLabel, merchantOf, signedAmount, topCategories, topCategory } from "../lib/transactions";
 
 /** What Cash flow (or a details drawer) asks the list to show. */
 export interface TransactionFilter {
@@ -34,6 +34,7 @@ export function TransactionsView({
   refreshKey,
   onAsk,
   onOpenChat,
+  onEdited,
 }: {
   token: string;
   period: Period;
@@ -45,6 +46,8 @@ export function TransactionsView({
   refreshKey?: unknown;
   onAsk: (text: string) => void;
   onOpenChat: () => void;
+  /** A row was edited -- totals elsewhere (goals, money rail) may have moved. */
+  onEdited?: () => void;
 }) {
   const [list, setList] = useState<TransactionList | null>(null);
   const [failed, setFailed] = useState(false);
@@ -53,10 +56,14 @@ export function TransactionsView({
   const searchRef = useRef<HTMLInputElement>(null);
   const window_ = periodInfo(period).window;
 
+  // Only blank the list for a new period; a refresh after an edit swaps
+  // rows in place so the open details drawer doesn't flicker shut.
+  const loadedWindow = useRef<string | null>(null);
   useEffect(() => {
     let stale = false;
     setFailed(false);
-    setList(null);
+    if (loadedWindow.current !== window_) setList(null);
+    loadedWindow.current = window_;
     fetchTransactions(token, window_)
       .then((r) => !stale && setList(r))
       .catch(() => !stale && setFailed(true));
@@ -77,7 +84,7 @@ export function TransactionsView({
   }, []);
 
   const all = useMemo(() => list?.transactions ?? [], [list]);
-  const categories = useMemo(() => [...new Set(all.map(topCategory))].sort(), [all]);
+  const categories = useMemo(() => [...new Set(all.flatMap(topCategories))].sort(), [all]);
   const accounts = useMemo(() => {
     const seen = new Map<string, string>();
     for (const t of all) seen.set(t.account.id, accountLabel(t.account));
@@ -87,15 +94,16 @@ export function TransactionsView({
   const q = filter.query.trim().toLowerCase();
   const shown = all.filter(
     (t) =>
-      (!filter.category || topCategory(t) === filter.category) &&
+      (!filter.category || topCategories(t).includes(filter.category)) &&
       (!account || t.account.id === account) &&
       (!q ||
         merchantOf(t).toLowerCase().includes(q) ||
         (t.category ?? "").toLowerCase().includes(q) ||
         Math.abs(t.amount).toFixed(2).includes(q)),
   );
-  const moneyIn = shown.reduce((s, t) => s + (t.amount > 0 && t.category_type !== "transfer" ? t.amount : 0), 0);
-  const moneyOut = shown.reduce((s, t) => s + (t.amount < 0 && t.category_type !== "transfer" ? -t.amount : 0), 0);
+  const counts = (t: TransactionRow) => !t.is_excluded && t.category_type !== "transfer";
+  const moneyIn = shown.reduce((s, t) => s + (t.amount > 0 && counts(t) ? t.amount : 0), 0);
+  const moneyOut = shown.reduce((s, t) => s + (t.amount < 0 && counts(t) ? -t.amount : 0), 0);
 
   const position = shown.findIndex((t) => t.id === selectedId);
   const selected = position >= 0 ? shown[position] : null;
@@ -204,6 +212,7 @@ export function TransactionsView({
                         <span className="truncate text-sm text-ink">
                           {merchantOf(t)}
                           {t.is_pending && <span className="text-xs text-warn"> · pending</span>}
+                          {t.is_excluded && <span className="text-xs text-ink-faint"> · excluded</span>}
                         </span>
                         <span className="font-tabular text-[11px] text-ink-faint">
                           {shortDate(t.date)} · {topCategory(t)}
@@ -236,7 +245,7 @@ export function TransactionsView({
                       key={t.id}
                       onClick={() => setSelectedId(isSelected ? null : t.id)}
                       aria-selected={isSelected}
-                      className={`cursor-pointer border-t border-line hover:bg-raised ${isSelected ? "bg-raised" : ""}`}
+                      className={`cursor-pointer border-t border-line hover:bg-raised ${isSelected ? "bg-raised" : ""} ${t.is_excluded ? "opacity-55" : ""}`}
                     >
                       <td className="py-[11px] pl-5 pr-3 font-tabular text-xs text-ink-soft">{shortDate(t.date)}</td>
                       <td className="max-w-[280px] truncate px-3 py-[11px] text-ink">
@@ -252,6 +261,7 @@ export function TransactionsView({
                           {merchantOf(t)}
                         </button>
                         {t.is_pending && <span className="text-xs text-warn"> · pending</span>}
+                        {t.is_excluded && <span className="text-xs text-ink-faint"> · excluded</span>}
                       </td>
                       <td className="px-3 py-[11px]">
                         <span className="rounded-full bg-raised px-[9px] py-[3px] text-xs text-ink-soft">{topCategory(t)}</span>
@@ -274,6 +284,11 @@ export function TransactionsView({
 
       {selected && (
         <TransactionDetails
+          token={token}
+          onUpdated={(row) => {
+            setList((l) => l && { ...l, transactions: l.transactions.map((t) => (t.id === row.id ? { ...t, ...row } : t)) });
+            onEdited?.();
+          }}
           txn={selected}
           position={position}
           count={shown.length}

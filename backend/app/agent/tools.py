@@ -512,7 +512,7 @@ def get_recent_transactions(db: Session, user_id: UUID, limit: int = 20) -> dict
         db.query(Transaction, Category.name)
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
         .outerjoin(Category, Transaction.bankr_category_id == Category.id)
-        .filter(LinkedAccount.user_id == user_id)
+        .filter(LinkedAccount.user_id == user_id, Transaction.is_split.is_(False))
         .order_by(Transaction.date.desc())
         .limit(limit)
         .all()
@@ -547,6 +547,7 @@ def get_unusual_transactions(db: Session, user_id: UUID, stddev_threshold: float
             Category.type == "expense",
             Transaction.amount < 0,
             Transaction.date >= since,
+            *mq.counted_filters(),
         )
         .all()
     )

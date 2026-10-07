@@ -19,6 +19,8 @@ def recategorize_all_transactions(db: Session) -> int:
         LinkedAccount, Transaction.linked_account_id == LinkedAccount.id
     )
     for txn, account_type in rows.all():
+        if txn.category_overridden:
+            continue  # the user picked this category; never re-map it
         raw = txn.raw_aggregator_category
         category_id = categories[map_raw_category(raw, float(txn.amount), account_type)].id
         if txn.bankr_category_id != category_id:

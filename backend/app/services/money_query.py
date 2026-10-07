@@ -329,8 +329,15 @@ def _base_query(db: Session, user_id: UUID, window: Window, category_type: str):
             Category.type == category_type,
             Transaction.date >= window.start,
             Transaction.date <= window.end,
+            *counted_filters(),
         )
     )
+
+
+def counted_filters() -> tuple:
+    """Rows that count toward money totals: not excluded by the user, and
+    not a split parent (its split rows count instead)."""
+    return (Transaction.is_excluded.is_(False), Transaction.is_split.is_(False))
 
 
 def spend_query(
@@ -547,7 +554,8 @@ MAX_LISTED_TRANSACTIONS = 2000
 
 def list_transactions(db: Session, user_id: UUID, window: Window) -> dict:
     """Every transaction in the window -- income, spending and transfers --
-    newest first, with its account, for the Transactions view."""
+    newest first, with its account, for the Transactions view. Split rows
+    are nested under their parent rather than listed on their own."""
     parent = aliased(Category)
     q = (
         db.query(Transaction, Category.name, Category.type, parent.name, LinkedAccount)
@@ -558,24 +566,20 @@ def list_transactions(db: Session, user_id: UUID, window: Window) -> dict:
             LinkedAccount.user_id == user_id,
             Transaction.date >= window.start,
             Transaction.date <= window.end,
+            Transaction.split_parent_id.is_(None),
         )
     )
     total_count = q.count()
     rows = q.order_by(Transaction.date.desc(), Transaction.created_at.desc()).limit(MAX_LISTED_TRANSACTIONS).all()
+    splits = _splits_for(db, [txn.id for txn, *_ in rows if txn.is_split])
     return {
         **window.as_dict(),
         "transaction_count": total_count,
         "truncated": total_count > len(rows),
         "transactions": [
             {
-                "id": str(txn.id),
-                "date": txn.date.isoformat(),
-                "amount": _money(txn.amount),
-                "merchant_name": txn.merchant_name,
-                "category": category_name,
-                "parent_category": parent_name,
-                "category_type": category_type,
-                "is_pending": txn.is_pending,
+                **transaction_row(txn, category_name, category_type, parent_name),
+                "splits": splits.get(txn.id, []),
                 "account": {
                     "id": str(account.id),
                     "institution": account.institution_name,
@@ -587,6 +591,42 @@ def list_transactions(db: Session, user_id: UUID, window: Window) -> dict:
             for txn, category_name, category_type, parent_name, account in rows
         ],
     }
+
+
+def transaction_row(txn: Transaction, category_name, category_type, parent_name) -> dict:
+    return {
+        "id": str(txn.id),
+        "date": txn.date.isoformat(),
+        "amount": _money(txn.amount),
+        "merchant_name": txn.merchant_name,
+        "original_merchant_name": txn.original_merchant_name,
+        "category_id": str(txn.bankr_category_id) if txn.bankr_category_id else None,
+        "category": category_name,
+        "parent_category": parent_name,
+        "category_type": category_type,
+        "is_pending": txn.is_pending,
+        "notes": txn.notes,
+        "is_excluded": txn.is_excluded,
+        "is_split": txn.is_split,
+    }
+
+
+def _splits_for(db: Session, parent_ids: list[UUID]) -> dict[UUID, list[dict]]:
+    if not parent_ids:
+        return {}
+    parent = aliased(Category)
+    rows = (
+        db.query(Transaction, Category.name, Category.type, parent.name)
+        .outerjoin(Category, Transaction.bankr_category_id == Category.id)
+        .outerjoin(parent, Category.parent_category_id == parent.id)
+        .filter(Transaction.split_parent_id.in_(parent_ids))
+        .order_by(Transaction.aggregator_transaction_id)
+        .all()
+    )
+    out: dict[UUID, list[dict]] = {}
+    for txn, name, ctype, parent_name in rows:
+        out.setdefault(txn.split_parent_id, []).append(transaction_row(txn, name, ctype, parent_name))
+    return out
 
 
 MAX_AVERAGE_MONTHS = 12

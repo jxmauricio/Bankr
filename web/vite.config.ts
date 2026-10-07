@@ -16,7 +16,7 @@ export default defineConfig({
       // VITE_API_BASE_URL empty), API calls go same-origin and are forwarded.
       ...(process.env.API_PROXY_TARGET
         ? Object.fromEntries(
-            ['/auth', '/linked-accounts', '/goals', '/dashboard', '/chat'].map((path) => [path, process.env.API_PROXY_TARGET!]),
+            ['/auth', '/linked-accounts', '/goals', '/dashboard', '/chat', '/categories', '/transactions', '/rules', '/recurring', '/budgets', '/insights'].map((path) => [path, process.env.API_PROXY_TARGET!]),
           )
         : {}),
     },

@@ -1,5 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import type { GoalProgress, SourceQuery, TransactionRow } from "../lib/api";
+import { useCategories } from "../lib/useCategories";
+import { TransactionEditor } from "./TransactionEditor";
 import { formatMoney } from "../lib/format";
 import { isTyping } from "../lib/useView";
 import { accountLabel, merchantOf, signedAmount, topCategory } from "../lib/transactions";
@@ -60,6 +62,8 @@ function goalFor(goals: GoalProgress[], t: TransactionRow): GoalProgress | undef
  * the rows currently shown; Esc closes.
  */
 export function TransactionDetails({
+  token,
+  onUpdated,
   txn,
   position,
   count,
@@ -73,6 +77,9 @@ export function TransactionDetails({
   onAsk,
   onOpenAnswer,
 }: {
+  token: string;
+  /** An edit saved; the row as the server now has it. */
+  onUpdated: (row: Omit<TransactionRow, "account">) => void;
   txn: TransactionRow;
   position: number;
   count: number;
@@ -102,11 +109,16 @@ export function TransactionDetails({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onPrev, onNext, onClose]);
+  const categories = useCategories(token);
 
   const merchant = merchantOf(txn);
   const amount = signedAmount(txn.amount);
   const kindColor = txn.category_type === "income" ? "text-signal" : txn.category_type === "transfer" ? "text-ink-soft" : "text-spend";
-  const category = txn.parent_category ? `${txn.category} · ${txn.parent_category}` : (txn.category ?? "Uncategorized");
+  const category = txn.is_split
+    ? `Split ${txn.splits.length} ways`
+    : txn.parent_category
+      ? `${txn.category} · ${txn.parent_category}`
+      : (txn.category ?? "Uncategorized");
 
   const visits = txn.merchant_name ? all.filter((t) => t.merchant_name === txn.merchant_name) : [txn];
   const visitMax = Math.max(...visits.map((v) => Math.abs(v.amount)), 1);
@@ -123,7 +135,7 @@ export function TransactionDetails({
     ["Account", accountLabel(txn.account)],
     ["Bank", txn.account.institution],
     ["Category", category],
-    ["Counts as", KIND_LABEL[txn.category_type ?? ""] ?? "Not categorized"],
+    ["Counts as", txn.is_excluded ? "Nothing — excluded from totals" : (KIND_LABEL[txn.category_type ?? ""] ?? "Not categorized")],
   ];
 
   const askText =
@@ -190,6 +202,8 @@ export function TransactionDetails({
             </div>
           ))}
         </dl>
+
+        <TransactionEditor key={txn.id} token={token} txn={txn} categories={categories} onUpdated={onUpdated} />
 
         {txn.merchant_name && (
           <section className="flex flex-col gap-2.5 rounded-[18px] bg-surface p-4">

@@ -6,8 +6,14 @@ export function accountLabel(account: TransactionAccount): string {
   return account.mask ? `${name} •••• ${account.mask}` : name;
 }
 
-export function topCategory(t: TransactionRow): string {
+export function topCategory(t: Pick<TransactionRow, "parent_category" | "category" | "is_split">): string {
+  if (t.is_split) return "Split";
   return t.parent_category ?? t.category ?? "Uncategorized";
+}
+
+/** Every top-level category a row counts toward (a split counts toward each part's). */
+export function topCategories(t: TransactionRow): string[] {
+  return t.is_split ? t.splits.map(topCategory) : [topCategory(t)];
 }
 
 export function merchantOf(t: TransactionRow): string {

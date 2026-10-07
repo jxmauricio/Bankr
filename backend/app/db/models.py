@@ -100,6 +100,24 @@ class Transaction(Base):
     is_pending: Mapped[bool] = mapped_column(Boolean, default=False)
     pending_transaction_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    # User edits. merchant_name is what every surface shows; the aggregator's
+    # own name is kept in original_merchant_name so rules can still match it
+    # after a rename. The *_overridden flags stop a re-sync (which re-maps
+    # every modified row) from undoing the user's choice.
+    original_merchant_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    merchant_overridden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    category_overridden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Excluded rows still show in the Transactions list but never count as
+    # spending or income (a reimbursed work trip, a one-off gift).
+    is_excluded: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # A split parent stays as the bank's record but stops counting; its
+    # children (same account and date, aggregator id "<parent>:split:<n>")
+    # carry the amounts and categories instead. Children must sum to it.
+    is_split: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    split_parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("transactions.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     linked_account: Mapped["LinkedAccount"] = relationship(back_populates="transactions")
     category: Mapped["Category | None"] = relationship()

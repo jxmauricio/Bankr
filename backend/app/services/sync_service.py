@@ -174,19 +174,51 @@ def _upsert_transaction(
         .filter(Transaction.aggregator_transaction_id == txn.aggregator_transaction_id)
         .one_or_none()
     )
-    if existing is None:
+    is_new = existing is None
+    if is_new:
         existing = Transaction(aggregator_transaction_id=txn.aggregator_transaction_id)
         db.add(existing)
 
-    category = categories[map_raw_category(txn.raw_category, txn.amount, account_type)]
     existing.linked_account_id = linked_account_id
     existing.amount = txn.amount
     existing.date = txn.date
-    existing.merchant_name = txn.merchant_name
+    existing.original_merchant_name = txn.merchant_name
     existing.raw_aggregator_category = txn.raw_category
-    existing.bankr_category_id = category.id
     existing.is_pending = txn.is_pending
     existing.pending_transaction_id = txn.pending_transaction_id
+    if is_new and txn.pending_transaction_id:
+        db.flush()
+        _carry_over_edits(db, txn.pending_transaction_id, existing)
+    # A re-sync reports every modified row again; it must not undo a
+    # rename or recategorization the user made.
+    if not existing.merchant_overridden:
+        existing.merchant_name = txn.merchant_name
+    if not existing.category_overridden:
+        existing.bankr_category_id = categories[map_raw_category(txn.raw_category, txn.amount, account_type)].id
+
+
+def _carry_over_edits(db: Session, pending_aggregator_id: str, posted: Transaction) -> None:
+    """When a pending charge posts, the bank issues a new id and the pending
+    row is deleted -- so move the user's edits (and any split) onto the
+    posted row first, or they'd silently vanish."""
+    pending = (
+        db.query(Transaction).filter(Transaction.aggregator_transaction_id == pending_aggregator_id).one_or_none()
+    )
+    if pending is None:
+        return
+    for field in (
+        "merchant_name",
+        "merchant_overridden",
+        "bankr_category_id",
+        "category_overridden",
+        "notes",
+        "is_excluded",
+        "is_split",
+    ):
+        setattr(posted, field, getattr(pending, field))
+    for child in db.query(Transaction).filter(Transaction.split_parent_id == pending.id):
+        child.split_parent_id = posted.id
+    db.flush()
 
 
 def _balance_totals(db: Session, user_id: UUID) -> tuple[float, float]:
