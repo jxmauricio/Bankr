@@ -132,6 +132,10 @@ on pace or the next step.
 Only "- " bullets and **bold** are allowed: no headers, italics, tables, \
 numbered or nested lists, or emoji. Keep the whole reply to about 6 lines.
 
+When the user says a merchant keeps landing in the wrong category, or asks \
+to always categorize something a certain way, call propose_rule so a \
+confirm card appears. Don't claim the rule exists until they confirm.
+
 Charts: when a picture beats a list -- a breakdown of 3+ items, a \
 this-vs-last comparison, or how something moved across months -- call \
 show_chart once (never more than one per reply), after the tools you \
@@ -304,6 +308,26 @@ TOOL_DEFINITIONS = [
         },
     ),
     ToolSpec(
+        name="propose_rule",
+        description=(
+            "Draft a categorization rule -- \"always put <merchant> under <category>\" -- for the user to "
+            "confirm on a card. Call it when they say a merchant is in the wrong category and want that "
+            "to stick, or ask to always categorize something a certain way. Does not create the rule."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "merchant": {
+                    "type": "string",
+                    "description": "Text to match in the merchant name, as it appears on transactions (\"Costco\").",
+                },
+                "category": {"type": "string", "description": "Category to assign, any type (Groceries, Income, Transfer)."},
+                "rename_to": {"type": "string", "description": "Optional cleaner merchant name to show."},
+            },
+            "required": ["merchant", "category"],
+        },
+    ),
+    ToolSpec(
         name="show_chart",
         description=(
             "Show a small chart under your reply. You choose what to chart; the numbers come straight from the "
@@ -375,6 +399,7 @@ _TOOL_DISPATCH = {
     "get_unusual_transactions": lambda db, user_id, **kwargs: tools.get_unusual_transactions(db, user_id),
     "calculate": lambda db, user_id, **kwargs: tools.calculate(**kwargs),
     "propose_goal": tools.propose_goal,
+    "propose_rule": tools.propose_rule,
     "show_chart": tools.show_chart,
     "web_search": lambda db, user_id, **kwargs: tools.web_search(client=_search_client, **kwargs),
 }
@@ -430,6 +455,8 @@ def _describe_tool_call(name: str, tool_input: dict, result: dict | None = None)
     if name == "show_chart":
         chart = (result or {}).get("chart")
         return f"Chart · {chart['title']}" if chart else "Chart"
+    if name == "propose_rule":
+        return "Proposed a categorization rule"
     if name == "propose_goal":
         kind = tool_input.get("type") or tool_input.get("goal_type")
         if kind == "track_spending":
@@ -465,6 +492,8 @@ def _progress_label(name: str, tool_input: dict) -> str:
         return "Searching the web…"
     if name == "propose_goal":
         return "Drafting a goal…"
+    if name == "propose_rule":
+        return "Drafting a rule…"
     if name == "show_chart":
         return "Drawing a chart…"
     return "Working on it…"
@@ -530,6 +559,8 @@ def run_agent_turn(
             # card without a separate channel. Stripped from the user-facing
             # sources trail in app/api/chat.py.
             entry["proposal"] = result["proposal"]
+        if isinstance(result, dict) and result.get("action"):
+            entry["action"] = result["action"]  # a confirm card, like proposal above
         if name == "show_chart" and isinstance(result, dict) and result.get("chart"):
             entry["chart"] = result["chart"]
         sources.append(entry)

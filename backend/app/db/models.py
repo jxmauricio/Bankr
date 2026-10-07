@@ -185,3 +185,26 @@ class ChatMessage(Base):
     # null on user-role messages.
     tool_calls: Mapped[list[dict] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class Rule(Base):
+    """"Always categorize <merchant> as <category>" -- applied to every
+    synced transaction the user hasn't categorized by hand."""
+
+    __tablename__ = "rules"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # Case-insensitive substring of the bank's merchant name (or the user's rename).
+    merchant_contains: Mapped[str] = mapped_column(String)
+    # Optional bounds on the charge's size (absolute value).
+    amount_min: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    amount_max: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    linked_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("linked_accounts.id", ondelete="CASCADE"), nullable=True
+    )
+    set_category_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("categories.id"))
+    set_merchant_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Higher wins when several rules match; ties go to the newest.
+    priority: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

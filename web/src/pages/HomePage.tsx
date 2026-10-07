@@ -13,6 +13,7 @@ import {
   type ChartSpec,
   type ChatSource,
   type GoalProgress,
+  type ActionProposal,
   type GoalProposal,
   type LinkedBank,
   type ItemizedTransactions,
@@ -22,6 +23,7 @@ import {
 import { resolveGoalProposal } from "../lib/goalProposal";
 import { GoalsSection } from "../components/GoalsSection";
 import { GoalProposalCard } from "../components/GoalProposalCard";
+import { ActionProposalCard } from "../components/ActionProposalCard";
 import { CreateGoalModal } from "../components/CreateGoalModal";
 import { isOAuthReturn } from "../lib/plaidOAuth";
 import { MoneyCard, MoneyPill, type MoneySummary } from "../components/MoneyRail";
@@ -57,7 +59,7 @@ type Period = "week" | "month" | "year";
 type Topic = "spending" | "income";
 
 type StreamItem =
-  | { kind: "assistant-text"; id: string; text: string; sources?: ChatSource[]; goalProposal?: GoalProposal | null; charts?: ChartSpec[] }
+  | { kind: "assistant-text"; id: string; text: string; sources?: ChatSource[]; goalProposal?: GoalProposal | null; actionProposal?: ActionProposal | null; charts?: ChartSpec[] }
   | { kind: "user-text"; id: string; text: string }
   | { kind: "topic-card"; id: string; topic: Topic; period: Period };
 
@@ -192,6 +194,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
         text: response.reply,
         sources: response.sources,
         charts: response.charts,
+        actionProposal: response.action_proposal,
         goalProposal: resolveGoalProposal({
           userText: text,
           assistantText: response.reply,
@@ -246,6 +249,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
             text: m.content,
             sources: m.sources,
             charts: m.charts,
+            actionProposal: m.action_proposal,
             goalProposal: resolveGoalProposal({
               userText: previous?.role === "user" ? previous.content : "",
               assistantText: m.content,
@@ -498,6 +502,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                   item={item}
                   token={token}
                   onGoalCreated={refreshGoalProgress}
+                  onActionDone={async () => void (await loadStandingState())}
                   onOpenSource={setSourceQuery}
                   onOpenCashFlow={() => setView("cashflow")}
                   isLast={item.id === lastAssistantId && !item.id.startsWith(GREETING_ID) && !isSending}
@@ -582,6 +587,7 @@ function StreamEntry({
   item,
   token,
   onGoalCreated,
+  onActionDone,
   onOpenSource,
   onOpenCashFlow,
   isLast,
@@ -589,6 +595,7 @@ function StreamEntry({
   item: StreamItem;
   token: string | null;
   onGoalCreated: () => void | Promise<void>;
+  onActionDone: () => void | Promise<void>;
   onOpenSource: (query: SourceQuery) => void;
   onOpenCashFlow: () => void;
   isLast: boolean;
@@ -653,6 +660,7 @@ function StreamEntry({
               onCreated={onGoalCreated}
             />
           )}
+          {item.actionProposal && <ActionProposalCard token={token} proposal={item.actionProposal} onDone={onActionDone} />}
          </div>
         </div>
       );

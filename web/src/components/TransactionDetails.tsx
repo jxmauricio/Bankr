@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import type { GoalProgress, SourceQuery, TransactionRow } from "../lib/api";
 import { useCategories } from "../lib/useCategories";
+import { RuleOffer } from "./RuleOffer";
 import { TransactionEditor } from "./TransactionEditor";
 import { formatMoney } from "../lib/format";
 import { isTyping } from "../lib/useView";
@@ -64,6 +65,7 @@ function goalFor(goals: GoalProgress[], t: TransactionRow): GoalProgress | undef
 export function TransactionDetails({
   token,
   onUpdated,
+  onRuleApplied,
   txn,
   position,
   count,
@@ -80,6 +82,8 @@ export function TransactionDetails({
   token: string;
   /** An edit saved; the row as the server now has it. */
   onUpdated: (row: Omit<TransactionRow, "account">) => void;
+  /** A rule recategorized other rows; reload the list. */
+  onRuleApplied: () => void;
   txn: TransactionRow;
   position: number;
   count: number;
@@ -203,7 +207,20 @@ export function TransactionDetails({
           ))}
         </dl>
 
-        <TransactionEditor key={txn.id} token={token} txn={txn} categories={categories} onUpdated={onUpdated} />
+        <TransactionEditor key={txn.id} token={token} txn={txn} categories={categories} onUpdated={onUpdated}>
+          {(changedTo) =>
+            changedTo && (
+              <RuleOffer
+                key={changedTo}
+                token={token}
+                txn={txn}
+                categoryId={changedTo}
+                categories={categories}
+                onApplied={(n) => n > 0 && onRuleApplied()}
+              />
+            )
+          }
+        </TransactionEditor>
 
         {txn.merchant_name && (
           <section className="flex flex-col gap-2.5 rounded-[18px] bg-surface p-4">

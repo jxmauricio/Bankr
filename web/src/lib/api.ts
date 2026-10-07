@@ -371,6 +371,45 @@ export interface TransactionList {
 export const fetchTransactions = (token: string, window: string) =>
   request<TransactionList>("/dashboard/transactions", { token, query: { window } });
 
+export interface Rule {
+  id: string;
+  merchant_contains: string;
+  amount_min: number | null;
+  amount_max: number | null;
+  linked_account_id: string | null;
+  set_category_id: string;
+  set_category: string | null;
+  set_merchant_name: string | null;
+  priority: number;
+  created_at: string | null;
+  /** Only on create with apply_to_existing. */
+  applied_to?: number;
+}
+
+export interface NewRule {
+  merchant_contains: string;
+  set_category_id: string;
+  set_merchant_name?: string;
+  amount_min?: number;
+  amount_max?: number;
+  apply_to_existing?: boolean;
+}
+
+export const fetchRules = (token: string) => request<{ rules: Rule[] }>("/rules", { token }).then((r) => r.rules);
+
+export const previewRule = (token: string, merchant: string, categoryId: string) =>
+  request<{ would_change: number }>("/rules/preview", {
+    token,
+    query: { merchant_contains: merchant, category_id: categoryId },
+  }).then((r) => r.would_change);
+
+export const createRule = (token: string, rule: NewRule) => request<Rule>("/rules", { method: "POST", token, body: rule });
+
+export const updateRule = (token: string, id: string, patch: Partial<NewRule>) =>
+  request<Rule>(`/rules/${id}`, { method: "PATCH", token, body: patch });
+
+export const deleteRule = (token: string, id: string) => request<void>(`/rules/${id}`, { method: "DELETE", token });
+
 export interface CashFlowBreakdown {
   window: string;
   start: string;
@@ -441,11 +480,24 @@ export interface ChartSpec {
   change?: { difference: number; percent_change: number | null; direction: "up" | "down" | "flat" } | null;
 }
 
+export interface RuleProposal {
+  kind: "rule";
+  merchant_contains: string;
+  category_id: string;
+  category: string;
+  set_merchant_name: string | null;
+  would_change: number;
+}
+
+/** A confirm card the assistant drafted; nothing is changed until the user confirms. */
+export type ActionProposal = RuleProposal;
+
 export interface ChatResponse {
   conversation_id: string;
   reply: string;
   sources: ChatSource[];
   goal_proposal: GoalProposal | null;
+  action_proposal?: ActionProposal | null;
   charts?: ChartSpec[];
 }
 
@@ -505,6 +557,7 @@ export interface ConversationMessage {
   content: string;
   sources: ChatSource[];
   goal_proposal: GoalProposal | null;
+  action_proposal?: ActionProposal | null;
   charts?: ChartSpec[];
   created_at: string;
 }

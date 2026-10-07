@@ -53,6 +53,7 @@ export function TransactionsView({
   const [failed, setFailed] = useState(false);
   const [account, setAccount] = useState<string>("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reloads, setReloads] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
   const window_ = periodInfo(period).window;
 
@@ -70,7 +71,7 @@ export function TransactionsView({
     return () => {
       stale = true;
     };
-  }, [token, window_, refreshKey]);
+  }, [token, window_, refreshKey, reloads]);
 
   // "/" jumps to search, like the hint in the box says.
   useEffect(() => {
@@ -287,6 +288,10 @@ export function TransactionsView({
           token={token}
           onUpdated={(row) => {
             setList((l) => l && { ...l, transactions: l.transactions.map((t) => (t.id === row.id ? { ...t, ...row } : t)) });
+            onEdited?.();
+          }}
+          onRuleApplied={() => {
+            setReloads((n) => n + 1);
             onEdited?.();
           }}
           txn={selected}

@@ -34,6 +34,7 @@ from app.services.goal_service import (
     normalize_goal_kind,
     spend_for_tracker,
 )
+from app.services.rules_service import preview_rule
 from app.services.sync_service import LIABILITY_ACCOUNT_TYPES
 
 
@@ -503,6 +504,47 @@ def propose_goal(
         "message": (
             "Drafted a goal for the user to confirm in the app. "
             "Do not claim it is already created."
+        ),
+    }
+
+
+def _any_category(db: Session, name: str):
+    """A category of any type (income and transfers too) by name or alias."""
+    categories = mq.seed_default_categories(db)
+    by_lower = {c.lower(): c for c in categories}
+    query = name.strip().lower()
+    canonical = by_lower.get(query) or mq.CATEGORY_ALIASES.get(query)
+    if canonical is None:
+        raise mq.QueryError(f"no category called {name!r}", valid_categories=sorted(categories))
+    return categories[canonical]
+
+
+def propose_rule(
+    db: Session, user_id: UUID, merchant: str, category: str, rename_to: str | None = None
+) -> dict:
+    """Draft "always categorize <merchant> as <category>" for the user to
+    confirm. Doesn't create anything -- the confirm card does."""
+    merchant = (merchant or "").strip()
+    if len(merchant) < 2:
+        return {"error": "merchant needs at least 2 characters"}
+    try:
+        target = _any_category(db, category)
+    except mq.QueryError as e:
+        return {"error": str(e), **e.extra}
+    would_change = preview_rule(db, user_id, merchant, target.id)
+    return {
+        "status": "proposed",
+        "action": {
+            "kind": "rule",
+            "merchant_contains": merchant,
+            "category_id": str(target.id),
+            "category": target.name,
+            "set_merchant_name": (rename_to or "").strip() or None,
+            "would_change": would_change,
+        },
+        "message": (
+            f"Drafted a rule for the user to confirm; it would recategorize {would_change} past "
+            "transactions. Do not claim it is already created."
         ),
     }
 

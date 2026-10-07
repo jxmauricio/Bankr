@@ -89,6 +89,8 @@ class ChatResponse(BaseModel):
     reply: str
     sources: list[ChatSource] = []
     goal_proposal: GoalProposal | None = None
+    # A confirm card for something other than a goal: {"kind": "rule" | "budget_move", ...}.
+    action_proposal: dict | None = None
     charts: list[ChartSpec] = []
 
 
@@ -104,6 +106,8 @@ class ConversationMessage(BaseModel):
     content: str
     sources: list[ChatSource] = []
     goal_proposal: GoalProposal | None = None
+    # A confirm card for something other than a goal: {"kind": "rule" | "budget_move", ...}.
+    action_proposal: dict | None = None
     charts: list[ChartSpec] = []
     created_at: datetime
 
@@ -128,6 +132,13 @@ def _goal_proposal(raw: list[dict] | None) -> dict | None:
     return None
 
 
+def _action_proposal(raw: list[dict] | None) -> dict | None:
+    for entry in reversed(raw or []):
+        if entry.get("action"):
+            return entry["action"]
+    return None
+
+
 def _charts(raw: list[dict] | None) -> list[dict]:
     """At most one chart per reply (the prompt asks for one); keep the last."""
     charts = [entry["chart"] for entry in raw or [] if entry.get("chart")]
@@ -147,6 +158,7 @@ def chat(
         reply=reply,
         sources=_public_sources(sources),
         goal_proposal=_goal_proposal(sources),
+        action_proposal=_action_proposal(sources),
         charts=_charts(sources),
     )
 
@@ -187,6 +199,7 @@ def chat_stream(
                 reply=reply,
                 sources=_public_sources(sources),
                 goal_proposal=_goal_proposal(sources),
+                action_proposal=_action_proposal(sources),
                 charts=_charts(sources),
             )
             events.put(("done", response.model_dump(mode="json")))
@@ -239,6 +252,7 @@ def get_conversation(
             "content": row["content"],
             "sources": _public_sources(row.get("sources")),
             "goal_proposal": _goal_proposal(row.get("sources")),
+            "action_proposal": _action_proposal(row.get("sources")),
             "charts": _charts(row.get("sources")),
             "created_at": row["created_at"],
         }
