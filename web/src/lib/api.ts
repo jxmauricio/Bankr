@@ -1,4 +1,7 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+// Empty string means same origin (dev shared through a tunnel, see vite.config.ts).
+const BASE_URL = import.meta.env.VITE_API_BASE_URL === ""
+  ? window.location.origin
+  : (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000");
 
 // FastAPI's own HTTPException(detail=...) sends a plain string, but Pydantic
 // validation errors send a list of {msg, loc, ...} objects instead.
@@ -289,6 +292,73 @@ export const fetchSpending = (token: string, period: string | SourceQuery) => {
 
 export const fetchIncome = (token: string, period: string) =>
   request<ItemizedTransactions>("/dashboard/income", { token, query: { period } });
+
+export interface TransactionAccount {
+  id: string;
+  institution: string;
+  name: string | null;
+  mask: string | null;
+  type: string;
+}
+
+/** One row of the Transactions view. amount < 0 is money out. */
+export interface TransactionRow {
+  id: string;
+  date: string;
+  amount: number;
+  merchant_name: string | null;
+  category: string | null;
+  parent_category: string | null;
+  category_type: "income" | "expense" | "transfer" | null;
+  is_pending: boolean;
+  account: TransactionAccount;
+}
+
+export interface TransactionList {
+  window: string;
+  start: string;
+  end: string;
+  label: string;
+  transaction_count: number;
+  truncated: boolean;
+  transactions: TransactionRow[];
+  as_of: string | null;
+}
+
+export const fetchTransactions = (token: string, window: string) =>
+  request<TransactionList>("/dashboard/transactions", { token, query: { window } });
+
+export interface CashFlowBreakdown {
+  window: string;
+  start: string;
+  end: string;
+  label: string;
+  income: number;
+  spending: number;
+  net: number;
+  sources: { name: string; amount: number }[];
+  categories: { name: string; amount: number }[];
+  as_of: string | null;
+}
+
+export const fetchCashFlow = (token: string, window: string) =>
+  request<CashFlowBreakdown>("/dashboard/cash-flow", { token, query: { window } });
+
+export interface SpendingPaceMonth {
+  start: string;
+  days_in_month: number;
+  /** Running total, one entry per day from the 1st. */
+  running: number[];
+  label: string;
+}
+
+export interface SpendingPace {
+  today: string;
+  this_month: SpendingPaceMonth;
+  last_month: SpendingPaceMonth;
+}
+
+export const fetchSpendingPace = (token: string) => request<SpendingPace>("/dashboard/spending-pace", { token });
 
 // --- Chat ---
 

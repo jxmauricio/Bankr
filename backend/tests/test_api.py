@@ -167,3 +167,55 @@ def test_spending_drilldown_matches_a_chat_source_query(client, monkeypatch):
     bad = client.get("/dashboard/spending", params={"category": "grocries"})
     assert bad.status_code == 422
     assert "Groceries" in bad.json()["detail"]["did_you_mean"]
+
+
+def _synced_in_august(client, monkeypatch):
+    from datetime import datetime, timezone
+
+    from app.services import money_query
+
+    monkeypatch.setattr(money_query, "_now", lambda: datetime(2026, 8, 20, 16, tzinfo=timezone.utc))
+    _with_fake_aggregator(client)
+    client.post("/linked-accounts", json={"public_token": "public-fake-token"})
+
+
+def test_transactions_view_lists_every_kind_with_its_account(client, monkeypatch):
+    _synced_in_august(client, monkeypatch)
+
+    body = client.get("/dashboard/transactions", params={"window": "this_month"}).json()
+
+    assert body["transaction_count"] == 3
+    assert [t["merchant_name"] for t in body["transactions"]] == ["Ramen Spot", "Trader Joe's", "Employer Inc"]
+    dining = body["transactions"][0]
+    assert dining["category"] == "Restaurants"
+    assert dining["parent_category"] == "Dining"
+    assert dining["category_type"] == "expense"
+    assert dining["account"]["type"] == "credit"
+    assert body["transactions"][2]["category_type"] == "income"
+
+    assert client.get("/dashboard/transactions", params={"window": "someday"}).status_code == 422
+
+
+def test_cash_flow_sides_add_up_to_the_rollup(client, monkeypatch):
+    _synced_in_august(client, monkeypatch)
+
+    body = client.get("/dashboard/cash-flow", params={"window": "this_month"}).json()
+    rollup = client.get("/dashboard/rollup", params={"window": "this_month"}).json()
+
+    assert body["income"] == rollup["income"] == 3000.0
+    assert body["sources"] == [{"name": "Employer Inc", "amount": 3000.0}]
+    assert {c["name"]: c["amount"] for c in body["categories"]} == {"Groceries": 120.5, "Dining": 45.0}
+    assert sum(c["amount"] for c in body["categories"]) == rollup["spending"]
+
+
+def test_spending_pace_runs_by_day(client, monkeypatch):
+    _synced_in_august(client, monkeypatch)
+
+    body = client.get("/dashboard/spending-pace").json()
+
+    running = body["this_month"]["running"]
+    assert len(running) == 20  # Aug 1 to today
+    assert running[1] == 0 and running[2] == 120.5 and running[4] == 165.5 and running[-1] == 165.5
+    assert body["this_month"]["days_in_month"] == 31
+    assert body["last_month"]["days_in_month"] == 31
+    assert set(body["last_month"]["running"]) == {0}

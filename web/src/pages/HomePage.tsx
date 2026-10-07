@@ -41,6 +41,11 @@ import { useVoiceMode, type VoiceState } from "../lib/useVoiceMode";
 import { formatDate, formatMoney } from "../lib/format";
 import { AssistantText } from "../components/AssistantText";
 import { RowAmount } from "../components/TransactionSearch";
+import { useView } from "../lib/useView";
+import { ViewTabBar, ViewTabs } from "../components/ViewSwitcher";
+import { TransactionsView, type TransactionFilter } from "./TransactionsView";
+import { CashFlowView } from "./CashFlowView";
+import type { Citation } from "../components/TransactionDetails";
 
 const GREETING = "Ask me anything about your money — what you've spent, what's coming in, or whether you're on pace for your goal.";
 // Not scoped to a user/token: a different account landing on a stale id
@@ -92,6 +97,8 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   // Phones: the money rail collapses into the top bar and drops down on tap.
   const [moneyOpen, setMoneyOpen] = useState(false);
   const flow = useCashFlow(token, period, monthRollup);
+  const [view, setView] = useView();
+  const [txFilter, setTxFilter] = useState<TransactionFilter>({ category: null, query: "" });
   const streamRef = useRef<HTMLDivElement>(null);
   const voice = useVoiceMode({
     onFinalTranscript: (text) => ask(text),
@@ -314,6 +321,23 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
     setMoneyOpen(false);
     setShowFlow(true);
   };
+  // Every sourced figure in this conversation, so a transaction can show which answers relied on it.
+  const citations: Citation[] = items.flatMap((item, index) => {
+    if (item.kind !== "assistant-text" || !item.sources) return [];
+    const question = items.slice(0, index).reverse().find((i) => i.kind === "user-text");
+    return item.sources.flatMap((source, i) =>
+      source.query ? [{ question: question?.kind === "user-text" ? question.text : source.label, footnote: i + 1, query: source.query }] : [],
+    );
+  });
+  const openTransactions = (filter: TransactionFilter) => {
+    setTxFilter(filter);
+    setView("transactions");
+  };
+  const askAboutTransaction = (text: string) => {
+    setView("chat");
+    setDraft(text);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
 
   return (
     <div className="relative flex h-dvh flex-col">
@@ -324,6 +348,9 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
             bankr<span className="text-signal">_</span>
           </span>
           <span className="hidden rounded-full bg-signal-wash px-2.5 py-1 font-mono text-[10px] tracking-[0.12em] text-signal md:inline">PRIVATE BETA</span>
+        </div>
+        <div className="absolute left-1/2 hidden -translate-x-1/2 lg:block">
+          <ViewTabs view={view} onChange={setView} />
         </div>
         <div className="flex min-w-0 max-w-[420px] flex-1 lg:hidden">
           <MoneyPill summary={summary} open={moneyOpen} onToggle={() => setMoneyOpen((o) => !o)} />
@@ -365,7 +392,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                 onClick={() => setMoneyOpen(false)}
                 className="h-11 shrink-0 cursor-pointer rounded-[14px] bg-raised text-sm text-ink"
               >
-                Back to chat
+                Close
               </button>
             </section>
           </div>
@@ -423,7 +450,36 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
           {goalsSection}
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {token && view === "transactions" && (
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <TransactionsView
+              token={token}
+              period={period}
+              onPeriodChange={changePeriod}
+              filter={txFilter}
+              onFilterChange={setTxFilter}
+              goals={goals}
+              citations={citations}
+              refreshKey={monthRollup}
+              onAsk={askAboutTransaction}
+              onOpenChat={() => setView("chat")}
+            />
+          </main>
+        )}
+        {token && view === "cashflow" && (
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <CashFlowView
+              token={token}
+              period={period}
+              onPeriodChange={changePeriod}
+              onOpenTransactions={openTransactions}
+              refreshKey={monthRollup}
+            />
+          </main>
+        )}
+
+        {/* Chat stays mounted while hidden so its scroll position and draft survive a view switch. */}
+        <main hidden={view !== "chat"} className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div
             ref={streamRef}
             className="flex-1 overflow-y-auto px-4 py-3 [mask-image:linear-gradient(to_bottom,transparent_0,#000_28px)] sm:px-7"
@@ -438,6 +494,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                   token={token}
                   onGoalCreated={refreshGoalProgress}
                   onOpenSource={setSourceQuery}
+                  onOpenCashFlow={() => setView("cashflow")}
                   isLast={item.id === lastAssistantId && !item.id.startsWith(GREETING_ID) && !isSending}
                 />
               ))}
@@ -509,8 +566,9 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
               Answers come from your linked accounts only. Bankr can read — it can’t move money.
             </p>
           </form>
-        </div>
+        </main>
       </div>
+      <ViewTabBar view={view} onChange={setView} />
     </div>
   );
 }
@@ -520,12 +578,14 @@ function StreamEntry({
   token,
   onGoalCreated,
   onOpenSource,
+  onOpenCashFlow,
   isLast,
 }: {
   item: StreamItem;
   token: string | null;
   onGoalCreated: () => void | Promise<void>;
   onOpenSource: (query: SourceQuery) => void;
+  onOpenCashFlow: () => void;
   isLast: boolean;
 }) {
   switch (item.kind) {
@@ -571,6 +631,15 @@ function StreamEntry({
                 </div>
               )}
             </ExpandToggle>
+          )}
+          {isLast && breakdownQuery && (
+            <button
+              type="button"
+              onClick={onOpenCashFlow}
+              className="h-11 cursor-pointer rounded-full bg-signal-wash px-4 text-[13px] font-medium text-signal ring-1 ring-inset ring-signal/40 hover:text-signal-hi"
+            >
+              Open in Cash flow →
+            </button>
           )}
           {item.goalProposal && (
             <GoalProposalCard

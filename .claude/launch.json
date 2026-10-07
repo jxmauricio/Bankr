@@ -40,6 +40,16 @@
         "cd web && VITE_API_BASE_URL=http://localhost:8010 npm run dev -- --port 5183 --strictPort"
       ],
       "port": 5183
+    },
+    {
+      "name": "web-ngrok",
+      "runtimeExecutable": "sh",
+      "autoPort": false,
+      "runtimeArgs": [
+        "-c",
+        "cd web && VITE_API_BASE_URL= API_PROXY_TARGET=http://localhost:8000 npm run dev -- --port 5183 --strictPort"
+      ],
+      "port": 5183
     }
   ]
 }

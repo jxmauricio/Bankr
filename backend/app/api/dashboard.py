@@ -80,6 +80,42 @@ def rollup(
         raise _query_error(e) from e
 
 
+@router.get("/transactions")
+def transactions(
+    window: str = "this_month",
+    start: str | None = None,
+    end: str | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Every transaction in the window, with its account (the Transactions view)."""
+    try:
+        w = mq.resolve_window(mq.today_for_user(db, user.id), window, start, end)
+    except QueryError as e:
+        raise _query_error(e) from e
+    return {**mq.list_transactions(db, user.id, w), "as_of": mq.data_freshness(db, user.id)}
+
+
+@router.get("/cash-flow")
+def cash_flow(
+    window: str = "this_month",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Income by payer and spending by category for the Cash flow view."""
+    try:
+        w = mq.resolve_window(mq.today_for_user(db, user.id), window)
+    except QueryError as e:
+        raise _query_error(e) from e
+    return {**mq.cash_flow_breakdown(db, user.id, w), "as_of": mq.data_freshness(db, user.id)}
+
+
+@router.get("/spending-pace")
+def spending_pace(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+    """Running spending by day of month, this month against last."""
+    return mq.spending_pace(db, user.id)
+
+
 @router.get("/average")
 def average(
     basis: Literal["month", "year"] = "month",

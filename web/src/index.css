@@ -56,6 +56,7 @@
   --animate-level: level 0.9s ease-in-out infinite;
   --animate-ring: ring 1.4s ease-out infinite;
   --animate-drop: drop 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-view: view-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 [data-theme="light"] {
@@ -111,6 +112,11 @@
 /* The phone money rail dropping from the top bar. */
 @keyframes drop {
   from { transform: translateY(-12px); opacity: 0; }
+}
+
+/* Switching between Chat, Transactions and Cash flow. */
+@keyframes view-in {
+  from { transform: translateY(4px); opacity: 0; }
 }
 
 /* Chat charts grow in once on arrival. */
