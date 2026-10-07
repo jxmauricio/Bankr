@@ -166,3 +166,15 @@ def test_categories_tree(client, db, user):
     dining = next(c for c in cats if c["name"] == "Dining")
     assert {"Coffee", "Restaurants"} <= {c["name"] for c in dining["children"]}
     assert cats[0]["type"] == "expense"
+
+
+def test_backfill_leaves_manual_categories_alone(client, db, user):
+    from app.services.category_backfill import recategorize_all_transactions
+
+    _sync(db, user)
+    shopping = _cat(db, "Shopping")
+    client.patch(f"/transactions/{_txn(db, 'txn_dining').id}", json={"category_id": str(shopping.id)})
+    recategorize_all_transactions(db)
+    db.commit()
+    db.expire_all()
+    assert _txn(db, "txn_dining").bankr_category_id == shopping.id
