@@ -168,10 +168,20 @@ show_chart once, after the tools you need for the answer. An answer has \
 only one picture: if the question needs more, chart the one that answers \
 it best; any second show_chart becomes a link to Transactions or Cash flow \
 under the reply, so point to it in a few words ("the month-by-month is in \
-Cash flow"). The chart comes with the list of transactions behind it. Then keep the text to 1-3 lines with the takeaway \
-(the biggest item, the direction of change) instead of repeating every \
-number the chart shows. Don't chart a single number, a goal, or a list of \
-transactions."""
+Cash flow"). The chart comes with the list of transactions behind it, \
+and opens with its headline total, so don't restate that total. Keep the \
+text to 1-3 lines with the takeaway (the biggest item, the direction of \
+change, the one outlier) instead of repeating every number the chart \
+shows. Pick the shape that fits:
+- "how much between two dates" -> daily
+- "where did my money go" -> breakdown
+- "how much at <merchant> this year" -> merchant
+- "what subscriptions/bills do I pay" -> recurring
+- "why did my net worth change" -> net_worth
+- "how has X moved over the months" -> trend; "this vs last" -> compare
+Don't chart a single number, a goal, or a few transactions: for "did my \
+paycheck come in?" call find_transactions (kind income) and answer in one \
+line; the record is shown as a card."""
 
 _SPEND_CATEGORIES = ", ".join(name for name, type_, _ in DEFAULT_CATEGORIES if type_ == "expense")
 _WINDOW_PROPS = {
@@ -243,7 +253,9 @@ TOOL_DEFINITIONS = [
     ToolSpec(
         name="find_transactions",
         description="List the individual spending transactions behind a figure (negative = money out, "
-        "positive = refund), filtered by window, category, merchant name, and/or charge size.",
+        "positive = refund), filtered by window, category, merchant name, and/or charge size. With "
+        "kind=income it lists money in instead (\"did my paycheck come in?\"); category is ignored then. "
+        "When it finds 1-3 rows, they're shown as cards under your reply.",
         parameters={
             "type": "object",
             "properties": {
@@ -253,6 +265,7 @@ TOOL_DEFINITIONS = [
                 "min_amount": {"type": "number", "description": "Minimum charge size in dollars."},
                 "max_amount": {"type": "number", "description": "Maximum charge size in dollars."},
                 "limit": {"type": "integer", "description": "Default 50."},
+                "kind": {"type": "string", "enum": ["spending", "income"], "description": "Default spending."},
             },
         },
     ),
@@ -404,8 +417,12 @@ TOOL_DEFINITIONS = [
         description=(
             "Show a small chart under your reply. You choose what to chart; the numbers come straight from the "
             "data. breakdown: horizontal bars of spending by category/subcategory/merchant for one window (top 6 "
-            "plus the rest). compare: two bars, a spending window vs the one before it, optionally one category. "
-            "trend: one value per month for the last N months (spending, income, or net)."
+            "plus the rest), with a vs-last-period column for this_week/this_month/this_year. compare: two bars, a "
+            "spending window vs the one before it, optionally one category. trend: one value per month for the "
+            "last N months (spending, income, or net). daily: spending per day for a window of up to 62 days "
+            "(\"between Sep 10 and 17\"). merchant: one merchant's spending per month (default this year so far) "
+            "with order count, average and largest. recurring: subscriptions (or bills, or all) with the next 30 "
+            "days on a timeline. net_worth: how each account moved net worth over a window (default last_30_days)."
         ),
         parameters={
             "type": "object",
@@ -437,7 +454,13 @@ TOOL_DEFINITIONS = [
                     "enum": ["spending", "income", "net"],
                     "description": "trend only. Default spending.",
                 },
-                "months": {"type": "integer", "description": "trend only. 3-12, default 6."},
+                "months": {"type": "integer", "description": "trend: 3-12, default 6. merchant: default this year so far."},
+                "merchant": {"type": "string", "description": "merchant only. Case-insensitive part of the name."},
+                "recurring": {
+                    "type": "string",
+                    "enum": ["subscriptions", "bills", "all"],
+                    "description": "recurring only. Default subscriptions.",
+                },
             },
             "required": ["kind"],
         },
@@ -561,6 +584,9 @@ def _describe_tool_call(name: str, tool_input: dict, result: dict | None = None)
     if name == "show_chart":
         chart = (result or {}).get("chart")
         return f"Chart · {chart['title']}" if chart else "Chart"
+    if name == "find_transactions" and tool_input.get("kind") == "income" and result is not None:
+        what = f"Income · “{tool_input['merchant']}”" if tool_input.get("merchant") else "Income"
+        return f"{what} · {result['label']} · {_count(result['transaction_count'])}"
     if name == "ask_clarifying_question":
         return "Asked which one you meant"
     if name == "propose_rule":
@@ -627,12 +653,15 @@ def _source_query(name: str, tool_input: dict, result: dict) -> dict | None:
         result = result["current"]
     elif name not in ("get_spending", "find_transactions"):
         return None
-    return {
+    query = {
         "start": result["start"],
         "end": result["end"],
         "category": result.get("category"),
         "merchant": tool_input.get("merchant") if name == "find_transactions" else None,
     }
+    if result.get("kind") == "income":
+        query["kind"] = "income"
+    return query
 
 
 # Result fields that hold dollar amounts. A "$" figure in a reply is cited to
@@ -694,6 +723,25 @@ def _money_figures(value, key: str | None = None) -> list[float]:
     return sorted(set(found))
 
 
+def _chart_figures(chart: dict) -> list[float]:
+    """The dollar amounts a chart shows -- bars, the headline, averages and
+    money stats -- so a figure only the chart holds (a net-worth change, a
+    merchant's average) is still numbered to it. Counts are skipped."""
+    found = [chart.get("average"), (chart.get("headline") or {}).get("value")]
+    for p in chart.get("points", []):
+        found += [p.get("value"), p.get("previous"), p.get("last_amount"), p.get("typical_amount")]
+    found += [u.get("value") for u in chart.get("upcoming", [])]
+    found += [s["value"] for s in chart.get("stats", []) if s.get("unit") == "usd"]
+    if chart.get("change"):
+        found.append(chart["change"]["difference"])
+    return sorted({round(abs(float(v)), 2) for v in found if isinstance(v, (int, float)) and not isinstance(v, bool)})
+
+
+# A lookup that found this few rows shows them as cards (the "did my paycheck
+# come in?" answer) rather than leaving the user to open a list of one.
+MAX_RECORDS = 3
+
+
 def _searched(db: Session, user_id: UUID, name: str, tool_input: dict, result: dict) -> dict | None:
     """What an empty search looked through -- the merchant or category, the
     dates and the accounts -- so "$0" comes with its working instead of a
@@ -713,16 +761,16 @@ def _searched(db: Session, user_id: UUID, name: str, tool_input: dict, result: d
         "what": f"“{merchant}”" if merchant else result.get("category") or "All spending",
         "range": result["label"],
         "accounts": [
-            " ".join(part for part in (a.name or a.institution_name, f"•••• {a.mask}" if a.mask else None) if part)
-            for a in accounts
+            mq.account_label(a) for a in accounts
         ],
     }
 
 
 def _view_link(chart: dict) -> dict:
-    """Where a picture that didn't fit goes instead: month-by-month movement
-    is Cash flow's job; everything else is a filtered Transactions list."""
-    if chart["kind"] == "trend":
+    """Where a picture that didn't fit goes instead: movement over time and
+    net worth are Cash flow's job; everything else is a filtered
+    Transactions list."""
+    if chart["kind"] in ("trend", "net_worth", "recurring") or not chart.get("query"):
         return {"view": "cash_flow", "label": "Open Cash flow"}
     return {"view": "transactions", "label": f"{chart['title']} in Transactions", "query": chart.get("query")}
 
@@ -791,6 +839,16 @@ def run_agent_turn(
                 }
             else:
                 entry["chart"] = result["chart"]
+                entry["figures"] = _chart_figures(result["chart"])
+                if result["chart"].get("query"):
+                    entry["query"] = result["chart"]["query"]
+        if (
+            name == "find_transactions"
+            and isinstance(result, dict)
+            and "error" not in result
+            and 0 < result["transaction_count"] <= MAX_RECORDS
+        ):
+            entry["records"] = [{**t, "kind": result.get("kind") or "spending"} for t in result["transactions"]]
         if name == "ask_clarifying_question" and isinstance(result, dict) and result.get("clarify"):
             entry["clarify"] = result["clarify"]
         sources.append(entry)

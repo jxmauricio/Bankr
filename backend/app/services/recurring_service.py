@@ -177,6 +177,27 @@ def _charges(db: Session, user_id: UUID, since: date) -> dict[tuple[str, str], l
     return groups
 
 
+def series_charges(db: Session, user_id: UUID, series_id: UUID, window: mq.Window) -> dict:
+    """The past payments a recurring series was detected from -- the
+    transactions behind a subscription row in a chat answer. Same matching
+    as detection: the normalized merchant name and the money's direction."""
+    series = (
+        db.query(RecurringSeries)
+        .filter(RecurringSeries.id == series_id, RecurringSeries.user_id == user_id)
+        .one_or_none()
+    )
+    if series is None:
+        raise mq.QueryError("no such recurring series")
+    listing = mq.list_transactions(db, user_id, window)
+    rows = [
+        row
+        for row in listing["transactions"]
+        if merchant_key(row["merchant_name"]) == series.merchant_key
+        and (row["amount"] > 0) == (series.direction == "in")
+    ]
+    return {**listing, "transaction_count": len(rows), "truncated": False, "transactions": rows}
+
+
 def detect_recurring(db: Session, user_id: UUID) -> list[RecurringSeries]:
     """Find or refresh every recurring series for the user. Returns the
     series touched by this run."""

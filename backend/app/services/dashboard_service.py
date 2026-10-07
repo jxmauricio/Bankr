@@ -68,7 +68,7 @@ def get_itemized_transactions(
     if kind == "expense":
         total = mq.spend_query(db, user_id, w, resolved_category)["total_spent"] if not merchant else listing["total_spent"]
     else:
-        total = mq.income_query(db, user_id, w)["total_income"]
+        total = mq.income_query(db, user_id, w)["total_income"] if not merchant else -listing["total_spent"]
     return {
         "period": period,
         **w.as_dict(),

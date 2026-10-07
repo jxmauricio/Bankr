@@ -21,6 +21,7 @@ import {
   type ItemizedTransactions,
   type PeriodRollup,
   type SourceQuery,
+  type TransactionRecord,
   type ViewLink,
 } from "../lib/api";
 import { resolveGoalProposal } from "../lib/goalProposal";
@@ -35,7 +36,7 @@ import { ProfileMenu } from "../components/ProfileMenu";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { loadPeriod, savePeriod, type Period as TimePeriod } from "../lib/period";
 import { RelinkBanner } from "../components/StatusBanners";
-import { ChatChart } from "../components/ChatChart";
+import { AnswerHeadline, ChatChart } from "../components/ChatChart";
 import { SettingsModal } from "../components/SettingsModal";
 import { NetWorthFlowModal } from "../components/NetWorthFlowModal";
 import { TransactionSearchModal } from "../components/TransactionSearchModal";
@@ -75,6 +76,7 @@ type StreamItem =
       charts?: ChartSpec[];
       links?: ViewLink[];
       clarify?: Clarify | null;
+      records?: TransactionRecord[];
     }
   | { kind: "user-text"; id: string; text: string }
   | { kind: "topic-card"; id: string; topic: Topic; period: Period };
@@ -221,6 +223,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
         charts: response.charts,
         links: response.links,
         clarify: response.clarify,
+        records: response.records,
         actionProposal: response.action_proposal,
         // A reply with its own confirm card is about that, not a goal -- skip the goal-card fallback.
         goalProposal: response.action_proposal ? null : resolveGoalProposal({
@@ -280,6 +283,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
             charts: m.charts,
             links: m.links,
             clarify: m.clarify,
+            records: m.records,
             actionProposal: m.action_proposal,
             goalProposal: m.action_proposal ? null : resolveGoalProposal({
               userText: previous?.role === "user" ? previous.content : "",
@@ -666,12 +670,17 @@ function StreamEntry({
       const searched = sources.filter((s) => s.searched);
       const breakdownQuery = sources.find((s) => s.query && !s.query.merchant)?.query ?? null;
       const linksToCashFlow = item.links?.some((l) => l.view === "cash_flow") ?? false;
+      const headline = item.charts?.[0]?.headline ?? null;
       return (
         <article className="flex items-start gap-3">
          <BotMark />
          <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
           <div className="flex max-w-full flex-col gap-3 rounded-[6px_20px_20px_20px] bg-surface px-5 py-[18px] text-[15px] leading-[1.65] text-ink">
+            {headline && <AnswerHeadline headline={headline} />}
             <AssistantText text={item.text} figures={{ citations: item.citations ?? [], sources, onOpen: onOpenSource }} />
+            {item.records?.map((record, i) => (
+              <RecordCard key={i} record={record} query={recordQuery(sources)} onOpen={onOpenSource} />
+            ))}
             {searched.map((s, i) => (
               <SearchedBox key={i} source={s} onLinkAccount={onLinkAccount} />
             ))}
@@ -860,6 +869,63 @@ function SourceTrail({ sources, onOpenSource }: { sources: ChatSource[]; onOpenS
         ),
       )}
     </div>
+  );
+}
+
+/** The lookup a record came from, so tapping it opens the same rows. */
+function recordQuery(sources: ChatSource[]): SourceQuery | null {
+  return [...sources].reverse().find((s) => s.tool === "find_transactions" && s.query)?.query ?? null;
+}
+
+/** "Today, Sep 19" for the record card; plain dates otherwise. */
+function recordDate(iso: string): string {
+  const today = new Date();
+  const local = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  return iso === local ? `Today, ${formatDate(iso)}` : formatDate(iso);
+}
+
+/** The one record a quick question is about ("did my paycheck come in?"),
+ * shown instead of making the user open a list of one. */
+function RecordCard({
+  record,
+  query,
+  onOpen,
+}: {
+  record: TransactionRecord;
+  query: SourceQuery | null;
+  onOpen: (query: SourceQuery) => void;
+}) {
+  const name = record.merchant_name ?? record.category ?? "Transaction";
+  const initials = name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+  const incoming = record.amount > 0;
+  const body = (
+    <>
+      <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-signal-wash text-[13px] font-semibold text-signal">
+        {initials}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate text-sm text-ink">{record.category && record.kind === "income" ? `${record.category} · ${name}` : name}</span>
+        <span className="truncate font-mono text-[11px] text-ink-faint">
+          {[recordDate(record.date), record.account, record.is_pending ? "Pending" : "Posted"].filter(Boolean).join(" · ")}
+        </span>
+      </span>
+      <span className={`shrink-0 font-mono text-base tabular-nums ${incoming ? "text-signal" : "text-ink"}`}>
+        {incoming ? "+" : "−"}
+        {formatMoney(Math.abs(record.amount))}
+      </span>
+    </>
+  );
+  const className = "flex w-full items-center gap-3 rounded-[14px] bg-raised px-3.5 py-3 text-left";
+  if (!query) return <div className={className}>{body}</div>;
+  return (
+    <button type="button" onClick={() => onOpen(query)} className={`${className} cursor-pointer hover:bg-line`}>
+      {body}
+      <span aria-hidden className="text-ink-faint">›</span>
+    </button>
   );
 }
 

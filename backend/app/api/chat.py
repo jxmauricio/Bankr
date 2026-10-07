@@ -40,7 +40,11 @@ class SourceQuery(BaseModel):
     end: str
     category: str | None = None
     merchant: str | None = None
-    kind: str | None = None  # "income" lists income rows; default spending
+    # "income" lists income rows, "all" every row (filtered by account_id or
+    # recurring_id); default spending.
+    kind: str | None = None
+    account_id: str | None = None
+    recurring_id: str | None = None
 
 
 class Searched(BaseModel):
@@ -75,6 +79,18 @@ class ViewLink(BaseModel):
     query: SourceQuery | None = None
 
 
+class TransactionRecord(BaseModel):
+    """One row a short lookup found, shown as a card under the reply."""
+
+    date: str
+    amount: float
+    merchant_name: str | None = None
+    category: str | None = None
+    is_pending: bool = False
+    account: str | None = None
+    kind: str = "spending"
+
+
 class ClarifyChoice(BaseModel):
     label: str
 
@@ -103,6 +119,40 @@ class ChartPoint(BaseModel):
     share: float | None = None
     partial: bool = False
     query: SourceQuery | None = None
+    # breakdown: the same group in the period before
+    previous: float | None = None
+    # daily / merchant: how many rows the bar is
+    count: int | None = None
+    weekday: str | None = None
+    # recurring
+    next_date: str | None = None
+    cadence: str | None = None
+    last_amount: float | None = None
+    typical_amount: float | None = None
+    price_changed: bool = False
+    suggested: bool = False
+    # net_worth: the "not from transactions" remainder
+    note: bool = False
+
+
+class ChartHeadline(BaseModel):
+    eyebrow: str
+    value: float
+    detail: str | None = None
+    tone: str | None = None  # pos | neg
+
+
+class ChartStat(BaseModel):
+    label: str
+    value: float
+    unit: str  # usd | count
+    date: str | None = None
+
+
+class UpcomingCharge(BaseModel):
+    label: str
+    date: str
+    value: float
 
 
 class ChartChange(BaseModel):
@@ -113,7 +163,8 @@ class ChartChange(BaseModel):
 
 class ChartSpec(BaseModel):
     """A small chart under a reply, built server-side from a fresh query (see
-    tools.show_chart). kind: breakdown | compare | trend."""
+    tools.show_chart and services/answer_charts.py). kind: breakdown |
+    compare | trend | daily | merchant | recurring | net_worth."""
 
     kind: str
     title: str
@@ -125,6 +176,13 @@ class ChartSpec(BaseModel):
     # which links to Cash flow instead).
     query: SourceQuery | None = None
     group_by: str | None = None
+    headline: ChartHeadline | None = None
+    previous_label: str | None = None
+    average: float | None = None
+    stats: list[ChartStat] = []
+    upcoming: list[UpcomingCharge] = []
+    today: str | None = None
+    horizon: str | None = None
 
 
 class AnswerParts(BaseModel):
@@ -139,6 +197,7 @@ class AnswerParts(BaseModel):
     charts: list[ChartSpec] = []
     links: list[ViewLink] = []
     clarify: Clarify | None = None
+    records: list[TransactionRecord] = []
 
 
 class ChatResponse(AnswerParts):
@@ -159,13 +218,15 @@ class ConversationMessage(AnswerParts):
     created_at: datetime
 
 
-# Entries that aren't data sources: a chart shows itself below the reply, and
-# a clarifying question shows as its choices.
-_INTERNAL_TOOLS = ("show_chart", "ask_clarifying_question")
-
-
 def _public_entries(raw: list[dict] | None) -> list[dict]:
-    return [entry for entry in raw or [] if entry["tool"] not in _INTERNAL_TOOLS]
+    """The sources a reply's footnotes number. A clarifying question isn't
+    one (it shows as its choices), nor is a chart that became a link; a chart
+    that was drawn is, since its figures can back the text."""
+    return [
+        entry
+        for entry in raw or []
+        if entry["tool"] != "ask_clarifying_question" and (entry["tool"] != "show_chart" or entry.get("chart"))
+    ]
 
 
 def _public_sources(raw: list[dict] | None) -> list[dict]:
@@ -247,6 +308,17 @@ def _links(raw: list[dict] | None) -> list[dict]:
     return links
 
 
+def _records(raw: list[dict] | None) -> list[dict]:
+    """The rows of a 1-3 result lookup, unless the answer has a chart (which
+    already lists its rows)."""
+    if any(entry.get("chart") for entry in raw or []):
+        return []
+    for entry in reversed(raw or []):
+        if entry.get("records"):
+            return entry["records"]
+    return []
+
+
 def _clarify(raw: list[dict] | None) -> dict | None:
     for entry in reversed(raw or []):
         if entry.get("clarify"):
@@ -263,6 +335,7 @@ def _answer_parts(reply: str, raw: list[dict] | None) -> dict:
         "charts": _charts(raw),
         "links": _links(raw),
         "clarify": _clarify(raw),
+        "records": _records(raw),
     }
 
 

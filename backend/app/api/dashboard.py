@@ -1,4 +1,5 @@
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ from app.services.dashboard_service import (
     get_period_rollup,
 )
 from app.services import money_query as mq
+from app.services.recurring_service import series_charges
 from app.services.money_query import QueryError
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -58,11 +60,12 @@ def income(
     window: str | None = None,
     start: str | None = None,
     end: str | None = None,
+    merchant: str | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     try:
-        return get_itemized_transactions(db, user.id, "income", period, window, start, end)
+        return get_itemized_transactions(db, user.id, "income", period, window, start, end, merchant=merchant)
     except QueryError as e:
         raise _query_error(e) from e
 
@@ -85,15 +88,23 @@ def transactions(
     window: str = "this_month",
     start: str | None = None,
     end: str | None = None,
+    account_id: UUID | None = None,
+    recurring_id: UUID | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Every transaction in the window, with its account (the Transactions view)."""
+    """Every transaction in the window, with its account (the Transactions view).
+    account_id narrows it to one account and recurring_id to one recurring
+    series' payments -- what a chat chart's net-worth or subscription row opens."""
     try:
         w = mq.resolve_window(mq.today_for_user(db, user.id), window, start, end)
+        if recurring_id is not None:
+            listing = series_charges(db, user.id, recurring_id, w)
+        else:
+            listing = mq.list_transactions(db, user.id, w, account_id)
     except QueryError as e:
         raise _query_error(e) from e
-    return {**mq.list_transactions(db, user.id, w), "as_of": mq.data_freshness(db, user.id)}
+    return {**listing, "as_of": mq.data_freshness(db, user.id)}
 
 
 @router.get("/cash-flow")

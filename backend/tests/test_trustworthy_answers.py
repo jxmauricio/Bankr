@@ -66,21 +66,25 @@ def test_counts_never_back_a_dollar_figure(db, ledger, monkeypatch):
     assert _citations(reply, sources) == [{"text": "$86.15", "source": 1}]
 
 
-def test_numbering_skips_charts_and_questions(db, ledger, monkeypatch):
-    reply = "Rent is $1,800.00 of it."
+def test_charts_are_sources_but_questions_and_links_are_not(db, ledger, monkeypatch):
+    reply = "Rent is $1,800.00 of it; you average $71.60 a month at Shell."
     sources = _turn(
         db,
         ledger,
         monkeypatch,
         reply,
         [
-            ("show_chart", {"kind": "breakdown", "window": "this_month"}),
             ("get_spending", {"window": "this_month", "group_by": "category"}),
+            ("show_chart", {"kind": "merchant", "merchant": "Shell", "months": 2}),
+            ("show_chart", {"kind": "trend"}),  # becomes a link
+            ("ask_clarifying_question", {"question": "Which?", "choices": ["a", "b"]}),
         ],
     )
     parts = _answer_parts(reply, sources)
-    assert [s["tool"] for s in parts["sources"]] == ["get_spending"]
-    assert parts["citations"] == [{"text": "$1,800.00", "source": 1}]
+    assert [s["tool"] for s in parts["sources"]] == ["get_spending", "show_chart"]
+    assert parts["sources"][1]["label"] == "Chart · Shell by month"
+    # The average is only in the chart.
+    assert parts["citations"] == [{"text": "$1,800.00", "source": 1}, {"text": "$71.60", "source": 2}]
 
 
 def test_citations_come_back_on_the_api_and_with_history(client, db, user, monkeypatch):
@@ -252,3 +256,95 @@ def test_the_model_sees_what_was_searched_too(db, ledger, monkeypatch):
 def test_a_search_that_found_rows_has_no_searched_box(db, ledger, monkeypatch):
     sources = _turn(db, ledger, monkeypatch, "x", [("get_spending", {"window": "this_month", "category": "groceries"})])
     assert "searched" not in sources[0]
+
+
+# --- the answer-shaped charts ------------------------------------------------------
+
+
+def test_breakdown_has_a_headline_and_a_vs_last_month_column(db, ledger):
+    chart = tools.show_chart(db, ledger.id, kind="breakdown", window="this_month")["chart"]
+    assert chart["headline"] == {
+        "eyebrow": "THIS MONTH · SEP 1–19",
+        "value": EXPECTED["this_month_spending"],
+        "detail": "across 6 categories",
+        "tone": None,
+    }
+    assert chart["previous_label"] == "vs Aug 1–19"
+    previous = {p["label"]: p["previous"] for p in chart["points"]}
+    # Aug 1–19 groceries (same point last month) -- the like-for-like number.
+    assert previous["Groceries"] == EXPECTED["groceries_last_month_to_date"]
+    assert previous["Shopping"] == 0.0  # nothing on Amazon by Aug 19
+
+
+def test_daily_bars_add_up_to_the_range(db, ledger):
+    chart = tools.show_chart(db, ledger.id, kind="daily", start="2026-09-07", end="2026-09-13", category="dining")["chart"]
+    assert [p["label"] for p in chart["points"]][:2] == ["Sep 7", "Sep 8"]
+    assert chart["points"][0]["weekday"] == "Mon"
+    assert round(sum(p["value"] for p in chart["points"]), 2) == EXPECTED["dining_last_week"]
+    assert chart["headline"]["value"] == EXPECTED["dining_last_week"]
+    assert chart["headline"]["detail"] == f"spent across {EXPECTED['dining_last_week_count']} transactions"
+    assert chart["points"][0]["query"] == {"start": "2026-09-07", "end": "2026-09-07", "category": "Dining", "merchant": None}
+
+
+def test_daily_refuses_a_range_that_is_too_long(db, ledger):
+    assert "error" in tools.show_chart(db, ledger.id, kind="daily", window="this_year")
+
+
+def test_merchant_chart_has_monthly_bars_and_stats(db, ledger):
+    chart = tools.show_chart(db, ledger.id, kind="merchant", merchant="Shell", months=2)["chart"]
+    # Aug: 48.20 + 45.00; Sep: 50.00
+    assert [(p["label"], p["value"]) for p in chart["points"]] == [("Aug", 93.2), ("Sep", 50.0)]
+    assert chart["points"][-1]["partial"] is True
+    assert chart["headline"]["value"] == 143.2 and chart["headline"]["detail"] == "over 3 orders"
+    assert chart["average"] == 71.6
+    assert chart["stats"] == [
+        {"label": "Orders", "value": 3, "unit": "count"},
+        {"label": "Average order", "value": 47.73, "unit": "usd"},
+        {"label": "Largest", "value": 50.0, "unit": "usd", "date": "2026-09-08"},
+    ]
+    assert chart["points"][0]["query"]["merchant"] == "Shell"
+
+
+def test_merchant_with_no_orders_falls_back_to_text(db, ledger):
+    assert tools.show_chart(db, ledger.id, kind="merchant", merchant="Target")["shown"] is False
+
+
+def test_net_worth_moves_are_each_accounts_transactions(db, ledger):
+    chart = tools.show_chart(db, ledger.id, kind="net_worth", start="2026-09-01", end="2026-09-19")["chart"]
+    moves = {p["label"]: p["value"] for p in chart["points"]}
+    # Checking: +3000 +3000 -500 -640 +40 -1800 -90; savings +500; card:
+    # -88.40 -102.30 -45.10 +640 -25 -42 -5.75 -12.40 +10 -36 -18 -50 -64.99.
+    assert moves == {"Total Checking •••• 1111": 3010.0, "Savings •••• 2222": 500.0, "Sapphire •••• 3333": 160.06}
+    assert chart["headline"]["value"] == 3670.06 and chart["headline"]["tone"] == "pos"
+    # No balance saved before Sep 1, so it says so instead of inventing a start.
+    assert "no balance saved" in chart["headline"]["detail"]
+    assert chart["points"][0]["query"]["kind"] == "all"
+
+
+def test_records_show_for_a_short_lookup(db, ledger, monkeypatch):
+    sources = _turn(
+        db,
+        ledger,
+        monkeypatch,
+        "Yes -- $3,000.00 landed Sep 15.",
+        [("find_transactions", {"start": "2026-09-15", "end": "2026-09-15", "kind": "income"})],
+    )
+    parts = _answer_parts("Yes -- $3,000.00 landed Sep 15.", sources)
+    assert parts["records"] == [
+        {
+            "date": "2026-09-15",
+            "amount": 3000.0,
+            "merchant_name": "Employer Inc",
+            "category": parts["records"][0]["category"],
+            "is_pending": False,
+            "account": "Total Checking •••• 1111",
+            "kind": "income",
+        }
+    ]
+    assert parts["sources"][0]["query"]["kind"] == "income"
+    assert parts["citations"] == [{"text": "$3,000.00", "source": 1}]
+
+
+def test_a_long_lookup_has_no_record_cards(db, ledger, monkeypatch):
+    sources = _turn(db, ledger, monkeypatch, "x", [("find_transactions", {"window": "this_month"})])
+    assert _answer_parts("x", sources)["records"] == []

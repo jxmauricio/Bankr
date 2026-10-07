@@ -282,7 +282,10 @@ export interface SourceQuery {
   end: string;
   category: string | null;
   merchant: string | null;
-  kind?: "income" | null;
+  /** "income" lists money in; "all" every row, narrowed by account_id or recurring_id. */
+  kind?: "income" | "all" | null;
+  account_id?: string | null;
+  recurring_id?: string | null;
 }
 
 export const fetchSpending = (token: string, period: string | SourceQuery) => {
@@ -296,9 +299,38 @@ export const fetchIncome = (token: string, period: string) =>
   request<ItemizedTransactions>("/dashboard/income", { token, query: { period } });
 
 /** The rows behind a SourceQuery, from whichever list it filters. */
-export const fetchQuery = (token: string, query: SourceQuery) => {
-  if (query.kind !== "income") return fetchSpending(token, { ...query, kind: null });
-  return request<ItemizedTransactions>("/dashboard/income", { token, query: { start: query.start, end: query.end } });
+export const fetchQuery = async (token: string, query: SourceQuery): Promise<ItemizedTransactions> => {
+  const range = { start: query.start, end: query.end };
+  if (query.kind === "income") {
+    return request<ItemizedTransactions>("/dashboard/income", {
+      token,
+      query: query.merchant ? { ...range, merchant: query.merchant } : range,
+    });
+  }
+  if (query.kind === "all") {
+    const filter: Record<string, string> = { ...range };
+    if (query.account_id) filter.account_id = query.account_id;
+    if (query.recurring_id) filter.recurring_id = query.recurring_id;
+    const list = await request<TransactionList>("/dashboard/transactions", { token, query: filter });
+    return {
+      period: null,
+      start: list.start,
+      end: list.end,
+      label: list.label,
+      category: null,
+      total: list.transactions.reduce((sum, t) => sum + t.amount, 0),
+      transaction_count: list.transaction_count,
+      items: list.transactions.map((t) => ({
+        date: t.date,
+        amount: t.amount,
+        merchant_name: t.merchant_name,
+        category: t.category,
+        is_pending: t.is_pending,
+      })),
+      as_of: list.as_of,
+    };
+  }
+  return fetchSpending(token, { ...query, kind: null });
 };
 
 export interface TransactionAccount {
@@ -623,6 +655,17 @@ export interface ViewLink {
   query?: SourceQuery | null;
 }
 
+/** One row a short lookup found, shown as a card under the reply. */
+export interface TransactionRecord {
+  date: string;
+  amount: number;
+  merchant_name: string | null;
+  category: string | null;
+  is_pending: boolean;
+  account: string | null;
+  kind: "spending" | "income";
+}
+
 /** Bankr asking which meaning was intended; tapping a choice sends its label. */
 export interface Clarify {
   question: string;
@@ -638,6 +681,7 @@ export interface AnswerParts {
   charts?: ChartSpec[];
   links?: ViewLink[];
   clarify?: Clarify | null;
+  records?: TransactionRecord[];
 }
 
 export interface GoalProposal {
@@ -660,11 +704,33 @@ export interface ChartPoint {
   partial?: boolean;
   /** The rows this bar is drawn from. */
   query?: SourceQuery | null;
+  /** breakdown: the same group in the period before. */
+  previous?: number | null;
+  /** daily / merchant: how many rows the bar is. */
+  count?: number | null;
+  weekday?: string | null;
+  /** recurring */
+  next_date?: string | null;
+  cadence?: string | null;
+  last_amount?: number | null;
+  typical_amount?: number | null;
+  price_changed?: boolean;
+  suggested?: boolean;
+  /** net_worth: the part of the change transactions don't explain. */
+  note?: boolean;
+}
+
+/** The answer first: a small label, one big number, one line of context. */
+export interface ChartHeadline {
+  eyebrow: string;
+  value: number;
+  detail?: string | null;
+  tone?: "pos" | "neg" | null;
 }
 
 /** A small chart under a reply, built server-side from a fresh query. */
 export interface ChartSpec {
-  kind: "breakdown" | "compare" | "trend";
+  kind: "breakdown" | "compare" | "trend" | "daily" | "merchant" | "recurring" | "net_worth";
   title: string;
   period?: string | null;
   unit: "usd";
@@ -673,6 +739,16 @@ export interface ChartSpec {
   /** The rows the whole chart is drawn from; null for a net trend (that's Cash flow). */
   query?: SourceQuery | null;
   group_by?: "category" | "subcategory" | "merchant" | null;
+  headline?: ChartHeadline | null;
+  /** breakdown: what the "vs" column compares against, e.g. "vs Aug 1–19". */
+  previous_label?: string | null;
+  /** merchant: the monthly average line. */
+  average?: number | null;
+  stats?: { label: string; value: number; unit: "usd" | "count"; date?: string | null }[];
+  /** recurring: the next 30 days. */
+  upcoming?: { label: string; date: string; value: number }[];
+  today?: string | null;
+  horizon?: string | null;
 }
 
 export interface RuleProposal {
