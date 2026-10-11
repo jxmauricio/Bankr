@@ -11,9 +11,10 @@ Guardrails are enforced two ways, not just by prompting:
 1. The system prompt explicitly instructs the model to give insights and
    general best-practice framing, and to decline specific investment/trading
    recommendations -- including when a web_search result surfaces one.
-2. Structurally: the tool set below never exposes investment/brokerage data
-   or a trade-execution tool, so there is nothing for the model to act on
-   beyond banking/spending/goal data even if it wanted to. web_search can
+2. Structurally: the tool set below never exposes brokerage holdings or a
+   trade-execution tool, so there is nothing for the model to recommend
+   buying. Transfers from linked bank accounts to a brokerage are still
+   banking data and find_transactions can list them. web_search can
    surface arbitrary web content, so it's the one tool where guardrail (1)
    -- prompting -- is load-bearing rather than backed by (2); see the
    system prompt for how that's constrained.
@@ -124,6 +125,16 @@ one of those instead of giving up or guessing. \
 numbered to the one it came from, so only write figures a tool returned \
 (or that calculate worked out). Never round a figure into one that isn't \
 there, and never estimate one.
+- Sending money to Fidelity, Venmo, Zelle, savings, or a credit-card \
+payoff is a Transfer, not spending. get_spending misses those. For "did I \
+send money to Fidelity" (or Venmo, etc.), call find_transactions with that \
+merchant -- a merchant lookup searches transfers, income, and spending. \
+Say they are transfers, not spending. get_cash_flow includes those moves \
+in transfer_in / transfer_out and in net (income − spending + transfers); \
+credit-card payoffs and checking↔savings are omitted there, because they \
+don't leave the linked accounts. "Last 3 months" is last_90_days \
+(or last_3_months). Listing a transfer to their own brokerage is not an \
+investment recommendation.
 
 When a money question could mean more than one thing -- "the weekend" (which \
 one?), "my card" when there are several, a merchant name that matches more \
@@ -210,8 +221,11 @@ TOOL_DEFINITIONS = [
     ),
     ToolSpec(
         name="get_cash_flow",
-        description="Income, spending, and the gap between them (net) for a date window. Transfers between "
-        "the user's own accounts and credit-card payments count as neither.",
+        description="Income, spending, and transfers that leave or enter the linked accounts (brokerage "
+        "sends, Venmo, ATM) for a date window. net is income − spending + transfer_in − transfer_out. "
+        "transfer_in_sources and transfer_out_destinations break those moves down by merchant. "
+        "Credit-card payoffs and checking↔savings count as neither — they aren't spending and they "
+        "don't leave the linked accounts.",
         parameters={"type": "object", "properties": _WINDOW_PROPS},
     ),
     ToolSpec(
@@ -252,9 +266,11 @@ TOOL_DEFINITIONS = [
     ),
     ToolSpec(
         name="find_transactions",
-        description="List the individual spending transactions behind a figure (negative = money out, "
-        "positive = refund), filtered by window, category, merchant name, and/or charge size. With "
-        "kind=income it lists money in instead (\"did my paycheck come in?\"); category is ignored then. "
+        description="List the individual transactions matching a window, category, merchant, and/or "
+        "amount (negative = money out, positive = money in). Default is spending. kind=income lists "
+        "money in (\"did my paycheck come in?\"); kind=transfer lists moves between the user's own "
+        "accounts, card payoffs, and brokerage/Venmo/Zelle sends; kind=all searches every type. When "
+        "merchant is set and kind is omitted, searches every type so a Fidelity send is not invisible. "
         "When it finds 1-3 rows, they're shown as cards under your reply.",
         parameters={
             "type": "object",
@@ -265,7 +281,11 @@ TOOL_DEFINITIONS = [
                 "min_amount": {"type": "number", "description": "Minimum charge size in dollars."},
                 "max_amount": {"type": "number", "description": "Maximum charge size in dollars."},
                 "limit": {"type": "integer", "description": "Default 50."},
-                "kind": {"type": "string", "enum": ["spending", "income"], "description": "Default spending."},
+                "kind": {
+                    "type": "string",
+                    "enum": ["spending", "income", "transfer", "all"],
+                    "description": "Default spending, except a merchant lookup with no kind searches all types.",
+                },
             },
         },
     ),
@@ -570,7 +590,11 @@ def _describe_tool_call(name: str, tool_input: dict, result: dict | None = None)
             return what
         return f"{what} · {result['label']} · {_count(result['transaction_count'])}"
     if name == "get_cash_flow":
-        return f"Income vs spending · {result['label']}" if result else "Income vs spending"
+        if result is None:
+            return "Income vs spending"
+        moved = result.get("transfer_in") or result.get("transfer_out")
+        what = "Income, spending & transfers" if moved else "Income vs spending"
+        return f"{what} · {result['label']}"
     if name == "compare_spending":
         what = (result or {}).get("category") or "Spending"
         if result is None:
@@ -609,9 +633,12 @@ def _progress_label(name: str, tool_input: dict) -> str:
     if name == "get_net_worth":
         return "Checking your balances…"
     if name == "get_cash_flow":
-        return "Comparing income and spending…"
+        return "Comparing income, spending, and transfers…"
     if name in ("get_spending", "find_transactions"):
-        what = tool_input.get("category") or tool_input.get("merchant")
+        merchant = tool_input.get("merchant")
+        what = tool_input.get("category") or merchant
+        if name == "find_transactions" and merchant:
+            return f"Looking up {merchant}…"
         return f"Looking up {what} spending…" if what else "Looking up your spending…"
     if name == "compare_spending":
         what = tool_input.get("category")
@@ -659,8 +686,11 @@ def _source_query(name: str, tool_input: dict, result: dict) -> dict | None:
         "category": result.get("category"),
         "merchant": tool_input.get("merchant") if name == "find_transactions" else None,
     }
-    if result.get("kind") == "income":
+    kind = result.get("kind")
+    if kind == "income":
         query["kind"] = "income"
+    elif kind in ("all", "transfer"):
+        query["kind"] = "all"
     return query
 
 
@@ -687,6 +717,8 @@ _MONEY_KEYS = frozenset(
         "target_amount",
         "total_assets",
         "total_income",
+        "transfer_in",
+        "transfer_out",
         "total_liabilities",
         "total_spent",
         "value",

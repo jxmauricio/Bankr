@@ -206,6 +206,9 @@ def test_cash_flow_sides_add_up_to_the_rollup(client, monkeypatch):
     assert body["sources"] == [{"name": "Employer Inc", "amount": 3000.0}]
     assert {c["name"]: c["amount"] for c in body["categories"]} == {"Groceries": 120.5, "Dining": 45.0}
     assert sum(c["amount"] for c in body["categories"]) == rollup["spending"]
+    assert body["transfer_in"] == rollup["transfer_in"] == 0
+    assert body["transfer_out"] == rollup["transfer_out"] == 0
+    assert body["net"] == rollup["gain"]
 
 
 def test_spending_pace_runs_by_day(client, monkeypatch):

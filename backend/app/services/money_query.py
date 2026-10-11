@@ -10,7 +10,12 @@ Definitions (chosen to match what a bank statement shows):
   the card statement. Netting happens within each top-level category and
   floors at zero (see spend_query), so a big refund can't produce "negative
   spending". Transfers between the user's own accounts (including
-  credit-card payments) are a separate category type and never count.
+  credit-card payments) are a separate category type and never count as
+  spending or income. Cash flow still reports transfers that leave or
+  enter the linked accounts (a brokerage send, Venmo, an ATM withdrawal)
+  as transfer_in / transfer_out, so leftover cash is income − spending +
+  those moves. Card payoffs and checking↔savings are omitted there too —
+  the purchases already hit spending, and savings is still the user's money.
 - Income = net amount in income categories.
 - Pending transactions are included (the money is committed) and reported
   separately as `pending_amount` so an answer can say "$X of that is still
@@ -47,6 +52,7 @@ NAMED_WINDOWS = (
     "last_7_days",
     "last_30_days",
     "last_90_days",
+    "last_3_months",
 )
 # Calendar periods that are still in progress: comparing one against the
 # full previous period is apples-to-oranges, so compare_spending also
@@ -237,6 +243,8 @@ def resolve_window(
         return Window(date(today.year, 1, 1), today, name)
     if name == "last_year":
         return Window(date(today.year - 1, 1, 1), date(today.year - 1, 12, 31), name)
+    if name == "last_3_months":
+        name = "last_90_days"
     if name.startswith("last_") and name.endswith("_days") and name in NAMED_WINDOWS:
         days = int(name.removeprefix("last_").removesuffix("_days"))
         return Window(today - timedelta(days=days - 1), today, name)
@@ -325,19 +333,21 @@ def _money(value) -> float:
     return round(float(value or 0), 2)
 
 
-def _base_query(db: Session, user_id: UUID, window: Window, category_type: str):
-    return (
+def _base_query(db: Session, user_id: UUID, window: Window, category_type: str | None = "expense"):
+    q = (
         db.query(Transaction)
         .join(Category, Transaction.bankr_category_id == Category.id)
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
         .filter(
             LinkedAccount.user_id == user_id,
-            Category.type == category_type,
             Transaction.date >= window.start,
             Transaction.date <= window.end,
             *counted_filters(),
         )
     )
+    if category_type:
+        q = q.filter(Category.type == category_type)
+    return q
 
 
 def counted_filters() -> tuple:
@@ -458,27 +468,80 @@ def income_query(db: Session, user_id: UUID, window: Window) -> dict:
     }
 
 
+INCOME_SOURCE_LIMIT = 3
+
+# Card payoffs already counted as the purchases they cover. Checking↔savings
+# is the same money on two linked accounts. Both stay type=transfer (not
+# spending) and are omitted from cash flow. Brokerage sends, Venmo, ATM, and
+# similar actually leave or enter the linked set, so they belong here.
+_INTERNAL_TRANSFER_RAW = frozenset(
+    {
+        "transfer_out_savings",
+        "transfer_in_savings",
+        "transfer_out_checking",
+        "transfer_in_checking",
+    }
+)
+
+
+def _cash_flow_transfer_query(db: Session, user_id: UUID, window: Window):
+    raw = func.lower(func.coalesce(Transaction.raw_aggregator_category, ""))
+    return _base_query(db, user_id, window, "transfer").filter(
+        ~raw.startswith("loan_payments_"),
+        ~raw.in_(_INTERNAL_TRANSFER_RAW),
+    )
+
+
+def _top_named(items: list[dict], limit: int, rest_label: str) -> list[dict]:
+    items = sorted(items, key=lambda s: s["amount"], reverse=True)
+    if len(items) <= limit:
+        return items
+    head, rest = items[: limit - 1], items[limit - 1 :]
+    return head + [
+        {"name": rest_label.format(n=len(rest)), "amount": _money(sum(s["amount"] for s in rest))}
+    ]
+
+
 def cash_flow(db: Session, user_id: UUID, window: Window) -> dict:
     income = income_query(db, user_id, window)
     spend = spend_query(db, user_id, window)
+    xfer_rows = (
+        _cash_flow_transfer_query(db, user_id, window)
+        .with_entities(
+            func.coalesce(Transaction.merchant_name, "Transfer"),
+            func.sum(Transaction.amount),
+            func.count(Transaction.id),
+        )
+        .group_by(func.coalesce(Transaction.merchant_name, "Transfer"))
+        .all()
+    )
+    incoming = [{"name": name, "amount": _money(amount)} for name, amount, _ in xfer_rows if (amount or 0) > 0]
+    outgoing = [{"name": name, "amount": _money(-amount)} for name, amount, _ in xfer_rows if (amount or 0) < 0]
+    transfer_in = sum(s["amount"] for s in incoming)
+    transfer_out = sum(s["amount"] for s in outgoing)
+    transfer_in_count = sum(n for _, amount, n in xfer_rows if (amount or 0) > 0)
+    transfer_out_count = sum(n for _, amount, n in xfer_rows if (amount or 0) < 0)
     return {
         **window.as_dict(),
         "income": income["total_income"],
         "spending": spend["total_spent"],
-        "net": _money(income["total_income"] - spend["total_spent"]),
+        "transfer_in": _money(transfer_in),
+        "transfer_out": _money(transfer_out),
+        "net": _money(income["total_income"] - spend["total_spent"] + transfer_in - transfer_out),
         "income_transaction_count": income["transaction_count"],
         "spending_transaction_count": spend["transaction_count"],
+        "transfer_in_transaction_count": int(transfer_in_count),
+        "transfer_out_transaction_count": int(transfer_out_count),
         "pending_spending": spend["pending_amount"],
+        "transfer_in_sources": _top_named(incoming, INCOME_SOURCE_LIMIT, "{n} other transfers in"),
+        "transfer_out_destinations": _top_named(outgoing, INCOME_SOURCE_LIMIT, "{n} other transfers out"),
     }
 
 
-INCOME_SOURCE_LIMIT = 3
-
-
 def cash_flow_breakdown(db: Session, user_id: UUID, window: Window) -> dict:
-    """Where the window's money came from (income by payer, biggest
-    INCOME_SOURCE_LIMIT plus the rest) and where it went (spending by
-    top-level category). Both sides sum exactly to cash_flow's totals."""
+    """Where the window's money came from (income by payer, plus transfers
+    in) and where it went (spending by top-level category, plus transfers
+    out). Both sides of the diagram sum to the same total."""
     flow = cash_flow(db, user_id, window)
     spend = spend_query(db, user_id, window, group_by="category")
 
@@ -508,9 +571,13 @@ def cash_flow_breakdown(db: Session, user_id: UUID, window: Window) -> dict:
         **window.as_dict(),
         "income": flow["income"],
         "spending": flow["spending"],
+        "transfer_in": flow["transfer_in"],
+        "transfer_out": flow["transfer_out"],
         "net": flow["net"],
         "sources": sources,
         "categories": [{"name": g["name"], "amount": g["amount"]} for g in spend.get("groups", [])],
+        "transfers_in": flow["transfer_in_sources"],
+        "transfers_out": flow["transfer_out_destinations"],
     }
 
 
@@ -558,7 +625,13 @@ def spending_pace(db: Session, user_id: UUID) -> dict:
 MAX_LISTED_TRANSACTIONS = 2000
 
 
-def list_transactions(db: Session, user_id: UUID, window: Window, account_id: UUID | None = None) -> dict:
+def list_transactions(
+    db: Session,
+    user_id: UUID,
+    window: Window,
+    account_id: UUID | None = None,
+    merchant: str | None = None,
+) -> dict:
     """Every transaction in the window -- income, spending and transfers --
     newest first, with its account, for the Transactions view. Split rows
     are nested under their parent rather than listed on their own."""
@@ -577,6 +650,8 @@ def list_transactions(db: Session, user_id: UUID, window: Window, account_id: UU
     )
     if account_id is not None:
         q = q.filter(LinkedAccount.id == account_id)
+    if merchant:
+        q = q.filter(Transaction.merchant_name.ilike(f"%{merchant.strip()}%"))
     total_count = q.count()
     rows = q.order_by(Transaction.date.desc(), Transaction.created_at.desc()).limit(MAX_LISTED_TRANSACTIONS).all()
     splits = _splits_for(db, [txn.id for txn, *_ in rows if txn.is_split])
@@ -649,23 +724,14 @@ def _earliest_transaction_date(db: Session, user_id: UUID) -> date | None:
     )
 
 
-def average_cash_flow(db: Session, user_id: UUID, basis: str = "month") -> dict:
-    """Average income and spending over up to the last 12 *complete* calendar
-    months (the in-progress month would drag every average down).
-
-    basis="month": the average per month. basis="year": that monthly average
-    x 12, i.e. a yearly figure; with fewer than 12 months of history it is an
-    extrapolation, and `annualized` says so. The first month of history is
-    skipped unless it began on the 1st, since it's usually only part of a month.
-    If there is no complete month yet, the month so far is used and flagged
-    `partial`, using everything since the first transaction, scaled to a
-    per-month rate (a freshly linked bank only has a few weeks of history, and
-    "the month so far" can easily hold no pay at all)."""
-    if basis not in ("month", "year"):
-        raise QueryError("basis must be 'month' or 'year'")
+def average_month_windows(db: Session, user_id: UUID) -> tuple[list[Window], bool, float]:
+    """The complete calendar months average_cash_flow (and spending health)
+    average over, plus the divisor `n`. The in-progress month is excluded
+    so one half-finished month doesn't drag every average down. If there
+    is no complete month yet, the month so far is used (`partial`), scaled
+    to a per-month rate by days / 30.4375."""
     today = today_for_user(db, user_id)
     earliest = _earliest_transaction_date(db, user_id)
-
     months: list[Window] = []
     cursor = _month_start(today)
     if earliest is not None:
@@ -681,14 +747,33 @@ def average_cash_flow(db: Session, user_id: UUID, basis: str = "month") -> dict:
     if partial:
         history_start = earliest if earliest is not None else _month_start(today)
         months = [Window(history_start, today, "custom")]
-
-    flows = [cash_flow(db, user_id, w) for w in months]
-    if partial:
         n = max((today - months[0].start).days + 1, 1) / 30.4375
     else:
-        n = len(flows)
+        n = float(len(months))
+    return months, partial, n
+
+
+def average_cash_flow(db: Session, user_id: UUID, basis: str = "month") -> dict:
+    """Average income and spending over up to the last 12 *complete* calendar
+    months (the in-progress month would drag every average down).
+
+    basis="month": the average per month. basis="year": that monthly average
+    x 12, i.e. a yearly figure; with fewer than 12 months of history it is an
+    extrapolation, and `annualized` says so. The first month of history is
+    skipped unless it began on the 1st, since it's usually only part of a month.
+    If there is no complete month yet, the month so far is used and flagged
+    `partial`, using everything since the first transaction, scaled to a
+    per-month rate (a freshly linked bank only has a few weeks of history, and
+    "the month so far" can easily hold no pay at all)."""
+    if basis not in ("month", "year"):
+        raise QueryError("basis must be 'month' or 'year'")
+    months, partial, n = average_month_windows(db, user_id)
+
+    flows = [cash_flow(db, user_id, w) for w in months]
     avg_income = sum(f["income"] for f in flows) / n
     avg_spending = sum(f["spending"] for f in flows) / n
+    avg_transfer_in = sum(f["transfer_in"] for f in flows) / n
+    avg_transfer_out = sum(f["transfer_out"] for f in flows) / n
     scale = 12 if basis == "year" else 1
     start = min(w.start for w in months)
     end = max(w.end for w in months)
@@ -696,8 +781,10 @@ def average_cash_flow(db: Session, user_id: UUID, basis: str = "month") -> dict:
         "basis": basis,
         "income": _money(avg_income * scale),
         "spending": _money(avg_spending * scale),
-        "net": _money((avg_income - avg_spending) * scale),
-        "months_used": round(n, 1) if partial else n,
+        "transfer_in": _money(avg_transfer_in * scale),
+        "transfer_out": _money(avg_transfer_out * scale),
+        "net": _money((avg_income - avg_spending + avg_transfer_in - avg_transfer_out) * scale),
+        "months_used": round(n, 1) if partial else int(n),
         "start": start.isoformat(),
         "end": end.isoformat(),
         "label": format_range(start, end),
@@ -736,6 +823,8 @@ def month_cash_flow(db: Session, user_id: UUID, month: str) -> dict:
         "month": month,
         "income": flow["income"],
         "spending": flow["spending"],
+        "transfer_in": flow["transfer_in"],
+        "transfer_out": flow["transfer_out"],
         "net": flow["net"],
         "months_used": 1,
         "start": first.isoformat(),
@@ -859,10 +948,10 @@ def find_transactions(
     limit: int = 50,
     category_type: str = "expense",
 ) -> dict:
-    """Spending transactions (outflows and refunds) matching the filters,
-    newest first. Amounts: negative = money out, positive = refund.
-    min/max compare against the *size* of the charge. category_type="income"
-    lists income rows instead (the dashboard's Income drill-down)."""
+    """Transactions matching the filters, newest first. Amounts: negative =
+    money out, positive = money in (income or a refund). min/max compare
+    against the *size* of the charge. category_type defaults to expense
+    (spending); pass "income", "transfer", or None for every type."""
     q = _base_query(db, user_id, window, category_type)
     if category is not None:
         q = q.filter(Transaction.bankr_category_id.in_(category.ids))
@@ -875,7 +964,7 @@ def find_transactions(
 
     total_count = q.count()
     rows = (
-        q.with_entities(Transaction, Category.name, LinkedAccount)
+        q.with_entities(Transaction, Category.name, Category.type, LinkedAccount)
         .order_by(Transaction.date.desc(), Transaction.amount)
         .limit(max(1, min(limit, 1000)))
         .all()
@@ -894,10 +983,11 @@ def find_transactions(
                 "amount": _money(txn.amount),
                 "merchant_name": txn.merchant_name,
                 "category": category_name,
+                "category_type": category_type_name,
                 "is_pending": txn.is_pending,
                 "account": account_label(account),
             }
-            for txn, category_name, account in rows
+            for txn, category_name, category_type_name, account in rows
         ],
     }
 

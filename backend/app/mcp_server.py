@@ -53,6 +53,7 @@ Window = Literal[
     "last_7_days",
     "last_30_days",
     "last_90_days",
+    "last_3_months",
 ]
 
 _current_user_id: ContextVar[UUID] = ContextVar("bankr_mcp_user_id")
@@ -88,9 +89,9 @@ def build_mcp_server() -> FastMCP:
 
     @mcp.tool()
     def get_cash_flow(window: Window = "this_month", start: str | None = None, end: str | None = None) -> dict:
-        """Income, spending, and the gap between them for a date window (resolved in the user's timezone;
-        weeks run Monday-Sunday). start/end (YYYY-MM-DD) override window. Transfers between the user's own
-        accounts and credit-card payments count as neither."""
+        """Income, spending, and transfers that leave or enter the linked accounts (brokerage sends,
+        Venmo, ATM) for a date window. net is income − spending + transfer_in − transfer_out.
+        Credit-card payoffs and checking↔savings count as neither."""
         with _session() as db:
             return tools.get_cash_flow(db, _current_user_id.get(), window, start, end)
 
@@ -133,13 +134,16 @@ def build_mcp_server() -> FastMCP:
         min_amount: float | None = None,
         max_amount: float | None = None,
         limit: int = 50,
+        kind: Literal["spending", "income", "transfer", "all"] | None = None,
     ) -> dict:
-        """List individual spending transactions (negative = money out, positive = refund) filtered by
-        window, category, merchant substring, and/or charge size. `limit` is capped at 200."""
+        """List individual transactions (negative = money out, positive = money in) filtered by
+        window, category, merchant substring, and/or charge size. Default is spending; a merchant
+        lookup with no kind also searches transfers (Fidelity, Venmo, card payoffs). `limit` is
+        capped at 200."""
         with _session() as db:
             return tools.find_transactions(
                 db, _current_user_id.get(), window, start, end, category, merchant, min_amount, max_amount,
-                max(1, min(limit, 200)),
+                max(1, min(limit, 200)), kind,
             )
 
     @mcp.tool()

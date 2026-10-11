@@ -218,6 +218,8 @@ export interface PeriodRollup {
   label: string;
   income: number;
   spending: number;
+  transfer_in: number;
+  transfer_out: number;
   gain: number;
   pending_spending: number;
   as_of: string | null;
@@ -242,6 +244,8 @@ export interface AverageCashFlow {
   basis: AverageBasis;
   income: number;
   spending: number;
+  transfer_in?: number;
+  transfer_out?: number;
   net: number;
   months_used: number;
   label: string;
@@ -251,6 +255,43 @@ export interface AverageCashFlow {
 
 export const fetchAverage = (token: string, basis: AverageBasis, month?: string) =>
   request<AverageCashFlow>("/dashboard/average", { token, query: month ? { basis, month } : { basis } });
+
+export type HealthTone = "good" | "ok" | "high" | "neutral";
+
+export interface HealthLine {
+  id: string;
+  name: string;
+  amount: number;
+  pct: number | null;
+  recommended_pct: number | null;
+  recommended_amount: number | null;
+  tone: HealthTone;
+  verdict: string;
+  source: string | null;
+  why: string | null;
+  this_month_amount: number;
+  this_month_pct: number | null;
+  higher_is_better: boolean;
+}
+
+export interface SpendingHealth {
+  income: number;
+  spending: number;
+  saved: number;
+  saved_pct: number | null;
+  months_used: number;
+  partial: boolean;
+  start: string;
+  end: string;
+  label: string;
+  as_of: string | null;
+  note: string;
+  snapshots: HealthLine[];
+  buckets: HealthLine[];
+  categories: HealthLine[];
+}
+
+export const fetchHealth = (token: string) => request<SpendingHealth>("/dashboard/health", { token });
 
 /** "YYYY-MM" values, newest first. */
 export const fetchMonths = (token: string) => request<string[]>("/dashboard/months", { token });
@@ -282,7 +323,7 @@ export interface SourceQuery {
   end: string;
   category: string | null;
   merchant: string | null;
-  /** "income" lists money in; "all" every row, narrowed by account_id or recurring_id. */
+  /** "income" lists money in; "all" every row, narrowed by account_id, recurring_id, or merchant. */
   kind?: "income" | "all" | null;
   account_id?: string | null;
   recurring_id?: string | null;
@@ -311,6 +352,7 @@ export const fetchQuery = async (token: string, query: SourceQuery): Promise<Ite
     const filter: Record<string, string> = { ...range };
     if (query.account_id) filter.account_id = query.account_id;
     if (query.recurring_id) filter.recurring_id = query.recurring_id;
+    if (query.merchant) filter.merchant = query.merchant;
     const list = await request<TransactionList>("/dashboard/transactions", { token, query: filter });
     return {
       period: null,
@@ -601,9 +643,13 @@ export interface CashFlowBreakdown {
   label: string;
   income: number;
   spending: number;
+  transfer_in: number;
+  transfer_out: number;
   net: number;
   sources: { name: string; amount: number }[];
   categories: { name: string; amount: number }[];
+  transfers_in: { name: string; amount: number }[];
+  transfers_out: { name: string; amount: number }[];
   as_of: string | null;
 }
 
@@ -663,7 +709,8 @@ export interface TransactionRecord {
   category: string | null;
   is_pending: boolean;
   account: string | null;
-  kind: "spending" | "income";
+  kind: "spending" | "income" | "transfer" | "all";
+  category_type?: "income" | "expense" | "transfer" | null;
 }
 
 /** Bankr asking which meaning was intended; tapping a choice sends its label. */

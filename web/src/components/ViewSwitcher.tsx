@@ -19,6 +19,13 @@ function ViewIcon({ view, size = 17 }: { view: View; size?: number }) {
       </svg>
     );
   }
+  if (view === "health") {
+    return (
+      <svg {...common}>
+        <path d="M3 12h4l2-6 3 12 2-6h7" />
+      </svg>
+    );
+  }
   if (view === "plan") {
     return (
       <svg {...common}>
@@ -47,7 +54,7 @@ export function ViewTabs({ view, onChange }: { view: View; onChange: (view: View
             aria-current={current ? "page" : undefined}
             aria-keyshortcuts={v.key}
             onClick={() => onChange(v.id)}
-            className={`flex h-11 cursor-pointer items-center gap-2 rounded-[14px] px-[18px] text-sm font-medium transition-colors ${
+            className={`flex h-11 cursor-pointer items-center gap-2 rounded-[14px] px-3 text-sm font-medium transition-colors ${
               current ? "bg-raised text-ink" : "text-ink-soft hover:text-ink"
             }`}
           >
@@ -66,7 +73,7 @@ export function ViewTabBar({ view, onChange }: { view: View; onChange: (view: Vi
   return (
     <nav
       aria-label="Views"
-      className="grid shrink-0 grid-cols-4 border-t border-line bg-bg px-2 pb-[max(10px,env(safe-area-inset-bottom))] pt-1.5 lg:hidden"
+      className="grid shrink-0 grid-cols-5 border-t border-line bg-bg px-2 pb-[max(10px,env(safe-area-inset-bottom))] pt-1.5 lg:hidden"
     >
       {VIEWS.map((v) => {
         const current = v.id === view;

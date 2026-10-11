@@ -192,24 +192,36 @@ def find_transactions(
     kind: str | None = None,
     **_extra,
 ) -> dict:
-    """kind="income" lists money in (paychecks, interest) instead of spending."""
-    if kind not in (None, "spending", "income"):
-        raise mq.QueryError("kind must be spending or income")
-    income = kind == "income"
+    """kind=income lists money in; kind=transfer lists moves between the user's
+    own accounts (Fidelity, Venmo, card payoffs). A merchant lookup with no
+    kind searches every type so those rows aren't invisible."""
+    if kind not in (None, "spending", "income", "transfer", "all"):
+        raise mq.QueryError("kind must be spending, income, transfer, or all")
+    if kind is None:
+        category_type = None if merchant else "expense"
+        result_kind = "all" if merchant else "spending"
+    elif kind == "spending":
+        category_type, result_kind = "expense", "spending"
+    elif kind == "income":
+        category_type, result_kind = "income", "income"
+    elif kind == "transfer":
+        category_type, result_kind = "transfer", "transfer"
+    else:
+        category_type, result_kind = None, "all"
     result = mq.find_transactions(
         db,
         user_id,
         _window(db, user_id, window, start, end),
-        None if income else _category(db, category),
+        _category(db, category) if category and result_kind in ("spending", "all") else None,
         merchant,
         min_amount,
         max_amount,
         limit,
-        category_type="income" if income else "expense",
+        category_type=category_type,
     )
-    if income:
-        # find_transactions sums spending as money out; for income that's the wrong sign.
-        result["kind"] = "income"
+    result["kind"] = result_kind
+    if result_kind == "income":
+        # find_transactions sums money out; for income that's the wrong sign.
         result["total_income"] = -result.pop("total_spent")
     return result
 

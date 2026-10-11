@@ -40,8 +40,8 @@ class SourceQuery(BaseModel):
     end: str
     category: str | None = None
     merchant: str | None = None
-    # "income" lists income rows, "all" every row (filtered by account_id or
-    # recurring_id); default spending.
+    # "income" lists income rows, "all" every row (filtered by account_id,
+    # recurring_id, or merchant); default spending.
     kind: str | None = None
     account_id: str | None = None
     recurring_id: str | None = None
@@ -89,6 +89,7 @@ class TransactionRecord(BaseModel):
     is_pending: bool = False
     account: str | None = None
     kind: str = "spending"
+    category_type: str | None = None
 
 
 class ClarifyChoice(BaseModel):

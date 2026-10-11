@@ -50,6 +50,7 @@ import { useView } from "../lib/useView";
 import { ViewTabBar, ViewTabs } from "../components/ViewSwitcher";
 import { TransactionsView, type TransactionFilter } from "./TransactionsView";
 import { PlanView } from "./PlanView";
+import { HealthView } from "./HealthView";
 import { UpcomingBills } from "../components/UpcomingBills";
 import { InsightsBell } from "../components/InsightsBell";
 import { CashFlowView } from "./CashFlowView";
@@ -539,6 +540,17 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
           </main>
         )}
 
+        {token && view === "health" && (
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <HealthView
+              token={token}
+              refreshKey={monthRollup}
+              onOpenTransactions={openTransactions}
+              onOpenCashFlow={() => setView("cashflow")}
+            />
+          </main>
+        )}
+
         {token && view === "plan" && (
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <PlanView token={token} refreshKey={monthRollup} focus={planFocus} onChanged={() => setPlanVersion((n) => n + 1)} />
@@ -908,7 +920,7 @@ function RecordCard({
         {initials}
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-sm text-ink">{record.category && record.kind === "income" ? `${record.category} · ${name}` : name}</span>
+        <span className="truncate text-sm text-ink">{record.category ? `${record.category} · ${name}` : name}</span>
         <span className="truncate font-mono text-[11px] text-ink-faint">
           {[recordDate(record.date), record.account, record.is_pending ? "Pending" : "Posted"].filter(Boolean).join(" · ")}
         </span>

@@ -6,9 +6,11 @@ backend-maintained mapping, not a full categorization engine.
 Three types, and the third one is load-bearing for correct totals:
 - income / expense: what "income" and "spending" sum over.
 - transfer: money moving between the user's *own* accounts (checking ->
-  savings, paying off a credit card). Counted as neither -- otherwise a
-  $500 card payment is "spent" on top of the $500 of card purchases it pays
-  for, and every income-vs-spend answer is wrong by the size of the bill.
+  savings, paying off a credit card, sending to a brokerage). Never
+  counted as spending or income -- otherwise a $500 card payment is
+  "spent" on top of the $500 of card purchases it pays for. Cash flow
+  still reports the ones that leave or enter the linked accounts
+  (brokerage, Venmo) separately from spending.
 
 Subcategories hang off a parent via parent_category_id so a question can be
 answered at either level: "how much on gas" -> Gas; "on getting around" ->

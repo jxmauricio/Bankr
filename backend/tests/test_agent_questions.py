@@ -67,7 +67,9 @@ def test_q2_income_vs_spend(db, ledger, monkeypatch):
         EXPECTED["this_month_spending"],
         EXPECTED["this_month_net"],
     )
-    assert source["label"] == "Income vs spending · Sep 1–19, 2026"
+    assert result["transfer_in"] == EXPECTED["this_month_transfer_in"]
+    assert result["transfer_out"] == EXPECTED["this_month_transfer_out"]
+    assert source["label"] == "Income, spending & transfers · Sep 1–19, 2026"
 
 
 def test_q3_groceries_this_month_vs_last(db, ledger, monkeypatch):

@@ -6,7 +6,7 @@ import { SpendingPaceChart } from "../components/SpendingPaceChart";
 const whole = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
 const MAX_CATEGORIES = 8;
 
-type Kind = "income" | "deficit" | "spend" | "kept";
+type Kind = "income" | "deficit" | "spend" | "transfer" | "kept";
 
 interface FlowNode {
   name: string;
@@ -20,11 +20,17 @@ const KIND_COLOR: Record<Kind, string> = {
   income: "var(--color-signal)",
   deficit: "var(--color-warn)",
   spend: "var(--color-spend)",
+  transfer: "var(--color-ink-soft)",
   kept: "var(--color-positive)",
 };
 
-/** Income sources on the left; spending categories plus what's left on the right. Both sides sum to the same total. */
+/** Income and transfers in on the left; spending, transfers out, and leftover on the right. Both sides sum to the same total. */
 function sides(flow: CashFlowBreakdown): { left: FlowNode[]; right: FlowNode[]; total: number } {
+  const transferIn = flow.transfer_in ?? 0;
+  const transferOut = flow.transfer_out ?? 0;
+  const moneyIn = flow.income + transferIn;
+  const moneyOut = flow.spending + transferOut;
+
   const left: FlowNode[] = flow.sources.map((s) => ({
     name: s.name,
     amount: s.amount,
@@ -32,8 +38,16 @@ function sides(flow: CashFlowBreakdown): { left: FlowNode[]; right: FlowNode[]; 
     // "N other sources" is a roll-up, so it lists every income row.
     target: { category: "Income", query: /^\d+ other sources$/.test(s.name) ? "" : s.name },
   }));
-  if (flow.spending > flow.income) {
-    left.push({ name: "From your balances", amount: flow.spending - flow.income, kind: "deficit" });
+  for (const t of flow.transfers_in ?? []) {
+    left.push({
+      name: t.name,
+      amount: t.amount,
+      kind: "transfer",
+      target: { category: "Transfer", query: /^\d+ other /.test(t.name) ? "" : t.name },
+    });
+  }
+  if (moneyOut > moneyIn) {
+    left.push({ name: "From your balances", amount: moneyOut - moneyIn, kind: "deficit" });
   }
 
   const cats = flow.categories;
@@ -44,9 +58,17 @@ function sides(flow: CashFlowBreakdown): { left: FlowNode[]; right: FlowNode[]; 
     const tail = cats.slice(shown.length);
     right.push({ name: `${tail.length} more`, amount: tail.reduce((s, c) => s + c.amount, 0), kind: "spend" });
   }
+  for (const t of flow.transfers_out ?? []) {
+    right.push({
+      name: t.name,
+      amount: t.amount,
+      kind: "transfer",
+      target: { category: "Transfer", query: /^\d+ other /.test(t.name) ? "" : t.name },
+    });
+  }
   if (flow.net > 0) right.push({ name: "Left over", amount: flow.net, kind: "kept" });
 
-  return { left, right, total: Math.max(flow.income, flow.spending) };
+  return { left, right, total: Math.max(moneyIn, moneyOut) };
 }
 
 export function CashFlowView({
@@ -79,7 +101,7 @@ export function CashFlowView({
   }, [token, window_, refreshKey]);
 
   const data = flow ? sides(flow) : null;
-  const empty = flow !== null && flow.income === 0 && flow.spending === 0;
+  const empty = flow !== null && flow.income === 0 && flow.spending === 0 && (flow.transfer_in ?? 0) === 0 && (flow.transfer_out ?? 0) === 0;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto animate-view">
@@ -88,7 +110,7 @@ export function CashFlowView({
           <div className="flex flex-col gap-1">
             <h1 className="m-0 text-[22px] font-semibold tracking-[-0.02em] text-ink lg:text-[26px]">Cash flow</h1>
             <span className="text-[13px] text-ink-soft">
-              Where your money came from and where it went{flow ? ` · ${flow.label}` : ""}. Pick a category to see its transactions.
+              Where your money came from and where it went — including transfers that left or entered your accounts{flow ? ` · ${flow.label}` : ""}. Pick a category to see its transactions.
             </span>
           </div>
           <div role="radiogroup" aria-label="Period" className="-mx-4 flex overflow-x-auto px-4 lg:mx-0 lg:px-0">
@@ -119,7 +141,7 @@ export function CashFlowView({
           <div className="h-[420px] animate-pulse rounded-3xl bg-surface" aria-label="Loading cash flow" />
         ) : empty ? (
           <Panel>
-            <p className="py-10 text-center text-sm text-ink-soft">No income or spending in {flow.label} yet.</p>
+            <p className="py-10 text-center text-sm text-ink-soft">No income, spending, or transfers in {flow.label} yet.</p>
           </Panel>
         ) : (
           <>
@@ -238,14 +260,14 @@ function Sankey({
   for (const l of labels) l.y = l.side === "left" ? leftYs[li++] : rightYs[ri++];
 
   const pct = (n: number) => `${Math.round((n / total) * 100)}%`;
-  const aria = `Cash flow for ${flow.label}: ${whole(flow.income)} income from ${flow.sources.length} source${flow.sources.length === 1 ? "" : "s"}, ${whole(flow.spending)} spending across ${flow.categories.length} categories${flow.net > 0 ? `, ${whole(flow.net)} left over` : `, ${whole(-flow.net)} more out than in`}.`;
+  const aria = `Cash flow for ${flow.label}: ${whole(flow.income)} income from ${flow.sources.length} source${flow.sources.length === 1 ? "" : "s"}, ${whole(flow.spending)} spending across ${flow.categories.length} categories${flow.transfer_out ? `, ${whole(flow.transfer_out)} transferred out` : ""}${flow.transfer_in ? `, ${whole(flow.transfer_in)} transferred in` : ""}${flow.net > 0 ? `, ${whole(flow.net)} left over` : `, ${whole(-flow.net)} more out than in`}.`;
 
   return (
     <div ref={boxRef} className="relative mx-auto w-full max-w-[980px]" style={{ aspectRatio: `${W} / ${H + 40}` }}>
       <svg role="img" aria-label={aria} viewBox={`0 -20 ${W} ${H + 40}`} className="absolute inset-0 h-full w-full overflow-visible">
         {links.map((l) => (
           <path
-            key={l.name}
+            key={`${l.color}-${l.name}`}
             d={l.d}
             fill={l.color}
             opacity={hover ? (hover === l.name ? 0.55 : 0.08) : 0.28}
@@ -261,7 +283,7 @@ function Sankey({
         className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 whitespace-nowrap"
         style={{ left: `${((XM + NODE_W / 2) / W) * 100}%`, top: `${((midY - 12 + 20) / (H + 40)) * 100}%` }}
       >
-        <span className="text-[13px] font-medium text-ink">{flow.spending > flow.income ? "Money out" : "Income"}</span>
+        <span className="text-[13px] font-medium text-ink">{flow.spending + (flow.transfer_out ?? 0) > flow.income + (flow.transfer_in ?? 0) ? "Money out" : "Money in"}</span>
         <span className="font-tabular text-[11px] text-ink-soft">{whole(total)}</span>
       </div>
 
@@ -286,9 +308,10 @@ function Sankey({
         const base = `absolute flex -translate-y-1/2 whitespace-nowrap rounded-md px-1.5 ${
           side === "left" ? "flex-col items-end py-0.5" : "h-6 items-center gap-2"
         }`;
+        const key = `${side}-${node.kind}-${node.name}`;
         return node.target ? (
           <button
-            key={node.name}
+            key={key}
             type="button"
             onClick={() => onPick(node.target!)}
             onMouseEnter={() => setHover(node.name)}
@@ -302,7 +325,7 @@ function Sankey({
             {content}
           </button>
         ) : (
-          <span key={node.name} className={base} style={style} onMouseEnter={() => setHover(node.name)} onMouseLeave={() => setHover(null)}>
+          <span key={key} className={base} style={style} onMouseEnter={() => setHover(node.name)} onMouseLeave={() => setHover(null)}>
             {content}
           </span>
         );
@@ -326,18 +349,19 @@ function CompactFlow({
   onPick: (filter: { category: string | null; query: string }) => void;
 }) {
   const spentPct = (flow.spending / total) * 100;
+  const movedPct = ((flow.transfer_out ?? 0) / total) * 100;
   const maxRow = Math.max(...right.map((r) => r.amount), 1);
   return (
     <div className="flex flex-col gap-3 md:hidden">
       <div className="flex flex-col gap-2.5 rounded-[18px] bg-surface p-3.5">
         <div className="flex justify-between text-[13px]">
-          <span className="text-ink">↓ Income</span>
-          <span className="font-tabular text-signal">{whole(flow.income)}</span>
+          <span className="text-ink">↓ Money in</span>
+          <span className="font-tabular text-signal">{whole(flow.income + (flow.transfer_in ?? 0))}</span>
         </div>
         <div className="flex h-3.5 gap-0.5 overflow-hidden rounded">
           {left.map((s, i) => (
             <div
-              key={s.name}
+              key={`${s.kind}-${s.name}`}
               style={{ width: `${(s.amount / total) * 100}%`, background: KIND_COLOR[s.kind], opacity: s.kind === "income" ? 1 - i * 0.25 : 1 }}
             />
           ))}
@@ -345,10 +369,12 @@ function CompactFlow({
         <span className="font-tabular text-[11px] text-ink-soft">{left.map((s) => `${s.name} ${whole(s.amount)}`).join(" · ")}</span>
         <div className="flex h-3.5 gap-0.5 overflow-hidden rounded">
           <div className="bg-spend" style={{ width: `${spentPct}%` }} />
-          {flow.net > 0 && <div className="bg-positive" style={{ width: `${100 - spentPct}%` }} />}
+          {movedPct > 0 && <div className="bg-ink-soft" style={{ width: `${movedPct}%` }} />}
+          {flow.net > 0 && <div className="bg-positive" style={{ width: `${Math.max(0, 100 - spentPct - movedPct)}%` }} />}
         </div>
-        <div className="flex justify-between text-xs">
+        <div className="flex justify-between gap-2 text-xs">
           <span className="text-spend">Spent {whole(flow.spending)}</span>
+          {(flow.transfer_out ?? 0) > 0 && <span className="text-ink-soft">Moved {whole(flow.transfer_out)}</span>}
           {flow.net > 0 ? <span className="text-positive">Kept {whole(flow.net)}</span> : <span className="text-warn">{whole(-flow.net)} more out than in</span>}
         </div>
       </div>
@@ -367,7 +393,7 @@ function CompactFlow({
           );
           const cls = `flex min-h-11 w-full items-center gap-2.5 ${i ? "border-t border-line" : ""}`;
           return (
-            <li key={c.name}>
+            <li key={`${c.kind}-${c.name}`}>
               {c.target ? (
                 <button type="button" onClick={() => onPick(c.target!)} className={`${cls} cursor-pointer`}>
                   {body}

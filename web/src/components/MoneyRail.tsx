@@ -139,18 +139,24 @@ function CashFlowBars({ flow }: { flow: PeriodRollup | null }) {
       </div>
     );
   }
-  const scale = Math.max(flow.income, flow.spending, 1);
+  const transferIn = flow.transfer_in ?? 0;
+  const transferOut = flow.transfer_out ?? 0;
+  const scale = Math.max(flow.income, flow.spending, transferIn, transferOut, 1);
   const incomePct = (flow.income / scale) * 100;
   const spendPct = (flow.spending / scale) * 100;
   const overspent = flow.gain < 0;
   const savedPct = flow.income > 0 && !overspent ? Math.round((flow.gain / flow.income) * 100) : null;
+  const movedBits = [
+    transferIn ? `transferred in ${formatMoney(transferIn)}` : null,
+    transferOut ? `transferred out ${formatMoney(transferOut)}` : null,
+  ].filter(Boolean);
 
   return (
     <div
       role="group"
-      aria-label={`${flow.label}: income ${formatMoney(flow.income)}, spending ${formatMoney(flow.spending)}, ${
-        overspent ? `${formatMoney(-flow.gain)} overspent` : `${formatMoney(flow.gain)} left over`
-      }`}
+      aria-label={`${flow.label}: income ${formatMoney(flow.income)}, spending ${formatMoney(flow.spending)}${
+        movedBits.length ? `, ${movedBits.join(", ")}` : ""
+      }, ${overspent ? `${formatMoney(-flow.gain)} overspent` : `${formatMoney(flow.gain)} left over`}`}
       className="flex flex-col gap-2.5 rounded-[14px] bg-raised px-3.5 py-3"
     >
       <FlowRow label="Income" arrow="↓" value={flow.income} tone="signal">
@@ -164,7 +170,7 @@ function CashFlowBars({ flow }: { flow: PeriodRollup | null }) {
             className={`h-2 bg-spend ${overspent || incomePct === spendPct ? "rounded" : "rounded-l"}`}
             style={{ width: `${spendPct}%` }}
           />
-          {!overspent && incomePct > spendPct && (
+          {!overspent && incomePct > spendPct && transferOut === 0 && (
             <div
               className="h-2 rounded-r border border-dashed border-positive/70"
               style={{ width: `${incomePct - spendPct}%` }}
@@ -172,6 +178,20 @@ function CashFlowBars({ flow }: { flow: PeriodRollup | null }) {
           )}
         </div>
       </FlowRow>
+      {transferIn > 0 && (
+        <FlowRow label="Moved in" arrow="↓" value={transferIn} tone="transfer">
+          <div className="h-2 rounded bg-line">
+            <div className="h-2 rounded bg-ink-soft" style={{ width: `${(transferIn / scale) * 100}%` }} />
+          </div>
+        </FlowRow>
+      )}
+      {transferOut > 0 && (
+        <FlowRow label="Moved out" arrow="↑" value={transferOut} tone="transfer">
+          <div className="h-2 rounded bg-line">
+            <div className="h-2 rounded bg-ink-soft" style={{ width: `${(transferOut / scale) * 100}%` }} />
+          </div>
+        </FlowRow>
+      )}
       <div className="flex items-baseline justify-between border-t border-line-strong pt-2">
         <span className="text-xs text-ink-soft">{overspent ? "Overspent" : "Left over"}</span>
         <span className={`font-mono text-[13px] ${overspent ? "text-negative" : "text-positive"}`}>
@@ -194,7 +214,7 @@ function FlowRow({
   label: string;
   arrow: string;
   value: number;
-  tone: "signal" | "spend";
+  tone: "signal" | "spend" | "transfer";
   children: React.ReactNode;
 }) {
   return (
@@ -204,14 +224,14 @@ function FlowRow({
           <span
             aria-hidden
             className={`flex h-[18px] w-[18px] items-center justify-center rounded-md text-[11px] ${
-              tone === "signal" ? "bg-signal/15 text-signal" : "bg-spend/15 text-spend"
+              tone === "signal" ? "bg-signal/15 text-signal" : tone === "transfer" ? "bg-ink-soft/15 text-ink-soft" : "bg-spend/15 text-spend"
             }`}
           >
             {arrow}
           </span>
           {label}
         </span>
-        <span className={`font-mono text-[17px] font-medium ${tone === "signal" ? "text-signal" : "text-spend"}`}>
+        <span className={`font-mono text-[17px] font-medium ${tone === "signal" ? "text-signal" : tone === "transfer" ? "text-ink-soft" : "text-spend"}`}>
           {whole(value)}
         </span>
       </div>

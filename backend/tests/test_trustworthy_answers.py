@@ -330,19 +330,32 @@ def test_records_show_for_a_short_lookup(db, ledger, monkeypatch):
         [("find_transactions", {"start": "2026-09-15", "end": "2026-09-15", "kind": "income"})],
     )
     parts = _answer_parts("Yes -- $3,000.00 landed Sep 15.", sources)
-    assert parts["records"] == [
-        {
-            "date": "2026-09-15",
-            "amount": 3000.0,
-            "merchant_name": "Employer Inc",
-            "category": parts["records"][0]["category"],
-            "is_pending": False,
-            "account": "Total Checking •••• 1111",
-            "kind": "income",
-        }
-    ]
+    rec = parts["records"][0]
+    assert rec["date"] == "2026-09-15"
+    assert rec["amount"] == 3000.0
+    assert rec["merchant_name"] == "Employer Inc"
+    assert rec["is_pending"] is False
+    assert rec["account"] == "Total Checking •••• 1111"
+    assert rec["kind"] == "income"
+    assert rec["category_type"] == "income"
     assert parts["sources"][0]["query"]["kind"] == "income"
     assert parts["citations"] == [{"text": "$3,000.00", "source": 1}]
+
+
+def test_a_merchant_lookup_includes_transfers(db, ledger, monkeypatch):
+    sources = _turn(
+        db,
+        ledger,
+        monkeypatch,
+        "Venmo sent **$40.00** on Sep 12 — that's a transfer, not income.",
+        [("find_transactions", {"window": "this_month", "merchant": "Venmo"})],
+    )
+    parts = _answer_parts("Venmo sent **$40.00** on Sep 12 — that's a transfer, not income.", sources)
+    assert parts["records"][0]["merchant_name"] == "Venmo"
+    assert parts["records"][0]["category_type"] == "transfer"
+    assert parts["records"][0]["kind"] == "all"
+    assert parts["sources"][0]["query"]["kind"] == "all"
+    assert parts["sources"][0]["query"]["merchant"] == "Venmo"
 
 
 def test_a_long_lookup_has_no_record_cards(db, ledger, monkeypatch):

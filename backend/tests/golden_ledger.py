@@ -101,9 +101,13 @@ EXPECTED = {
     "total_liabilities": 850.00,
     # Q2 (Sep 1–19): paychecks only. Spend = rent 1800 + PG&E 90 +
     # groceries 235.80 + dining 129.15 + gas 50 + Amazon 64.99.
+    # Venmo +40 is a transfer in (not income). Savings and card payoffs
+    # are omitted from cash flow. net = income − spending + Venmo.
     "this_month_income": 6000.00,
     "this_month_spending": 2369.94,
-    "this_month_net": 3630.06,
+    "this_month_transfer_in": 40.00,
+    "this_month_transfer_out": 0.00,
+    "this_month_net": 3670.06,
     # Q3: 88.40 + 102.30 + 45.10 (pending) vs 120.50 + 95.25 + 60.00;
     # same point last month (Aug 1–19) = 120.50 + 95.25.
     "groceries_this_month": 235.80,

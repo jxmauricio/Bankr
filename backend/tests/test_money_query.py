@@ -38,6 +38,7 @@ def w(name):
         ("this_year", date(2026, 1, 1), date(2026, 9, 19)),
         ("last_year", date(2025, 1, 1), date(2025, 12, 31)),
         ("last_7_days", date(2026, 9, 13), date(2026, 9, 19)),
+        ("last_3_months", date(2026, 6, 22), date(2026, 9, 19)),
         ("yesterday", date(2026, 9, 18), date(2026, 9, 18)),
         ("month", date(2026, 9, 1), date(2026, 9, 19)),  # legacy dashboard period
     ],
@@ -117,7 +118,11 @@ def test_q2_income_vs_spend_this_month(db, ledger):
     flow = mq.cash_flow(db, ledger.id, w("this_month"))
     assert flow["income"] == EXPECTED["this_month_income"]
     assert flow["spending"] == EXPECTED["this_month_spending"]
+    assert flow["transfer_in"] == EXPECTED["this_month_transfer_in"]
+    assert flow["transfer_out"] == EXPECTED["this_month_transfer_out"]
     assert flow["net"] == EXPECTED["this_month_net"]
+    assert flow["transfer_in_sources"] == [{"name": "Venmo", "amount": 40.0}]
+    assert flow["transfer_out_destinations"] == []
     assert (flow["start"], flow["end"]) == ("2026-09-01", "2026-09-19")
 
 
@@ -173,6 +178,25 @@ def test_transfers_and_card_payments_never_count(db, ledger):
     assert spend["refunds"] == 10.00  # only the restaurant refund; the card's payment-received isn't one
     income = mq.income_query(db, ledger.id, w("this_month"))
     assert income["transaction_count"] == 2  # two paychecks; not Venmo, not the savings transfer
+    flow = mq.cash_flow(db, ledger.id, w("this_month"))
+    assert flow["transfer_in"] == 40.00  # Venmo
+    assert flow["transfer_out"] == 0.00  # savings and card payoffs stay off the diagram
+
+
+def test_find_transactions_can_list_transfers_when_asked(db, ledger):
+    found = mq.find_transactions(
+        db, ledger.id, w("this_month"), merchant="Venmo", category_type="transfer"
+    )
+    assert found["transaction_count"] == 1
+    assert found["transactions"][0]["merchant_name"] == "Venmo"
+    assert found["transactions"][0]["category_type"] == "transfer"
+
+    across = mq.find_transactions(db, ledger.id, w("this_month"), merchant="Venmo", category_type=None)
+    assert across["transaction_count"] == 1
+
+    listed = mq.list_transactions(db, ledger.id, w("this_month"), merchant="Venmo")
+    assert listed["transaction_count"] == 1
+    assert listed["transactions"][0]["merchant_name"] == "Venmo"
 
 
 def test_find_transactions_backs_up_the_number(db, ledger):

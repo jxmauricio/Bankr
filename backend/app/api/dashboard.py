@@ -16,6 +16,7 @@ from app.services.dashboard_service import (
 from app.services import money_query as mq
 from app.services.recurring_service import series_charges
 from app.services.money_query import QueryError
+from app.services.spending_health import spending_health
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -90,18 +91,20 @@ def transactions(
     end: str | None = None,
     account_id: UUID | None = None,
     recurring_id: UUID | None = None,
+    merchant: str | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     """Every transaction in the window, with its account (the Transactions view).
     account_id narrows it to one account and recurring_id to one recurring
-    series' payments -- what a chat chart's net-worth or subscription row opens."""
+    series' payments -- what a chat chart's net-worth or subscription row opens.
+    merchant is what a transfer/all source chip carries."""
     try:
         w = mq.resolve_window(mq.today_for_user(db, user.id), window, start, end)
         if recurring_id is not None:
             listing = series_charges(db, user.id, recurring_id, w)
         else:
-            listing = mq.list_transactions(db, user.id, w, account_id)
+            listing = mq.list_transactions(db, user.id, w, account_id, merchant=merchant)
     except QueryError as e:
         raise _query_error(e) from e
     return {**listing, "as_of": mq.data_freshness(db, user.id)}
@@ -153,3 +156,11 @@ def months(user: User = Depends(get_current_user), db: Session = Depends(get_db)
 @router.get("/goal-progress")
 def goal_progress(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     return get_goal_progress(db, user.id)
+
+
+@router.get("/health")
+def health(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+    """Average monthly spending by category as a share of income, scored
+    against widely cited guidelines (HUD housing, 50/30/20, common budget
+    shares). Uses the same complete months as /dashboard/average."""
+    return spending_health(db, user.id)
