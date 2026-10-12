@@ -73,3 +73,10 @@ def test_uncategorized_money_into_a_card_or_loan_is_a_transfer_not_income():
     assert map_raw_category("some_unrecognized_value", 500.0, "loan") == "Transfer"
     assert map_raw_category(None, -40.0, "credit") == "Other"
     assert map_raw_category(None, 500.0, "checking") == "Income"
+
+
+def test_income_category_on_a_card_or_loan_is_a_transfer():
+    # Plaid sandbox tags card "AUTOMATIC PAYMENT - THANK YOU" rows INCOME_SALARY.
+    assert map_raw_category("INCOME_SALARY", 2835.80, "credit") == "Transfer"
+    assert map_raw_category("INCOME_CONTRACTOR", 297.04, "loan") == "Transfer"
+    assert map_raw_category("INCOME_SALARY", 2835.80, "checking") == "Income"

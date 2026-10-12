@@ -87,11 +87,15 @@ def map_raw_category(raw_category: str | None, amount: float, account_type: str 
     no matter which detailed value Plaid picked -- found in Plaid sandbox
     data, where a card's "AUTOMATIC PAYMENT - THANK YOU" is tagged
     LOAN_PAYMENTS_OTHER_PAYMENT and would otherwise count as $2k/month of
-    spending."""
+    spending.
+
+    The same goes for INCOME_*: nobody earns a paycheck on a credit card or
+    loan, so Plaid tagging a card payment's receiving side INCOME_SALARY /
+    INCOME_CONTRACTOR (also seen in sandbox) is a payment, not income."""
     if raw_category:
         normalized = raw_category.strip().lower()
 
-        if account_type in _LIABILITY_ACCOUNT_TYPES and normalized.startswith("loan_payments"):
+        if account_type in _LIABILITY_ACCOUNT_TYPES and normalized.startswith(("loan_payments", "income")):
             return "Transfer"
 
         if normalized in DETAILED_CATEGORY_MAP:
