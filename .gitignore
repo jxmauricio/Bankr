@@ -7,3 +7,6 @@ ios/Bankr.xcodeproj/
 ios/**/xcuserdata/
 ios/**/*.xcuserstate
 ios/DerivedData/
+
+# Agent eval transcripts
+backend/tests/evals/results/

@@ -59,6 +59,8 @@ createdb -O bankr bankr_test   # once
 pytest
 ```
 
+Real-model agent evals live in `tests/evals/` and are skipped unless `RUN_EVALS=1` (see its README).
+
 ## Layout
 
 - `app/db/models.py` — SQLAlchemy models (users, linked_accounts, transactions,
