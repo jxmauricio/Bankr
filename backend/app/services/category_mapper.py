@@ -13,7 +13,10 @@ not assumed):
 2. Fall back to a coarse match on the `primary` value (all 16 taxonomy
    primaries) -- this also catches any `detailed` value PFCv2 adds later
    under a primary we already know how to bucket.
-3. Fall back to sign-based Income/Other if nothing matched.
+3. Fall back to sign-based Income/Other if nothing matched -- except that
+   money into a credit card or loan is never income, so it falls back to
+   Transfer. Plaid tags many card payments' receiving side
+   LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT, which no map entry covers.
 
 This table is aggregator-specific -- if Plaid is ever replaced, this map
 (and plaid_client.py's `raw_category` extraction) is the only thing that
@@ -98,4 +101,6 @@ def map_raw_category(raw_category: str | None, amount: float, account_type: str 
             if normalized == primary or normalized.startswith(primary + "_"):
                 return category
 
-    return "Income" if amount > 0 else "Other"
+    if amount > 0:
+        return "Transfer" if account_type in _LIABILITY_ACCOUNT_TYPES else "Income"
+    return "Other"

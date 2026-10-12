@@ -62,3 +62,14 @@ def test_loan_payment_on_the_card_or_loan_itself_is_a_transfer():
     assert map_raw_category("LOAN_PAYMENTS_MORTGAGE_PAYMENT", 1500.0, "loan") == "Transfer"
     # The paying side, from checking, is real money out.
     assert map_raw_category("LOAN_PAYMENTS_MORTGAGE_PAYMENT", -1500.0, "checking") == "Loan Payments"
+
+
+def test_uncategorized_money_into_a_card_or_loan_is_a_transfer_not_income():
+    # A card payment with a category the map doesn't know must not show up
+    # as income. LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT is what Plaid sends
+    # for the card's "Payment Thank You" credit.
+    assert map_raw_category("LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT", 1883.17, "credit") == "Transfer"
+    assert map_raw_category(None, 500.0, "credit") == "Transfer"
+    assert map_raw_category("some_unrecognized_value", 500.0, "loan") == "Transfer"
+    assert map_raw_category(None, -40.0, "credit") == "Other"
+    assert map_raw_category(None, 500.0, "checking") == "Income"
