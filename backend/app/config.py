@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     openrouter_model: str = "deepseek/deepseek-v4-flash-0731"
     openrouter_site_url: str = ""
     openrouter_app_name: str = "Bankr"
+    # How OpenRouter picks among the providers serving OPENROUTER_MODEL:
+    # "throughput" (fastest tokens/sec), "latency" (fastest first token) or
+    # "price". Blank leaves it to OpenRouter's default load balancing, which
+    # favors cheaper providers over faster ones.
+    openrouter_provider_sort: str = "throughput"
 
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5"

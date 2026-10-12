@@ -53,6 +53,7 @@ def build_agent_client() -> AgentClient:
             model=settings.openrouter_model,
             site_url=settings.openrouter_site_url,
             app_name=settings.openrouter_app_name,
+            provider_sort=settings.openrouter_provider_sort,
             extended_thinking=settings.agent_extended_thinking,
             thinking_budget_tokens=settings.agent_thinking_budget_tokens,
         )
