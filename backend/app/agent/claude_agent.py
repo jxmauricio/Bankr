@@ -818,11 +818,16 @@ _client = build_agent_client()
 _search_client = build_web_search_client()
 
 
+class TurnCancelled(Exception):
+    """The user stopped the turn before it produced a reply."""
+
+
 def run_agent_turn(
     db: Session,
     user_id: UUID,
     messages: list[dict],
     on_status: Callable[[str], None] | None = None,
+    is_cancelled: Callable[[], bool] | None = None,
 ) -> tuple[str, list[dict]]:
     """Run one user turn to completion, resolving any tool calls, and return
     (final assistant reply text, sources) -- sources is every tool call that
@@ -833,10 +838,20 @@ def run_agent_turn(
 
     on_status, when given, is called with a short progress line just before
     each tool runs -- the streaming chat endpoint forwards these so the user
-    sees what's happening during a multi-round turn."""
+    sees what's happening during a multi-round turn.
+
+    is_cancelled, when given, is polled before each tool runs and once more
+    before the reply is returned; a True raises TurnCancelled. A model call
+    already in flight can't be interrupted, so a stop takes effect at the
+    next round boundary."""
     sources: list[dict] = []
 
+    def check_cancelled() -> None:
+        if is_cancelled and is_cancelled():
+            raise TurnCancelled()
+
     def call_tool(name: str, tool_input: dict) -> dict:
+        check_cancelled()
         if on_status:
             on_status(_progress_label(name, tool_input))
         result = _TOOL_DISPATCH[name](db, user_id, **tool_input)
@@ -888,4 +903,5 @@ def run_agent_turn(
 
     system = SYSTEM_PROMPT + _date_context(db, user_id)
     reply = _client.run_turn(system, TOOL_DEFINITIONS, messages, call_tool)
+    check_cancelled()
     return reply, sources

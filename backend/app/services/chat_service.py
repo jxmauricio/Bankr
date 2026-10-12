@@ -20,7 +20,7 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.agent.claude_agent import run_agent_turn
+from app.agent.claude_agent import TurnCancelled, run_agent_turn
 from app.db.models import ChatMessage
 
 _PREVIEW_MAX_CHARS = 120
@@ -55,16 +55,25 @@ def send_message(
     conversation_id: UUID,
     message_text: str,
     on_status: Callable[[str], None] | None = None,
+    is_cancelled: Callable[[], bool] | None = None,
 ) -> tuple[str, list[dict]]:
     """Returns (reply text, sources) -- see run_agent_turn for what sources
-    is and what on_status receives."""
+    is and what on_status receives. If is_cancelled turns True mid-turn the
+    user's message is removed again (so history never holds a question with
+    no answer) and TurnCancelled is raised."""
     history = _conversation_history(db, user_id, conversation_id)
     history.append({"role": "user", "content": message_text})
 
-    db.add(ChatMessage(user_id=user_id, conversation_id=conversation_id, role="user", content=message_text))
+    user_row = ChatMessage(user_id=user_id, conversation_id=conversation_id, role="user", content=message_text)
+    db.add(user_row)
     db.commit()
 
-    assistant_text, sources = run_agent_turn(db, user_id, history, on_status)
+    try:
+        assistant_text, sources = run_agent_turn(db, user_id, history, on_status, is_cancelled)
+    except TurnCancelled:
+        db.delete(user_row)
+        db.commit()
+        raise
 
     db.add(
         ChatMessage(
