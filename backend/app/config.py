@@ -100,6 +100,12 @@ class Settings(BaseSettings):
     # endpoint, so it's left alone; point AGENT_MODEL at a reasoning model
     # directly (e.g. deepseek-reasoner) if you want that there instead.
     agent_extended_thinking: bool = False
+    # Output cap (reasoning + reply) per call for the OpenRouter and
+    # OpenAI-compatible clients. Not just a safety limit: with none set,
+    # OpenRouter reserves credit for each provider's full output limit
+    # (100k+ tokens), and a key with a spending limit then only reaches
+    # providers with a small limit -- in practice one slow host.
+    agent_max_output_tokens: int = 8192
     agent_thinking_budget_tokens: int = 2048
 
     # Web search tool the agent can call for anything time-sensitive (current

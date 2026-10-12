@@ -828,6 +828,7 @@ def run_agent_turn(
     messages: list[dict],
     on_status: Callable[[str], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
+    on_text: Callable[[str | None], None] | None = None,
 ) -> tuple[str, list[dict]]:
     """Run one user turn to completion, resolving any tool calls, and return
     (final assistant reply text, sources) -- sources is every tool call that
@@ -843,7 +844,11 @@ def run_agent_turn(
     is_cancelled, when given, is polled before each tool runs and once more
     before the reply is returned; a True raises TurnCancelled. A model call
     already in flight can't be interrupted, so a stop takes effect at the
-    next round boundary."""
+    next round boundary.
+
+    on_text, when given, gets the reply text as the model writes it (see
+    AgentClient.run_turn). is_cancelled is also checked on each piece, so a
+    stop lands mid-answer instead of after it."""
     sources: list[dict] = []
 
     def check_cancelled() -> None:
@@ -901,7 +906,13 @@ def run_agent_turn(
         sources.append(entry)
         return result
 
+    def stream_text(text: str | None) -> None:
+        check_cancelled()
+        on_text(text)
+
     system = SYSTEM_PROMPT + _date_context(db, user_id)
-    reply = _client.run_turn(system, TOOL_DEFINITIONS, messages, call_tool)
+    # Only passed when wanted, so AgentClient stand-ins without it still work.
+    streaming = {"on_text": stream_text} if on_text else {}
+    reply = _client.run_turn(system, TOOL_DEFINITIONS, messages, call_tool, **streaming)
     check_cancelled()
     return reply, sources

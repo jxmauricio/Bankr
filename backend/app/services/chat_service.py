@@ -56,9 +56,10 @@ def send_message(
     message_text: str,
     on_status: Callable[[str], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
+    on_text: Callable[[str | None], None] | None = None,
 ) -> tuple[str, list[dict]]:
     """Returns (reply text, sources) -- see run_agent_turn for what sources
-    is and what on_status receives. If is_cancelled turns True mid-turn the
+    is and what on_status and on_text receive. If is_cancelled turns True mid-turn the
     user's message is removed again (so history never holds a question with
     no answer) and TurnCancelled is raised."""
     history = _conversation_history(db, user_id, conversation_id)
@@ -69,7 +70,7 @@ def send_message(
     db.commit()
 
     try:
-        assistant_text, sources = run_agent_turn(db, user_id, history, on_status, is_cancelled)
+        assistant_text, sources = run_agent_turn(db, user_id, history, on_status, is_cancelled, on_text)
     except TurnCancelled:
         db.delete(user_row)
         db.commit()

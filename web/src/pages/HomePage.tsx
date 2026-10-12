@@ -109,6 +109,8 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [statusLabel, setStatusLabel] = useState<string | null>(null);
+  // The answer as it streams in, shown until the finished reply replaces it.
+  const [replySoFar, setReplySoFar] = useState("");
   const [error, setError] = useState<string | null>(null);
   // The question whose answer failed (or was stopped), so it can be retried or edited in place.
   const [failed, setFailed] = useState<{ itemId: string; text: string; stopped?: boolean } | null>(null);
@@ -194,7 +196,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
 
   useEffect(() => {
     streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight, behavior: "smooth" });
-  }, [items, isSending, statusLabel]);
+  }, [items, isSending, statusLabel, replySoFar]);
 
   // Keep the active conversation in sync with localStorage so a refresh (or
   // reopening the tab) restores it instead of dropping back to the greeting.
@@ -217,10 +219,11 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
     setFailed(null);
     setIsSending(true);
     setStatusLabel(null);
+    setReplySoFar("");
     const abort = new AbortController();
     turnAbort.current = abort;
     try {
-      const response = await streamChatMessage(token, text, conversationId, setStatusLabel, abort.signal);
+      const response = await streamChatMessage(token, text, conversationId, setStatusLabel, setReplySoFar, abort.signal);
       setConversationId(response.conversation_id);
       pushItem({
         kind: "assistant-text",
@@ -249,6 +252,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
       if (turnAbort.current === abort) turnAbort.current = null;
       setIsSending(false);
       setStatusLabel(null);
+      setReplySoFar("");
     }
   }
 
@@ -591,9 +595,15 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
               {isSending && (
                 <div className="flex items-start gap-3">
                   <BotMark />
-                  <div className="rounded-[6px_20px_20px_20px] bg-surface px-[18px] py-3.5">
-                    <ThinkingIndicator label={statusLabel} />
-                  </div>
+                  {replySoFar ? (
+                    <div className="max-w-full rounded-[6px_20px_20px_20px] bg-surface px-5 py-[18px] text-[15px] leading-[1.65] text-ink">
+                      <AssistantText text={replySoFar} />
+                    </div>
+                  ) : (
+                    <div className="rounded-[6px_20px_20px_20px] bg-surface px-[18px] py-3.5">
+                      <ThinkingIndicator label={statusLabel} />
+                    </div>
+                  )}
                 </div>
               )}
               {failed && !isSending && (failed.stopped ? (

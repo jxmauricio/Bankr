@@ -52,6 +52,21 @@ def _log_round(round_number: int, model_seconds: float, tool_seconds: float, usa
     )
 
 
+
+def _merge_piece(pieces: dict[int, dict], piece) -> None:
+    """Fold one streamed reasoning_details fragment into the entry with the
+    same index: text-like fields concatenate, anything else (type, format,
+    signature) is kept from whichever fragment carried it."""
+    piece = piece if isinstance(piece, dict) else piece.model_dump()
+    entry = pieces.setdefault(piece.get("index", 0), {})
+    for key, value in piece.items():
+        if value is None:
+            continue
+        if key in ("text", "summary", "data") and isinstance(value, str):
+            entry[key] = entry.get(key, "") + value
+        else:
+            entry.setdefault(key, value)
+
 class AnthropicAgentClient:
     def __init__(
         self,
@@ -83,7 +98,12 @@ class AnthropicAgentClient:
         }
 
     def run_turn(
-        self, system: str, tools: list[ToolSpec], history: list[dict], call_tool: Callable[[str, dict], dict]
+        self,
+        system: str,
+        tools: list[ToolSpec],
+        history: list[dict],
+        call_tool: Callable[[str, dict], dict],
+        on_text: Callable[[str | None], None] | None = None,
     ) -> str:
         anthropic_tools = self._to_anthropic_tools(tools)
         messages = list(history)
@@ -113,7 +133,12 @@ class AnthropicAgentClient:
 
             if response.stop_reason != "tool_use" or final_round:
                 _log_round(round_number, model_seconds, 0.0, usage, None)
-                return "".join(block.text for block in response.content if block.type == "text")
+                text = "".join(block.text for block in response.content if block.type == "text")
+                # Not streamed token by token here (OpenRouter is the default
+                # provider); the listener gets the whole answer in one piece.
+                if on_text and text:
+                    on_text(text)
+                return text
 
             started = time.monotonic()
             tool_results = []
@@ -143,9 +168,11 @@ class OpenAICompatibleAgentClient:
         model: str,
         default_headers: dict | None = None,
         extra_body: dict | None = None,
+        max_output_tokens: int = 8192,
     ):
         self._client = openai.OpenAI(api_key=api_key, base_url=base_url, default_headers=default_headers)
         self._model = model
+        self._max_tokens = max_output_tokens
         # Provider-specific extras (e.g. OpenRouter's `reasoning` param) that
         # aren't part of the OpenAI-compatible spec every endpoint speaks --
         # left unset for a plain /chat/completions target so this stays a
@@ -173,8 +200,67 @@ class OpenAICompatibleAgentClient:
             "reasoning": getattr(details, "reasoning_tokens", None),
         }
 
+    def _create_round(self, request: dict, on_text: Callable[[str | None], None] | None) -> tuple[dict, dict, str | None]:
+        """One model call, returned as (assistant message dict, usage,
+        served_by). Without on_text it's a plain request; with it the call
+        streams and each piece of reply text goes to on_text as it arrives."""
+        if on_text is None:
+            response = self._client.chat.completions.create(**request)
+            # OpenRouter adds which upstream provider served the call; plain
+            # OpenAI-compatible endpoints don't, so this is None there.
+            served_by = getattr(response, "provider", None)
+            return response.choices[0].message.model_dump(exclude_none=True), self._usage(response), served_by
+
+        content: list[str] = []
+        reasoning: list[str] = []
+        reasoning_details: dict[int, dict] = {}
+        tool_calls: dict[int, dict] = {}
+        usage, served_by = {}, None
+        with self._client.chat.completions.create(
+            **request, stream=True, stream_options={"include_usage": True}
+        ) as stream:
+            for chunk in stream:
+                served_by = getattr(chunk, "provider", None) or served_by
+                if getattr(chunk, "usage", None):
+                    usage = self._usage(chunk)
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    content.append(delta.content)
+                    on_text(delta.content)
+                if getattr(delta, "reasoning", None):
+                    reasoning.append(delta.reasoning)
+                for detail in getattr(delta, "reasoning_details", None) or []:
+                    _merge_piece(reasoning_details, detail)
+                for call in delta.tool_calls or []:
+                    slot = tool_calls.setdefault(
+                        call.index, {"id": "", "type": "function", "function": {"name": "", "arguments": ""}}
+                    )
+                    slot["id"] = call.id or slot["id"]
+                    if call.function:
+                        slot["function"]["name"] += call.function.name or ""
+                        slot["function"]["arguments"] += call.function.arguments or ""
+
+        # Rebuild it the way a non-streamed response would have come back,
+        # reasoning included -- some reasoning models need it echoed back on
+        # the next round of a tool loop.
+        message: dict = {"role": "assistant", "content": "".join(content)}
+        if reasoning:
+            message["reasoning"] = "".join(reasoning)
+        if reasoning_details:
+            message["reasoning_details"] = [reasoning_details[i] for i in sorted(reasoning_details)]
+        if tool_calls:
+            message["tool_calls"] = [tool_calls[i] for i in sorted(tool_calls)]
+        return message, usage, served_by
+
     def run_turn(
-        self, system: str, tools: list[ToolSpec], history: list[dict], call_tool: Callable[[str, dict], dict]
+        self,
+        system: str,
+        tools: list[ToolSpec],
+        history: list[dict],
+        call_tool: Callable[[str, dict], dict],
+        on_text: Callable[[str | None], None] | None = None,
     ) -> str:
         openai_tools = self._to_openai_tools(tools)
         messages = [{"role": "system", "content": system}] + list(history)
@@ -182,37 +268,42 @@ class OpenAICompatibleAgentClient:
         for round_number in range(MAX_TOOL_ROUNDS + 1):
             final_round = round_number == MAX_TOOL_ROUNDS
             started = time.monotonic()
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=messages,
-                tools=openai_tools,
-                # Only sent with tools present -- some endpoints reject
-                # tool_choice alongside an empty tools list.
-                **({"tool_choice": "none"} if final_round and openai_tools else {}),
-                extra_body=self._extra_body,
+            message, usage, served_by = self._create_round(
+                {
+                    "model": self._model,
+                    "max_tokens": self._max_tokens,
+                    "messages": messages,
+                    "tools": openai_tools,
+                    # Only sent with tools present -- some endpoints reject
+                    # tool_choice alongside an empty tools list.
+                    **({"tool_choice": "none"} if final_round and openai_tools else {}),
+                    "extra_body": self._extra_body,
+                },
+                on_text,
             )
             model_seconds = time.monotonic() - started
-            usage = self._usage(response)
-            # OpenRouter adds which upstream provider served the call; plain
-            # OpenAI-compatible endpoints don't, so this is None there.
-            served_by = getattr(response, "provider", None)
-            message = response.choices[0].message
-            messages.append(message.model_dump(exclude_none=True))
+            messages.append(message)
+            tool_calls = message.get("tool_calls")
 
-            if not message.tool_calls or final_round:
+            if not tool_calls or final_round:
                 _log_round(round_number, model_seconds, 0.0, usage, served_by)
-                return message.content or ""
+                return message.get("content") or ""
 
+            if on_text and message.get("content"):
+                # Text the model wrote before deciding to call a tool isn't the
+                # answer; tell the listener to drop what it was shown.
+                on_text(None)
             started = time.monotonic()
-            for tool_call in message.tool_calls:
-                args = json.loads(tool_call.function.arguments or "{}")
-                result = call_tool(tool_call.function.name, args)
-                messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": json.dumps(result)})
+            for tool_call in tool_calls:
+                args = json.loads(tool_call["function"]["arguments"] or "{}")
+                result = call_tool(tool_call["function"]["name"], args)
+                messages.append({"role": "tool", "tool_call_id": tool_call["id"], "content": json.dumps(result)})
             _log_round(round_number, model_seconds, time.monotonic() - started, usage, served_by)
 
     def complete(self, system: str, user_message: str) -> str:
         response = self._client.chat.completions.create(
             model=self._model,
+            max_tokens=self._max_tokens,
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user_message}],
             extra_body=self._extra_body,
         )
@@ -241,6 +332,7 @@ class OpenRouterAgentClient(OpenAICompatibleAgentClient):
         extended_thinking: bool = False,
         thinking_budget_tokens: int = 2048,
         provider_sort: str = "",
+        max_output_tokens: int = 8192,
     ):
         headers = {"X-Title": app_name}
         if site_url:
@@ -258,4 +350,5 @@ class OpenRouterAgentClient(OpenAICompatibleAgentClient):
             model=model,
             default_headers=headers,
             extra_body=extra_body or None,
+            max_output_tokens=max_output_tokens,
         )

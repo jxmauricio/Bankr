@@ -829,7 +829,9 @@ export interface ChatResponse extends AnswerParts {
 /**
  * Sends a chat turn over Server-Sent Events (POST /chat/stream): onStatus
  * fires with a progress line ("Looking up Dining spending…") before each tool
- * runs, and the promise resolves with the final reply. A stream that ends
+ * runs, onText with the reply so far each time more of it arrives (or "" when
+ * the server says to drop it, because the model went on to call a tool), and
+ * the promise resolves with the final reply. A stream that ends
  * without a reply rejects with an ApiError like any other failure. Aborting
  * `signal` cancels the turn: the connection closes, the server stops the turn
  * and drops the question, and the promise rejects with an AbortError.
@@ -839,6 +841,7 @@ export async function streamChatMessage(
   message: string,
   conversationId: string | null,
   onStatus: (label: string) => void,
+  onText: (replySoFar: string) => void,
   signal?: AbortSignal
 ): Promise<ChatResponse> {
   const response = await fetch(new URL(BASE_URL + "/chat/stream"), {
@@ -854,6 +857,7 @@ export async function streamChatMessage(
 
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";
+  let reply = "";
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -867,6 +871,8 @@ export async function streamChatMessage(
       if (!event || data === undefined) continue; // keepalive comment
       const payload = JSON.parse(data);
       if (event === "status") onStatus(payload.label);
+      else if (event === "delta") onText((reply += payload.text));
+      else if (event === "reset") onText((reply = ""));
       else if (event === "done") return payload as ChatResponse;
       else if (event === "error") throw new ApiError(500, payload.message);
     }

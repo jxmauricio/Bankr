@@ -29,9 +29,13 @@ class AgentClient(Protocol):
         tools: list[ToolSpec],
         history: list[dict],
         call_tool: Callable[[str, dict], dict],
+        on_text: Callable[[str | None], None] | None = None,
     ) -> str:
         """Resolve one user turn to completion, including any tool calls,
-        and return the final assistant text. `history` is a plain
+        and return the final assistant text. When on_text is given, reply
+        text is passed to it piece by piece as the model writes it; on_text(None)
+        means "discard what you were sent", because the model went on to call
+        a tool instead of answering. `history` is a plain
         [{"role": "user"|"assistant", "content": str}, ...] list -- no
         vendor-specific tool_use/tool_result blocks leak across turns (see
         chat_service.py, which persists only final text per turn)."""
@@ -54,12 +58,16 @@ def build_agent_client() -> AgentClient:
             site_url=settings.openrouter_site_url,
             app_name=settings.openrouter_app_name,
             provider_sort=settings.openrouter_provider_sort,
+            max_output_tokens=settings.agent_max_output_tokens,
             extended_thinking=settings.agent_extended_thinking,
             thinking_budget_tokens=settings.agent_thinking_budget_tokens,
         )
     if settings.agent_provider == "openai_compatible":
         return OpenAICompatibleAgentClient(
-            api_key=settings.agent_api_key, base_url=settings.agent_base_url, model=settings.agent_model
+            api_key=settings.agent_api_key,
+            base_url=settings.agent_base_url,
+            model=settings.agent_model,
+            max_output_tokens=settings.agent_max_output_tokens,
         )
     return AnthropicAgentClient(
         api_key=settings.anthropic_api_key,

@@ -57,3 +57,14 @@ def test_run_turn_logs_timing_tokens_and_provider(monkeypatch, caplog):
     [line] = [r.getMessage() for r in caplog.records if r.name == "app.agent.providers"]
     assert line.startswith("agent round 0: model ")
     assert "tokens in=1200 out=300 reasoning=250, served_by=SomeHost" in line
+
+
+def test_openrouter_client_caps_output_tokens(monkeypatch):
+    """Without a cap OpenRouter reserves each provider's full output limit,
+    which rules out most providers on a key with a spending limit."""
+    client = OpenRouterAgentClient(api_key="key", model="some/model", max_output_tokens=4096)
+    captured = _capture_create(monkeypatch, client, _openai_text_response("hi"))
+
+    client.run_turn("system", [], [{"role": "user", "content": "hello"}], lambda name, args: {})
+
+    assert captured["max_tokens"] == 4096

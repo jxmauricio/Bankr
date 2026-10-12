@@ -31,7 +31,20 @@ def test_openai_compatible_tool_loop_stops_at_the_cap(monkeypatch):
         message = SimpleNamespace(
             content="Here's what I found." if final else None,
             tool_calls=tool_calls,
-            model_dump=lambda exclude_none=True: {"role": "assistant", "content": ""},
+            model_dump=lambda exclude_none=True: {
+                "role": "assistant",
+                "content": message.content or "",
+                **(
+                    {
+                        "tool_calls": [
+                            {"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}}
+                            for c in tool_calls
+                        ]
+                    }
+                    if tool_calls
+                    else {}
+                ),
+            },
         )
         return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 

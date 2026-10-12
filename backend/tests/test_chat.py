@@ -190,7 +190,7 @@ def _sse_events(response) -> list[tuple[str, dict]]:
     return events
 
 
-def test_chat_stream_sends_status_then_the_reply(client, db, user, monkeypatch):
+def test_chat_stream_sends_status_then_the_reply_text_then_done(client, db, user, monkeypatch):
     sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
     monkeypatch.setattr(
         claude_agent,
@@ -210,10 +210,12 @@ def test_chat_stream_sends_status_then_the_reply(client, db, user, monkeypatch):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
     events = _sse_events(response)
-    assert [name for name, _ in events] == ["status", "status", "done"]
+    names = [name for name, _ in events]
+    assert names == ["status", "status"] + ["delta"] * 5 + ["done"]
     assert events[0][1] == {"label": "Checking your balances…"}
     assert events[1][1] == {"label": "Looking up Dining spending…"}
-    done = events[2][1]
+    assert "".join(data["text"] for name, data in events if name == "delta") == "Your net worth is $2,100."
+    done = events[-1][1]
     assert done["reply"] == "Your net worth is $2,100."
     assert done["sources"][0]["tool"] == "get_net_worth"
 
@@ -221,6 +223,25 @@ def test_chat_stream_sends_status_then_the_reply(client, db, user, monkeypatch):
     messages = db.query(ChatMessage).filter(ChatMessage.user_id == user.id).order_by(ChatMessage.created_at).all()
     assert [m.role for m in messages] == ["user", "assistant"]
     assert messages[1].content == "Your net worth is $2,100."
+
+
+def test_chat_stream_sends_reset_when_the_model_drops_its_text(client, user, monkeypatch):
+    """Text written before a tool call isn't the answer: the client is told
+    to drop it before the real reply streams."""
+
+    class ThinksAloudClient:
+        def run_turn(self, system, tools, history, call_tool, on_text=None):
+            on_text("Let me check.")
+            on_text(None)
+            on_text("All set.")
+            return "All set."
+
+    monkeypatch.setattr(claude_agent, "_client", ThinksAloudClient())
+
+    events = _sse_events(client.post("/chat/stream", json={"message": "hi"}))
+
+    assert [name for name, _ in events] == ["delta", "reset", "delta", "done"]
+    assert events[-1][1]["reply"] == "All set."
 
 
 def test_chat_stream_reports_a_failed_turn_as_an_error_event(client, user, monkeypatch):

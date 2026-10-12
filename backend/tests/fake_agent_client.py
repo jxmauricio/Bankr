@@ -23,10 +23,22 @@ class FakeAgentClient:
         self._turns = list(turns or [])
         self._completions = list(completions or [])
 
-    def run_turn(self, system: str, tools: list, history: list[dict], call_tool: Callable[[str, dict], dict]) -> str:
+    def run_turn(
+        self,
+        system: str,
+        tools: list,
+        history: list[dict],
+        call_tool: Callable[[str, dict], dict],
+        on_text: Callable[[str | None], None] | None = None,
+    ) -> str:
         turn = self._turns.pop(0)
         for name, tool_input in turn.tool_calls:
             call_tool(name, tool_input)
+        if on_text:
+            # Word by word, like a streamed reply.
+            words = turn.final_text.split(" ")
+            for i, word in enumerate(words):
+                on_text(word if i == 0 else " " + word)
         return turn.final_text
 
     def complete(self, system: str, user_message: str) -> str:

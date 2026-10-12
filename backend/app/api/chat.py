@@ -368,14 +368,23 @@ def chat_stream(
     can show progress during a multi-round turn:
 
       event: status  data: {"label": "Looking up Dining spending…"}  (0..n)
+      event: delta   data: {"text": "You spent "}                     (0..n)
+      event: reset   data: {}                                         (0..n)
       event: done    data: <the ChatResponse JSON>                    (once)
       event: error   data: {"message": "..."}                         (instead of done)
 
     The turn runs in a worker thread with its own DB session (this request's
     session is closed before the body streams). Disconnecting is how a client
-    cancels: the turn stops at its next tool call or before the reply is
-    saved, and the user's message is removed again (see
-    chat_service.send_message), so a stopped question leaves no trace."""
+    cancels: the turn stops at its next tool call, its next piece of reply
+    text, or before the reply is saved, and the user's message is removed again (see
+    chat_service.send_message), so a stopped question leaves no trace.
+
+    delta events carry the reply text as the model writes it, so a client can
+    show the answer forming instead of waiting for done. reset means drop the
+    text received so far: the model wrote some, then called a tool instead of
+    answering. done still carries the whole reply (plus its sources, charts,
+    ...) and is what a client should keep; clients that ignore delta and
+    reset work exactly as before."""
     conversation_id = body.conversation_id or uuid4()
     user_id = user.id
     events: queue.Queue[tuple[str, dict] | None] = queue.Queue()
@@ -391,6 +400,7 @@ def chat_stream(
                     body.message,
                     on_status=lambda label: events.put(("status", {"label": label})),
                     is_cancelled=cancelled.is_set,
+                    on_text=lambda text: events.put(("delta", {"text": text}) if text is not None else ("reset", {})),
                 )
             response = ChatResponse(conversation_id=conversation_id, reply=reply, **_answer_parts(reply, sources))
             events.put(("done", response.model_dump(mode="json")))
