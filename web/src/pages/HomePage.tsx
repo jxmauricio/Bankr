@@ -35,6 +35,7 @@ import { useCashFlow } from "../lib/useCashFlow";
 import { ProfileMenu } from "../components/ProfileMenu";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { loadPeriod, savePeriod, type Period as TimePeriod } from "../lib/period";
+import { BankLogosProvider } from "../lib/bankLogos";
 import { RelinkBanner } from "../components/StatusBanners";
 import { AnswerHeadline, ChatChart } from "../components/ChatChart";
 import { SettingsModal } from "../components/SettingsModal";
@@ -386,6 +387,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   };
 
   return (
+    <BankLogosProvider banks={banks}>
     <div className="relative flex h-dvh flex-col">
       <header className="relative z-30 flex min-h-16 shrink-0 items-center justify-between gap-1 border-b border-line bg-bg px-1.5 py-2 sm:gap-2 sm:px-6">
         <div className="flex shrink-0 items-center gap-3">
@@ -669,6 +671,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
       </div>
       <ViewTabBar view={view} onChange={setView} />
     </div>
+    </BankLogosProvider>
   );
 }
 
@@ -848,15 +851,25 @@ function SkeletonLine() {
 }
 
 /** Every source behind an answer, numbered to match the footnotes on its
- * figures. Ones that sum transactions open the exact rows. */
+ * figures. Ones that sum transactions open the exact rows. The chips stay
+ * tucked away until the "N sources" label is clicked. */
 function SourceTrail({ sources, onOpenSource }: { sources: ChatSource[]; onOpenSource: (query: SourceQuery) => void }) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-ink-soft" aria-label="Sources">
-      <span className="flex items-center gap-1.5" title="Grounded in your real account data via these lookups">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title="Grounded in your real account data via these lookups"
+        className="flex min-h-9 items-center gap-1.5 transition-colors hover:text-ink cursor-pointer"
+      >
         <ShieldIcon />
         {sources.length} source{sources.length === 1 ? "" : "s"}
-      </span>
-      {sources.map((source, i) =>
+        <span aria-hidden>{open ? "▴" : "▾"}</span>
+      </button>
+      {open &&
+        sources.map((source, i) =>
         source.query ? (
           <button
             key={i}

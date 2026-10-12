@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { ChatSource, Citation, SourceQuery } from "../lib/api";
+import { BankText } from "./BankLogo";
 
 /** How a reply's dollar figures link back to the sources under it. */
 export interface FigureSources {
@@ -91,7 +92,9 @@ function renderFigures(text: string, keyPrefix: string, figures?: FigureSources)
     /^-?\$[\d,]/.test(part) ? (
       <Figure key={`${keyPrefix}-${i}`} text={part} figures={figures} />
     ) : (
-      <span key={`${keyPrefix}-${i}`}>{part}</span>
+      <span key={`${keyPrefix}-${i}`}>
+        <BankText text={part} />
+      </span>
     ),
   );
 }

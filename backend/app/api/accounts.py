@@ -103,6 +103,7 @@ class LinkedBank(BaseModel):
     # the whole bank login that account belongs to.
     id: UUID
     institution_name: str
+    institution_logo: str | None  # base64 PNG
     status: str  # active | error
     accounts: list[LinkedBankAccount]
 
@@ -114,6 +115,7 @@ def list_linked_banks(user: User = Depends(get_current_user), db: Session = Depe
         LinkedBank(
             id=login.accounts[0].id,
             institution_name=login.accounts[0].institution_name,
+            institution_logo=login.accounts[0].institution_logo,
             status="error" if any(a.status != "active" for a in login.accounts) else "active",
             accounts=[LinkedBankAccount(name=a.name, mask=a.mask, account_type=a.account_type) for a in login.accounts],
         )

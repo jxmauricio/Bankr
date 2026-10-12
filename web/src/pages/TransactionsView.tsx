@@ -5,6 +5,7 @@ import { periodInfo, type Period } from "../lib/period";
 import { isTyping } from "../lib/useView";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { TransactionDetails, type Citation } from "../components/TransactionDetails";
+import { BankName } from "../components/BankLogo";
 import { accountLabel, merchantOf, signedAmount, topCategories, topCategory } from "../lib/transactions";
 
 /** What Cash flow (or a details drawer) asks the list to show. */
@@ -281,7 +282,8 @@ export function TransactionsView({
                       <td className="px-3 py-[11px]">
                         <span className="rounded-full bg-raised px-[9px] py-[3px] text-xs text-ink-soft">{topCategory(t)}</span>
                       </td>
-                      <td className="px-3 py-[11px] font-tabular text-xs text-ink-soft">{accountLabel(t.account)}</td>
+                      <td className="px-3 py-[11px] font-tabular text-xs text-ink-soft"><BankName bank={t.account.institution}>{accountLabel(t.account)}</BankName>
+                      </td>
                       <td className={`py-[11px] pl-3 pr-5 text-right font-tabular ${amt.className}`}>{amt.text}</td>
                     </tr>
                   );

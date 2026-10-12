@@ -114,6 +114,7 @@ export const linkAccount = (token: string, publicToken: string) =>
 export interface LinkedBank {
   id: string;
   institution_name: string;
+  institution_logo: string | null;
   status: "active" | "error";
   accounts: { name: string | null; mask: string | null; account_type: string }[];
 }

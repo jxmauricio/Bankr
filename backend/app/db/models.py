@@ -46,6 +46,7 @@ class LinkedAccount(Base):
     aggregator: Mapped[str] = mapped_column(String, default="plaid")
     aggregator_account_id: Mapped[str] = mapped_column(String, index=True)
     institution_name: Mapped[str] = mapped_column(String)
+    institution_logo: Mapped[str | None] = mapped_column(Text, nullable=True)  # base64 PNG
     name: Mapped[str | None] = mapped_column(String, nullable=True)
     mask: Mapped[str | None] = mapped_column(String, nullable=True)  # last 4 digits
     account_type: Mapped[str] = mapped_column(String)  # checking | savings | credit | loan | investment

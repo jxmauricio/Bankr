@@ -1,3 +1,5 @@
+import { BankName } from "./BankLogo";
+
 const STALE_AFTER_MS = 36 * 3_600_000;
 
 export function isStale(asOf: string | null | undefined): boolean {
@@ -6,7 +8,6 @@ export function isStale(asOf: string | null | undefined): boolean {
 
 /** One or more banks need the user to sign in again. */
 export function RelinkBanner({ banks, onManage }: { banks: string[]; onManage: () => void }) {
-  const names = banks.join(", ");
   return (
     <div role="alert" className="flex flex-col gap-3.5 rounded-[20px] border border-negative/45 bg-negative-soft p-5">
       <div className="flex items-start gap-3">
@@ -16,7 +17,13 @@ export function RelinkBanner({ banks, onManage }: { banks: string[]; onManage: (
         </svg>
         <div className="flex flex-col gap-1">
           <span className="text-[15px] font-semibold text-ink">
-            {names} {banks.length === 1 ? "needs" : "need"} you to sign in again
+            {banks.map((bank, i) => (
+              <span key={bank}>
+                {i > 0 && ", "}
+                <BankName bank={bank} />
+              </span>
+            ))}{" "}
+            {banks.length === 1 ? "needs" : "need"} you to sign in again
           </span>
           <span className="text-[13px] leading-relaxed text-ink-soft">
             Until then, answers and net worth leave out {banks.length === 1 ? "this bank" : "these banks"}. Your other

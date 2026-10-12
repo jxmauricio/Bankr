@@ -70,6 +70,8 @@ def sync_user_accounts(
             db.add(linked)
 
         linked.institution_name = acc.institution_name
+        if acc.institution_logo:  # keep the stored one if this lookup came back empty
+            linked.institution_logo = acc.institution_logo
         linked.name = acc.name
         linked.mask = acc.mask
         linked.account_type = acc.account_type

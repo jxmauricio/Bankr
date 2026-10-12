@@ -21,6 +21,7 @@ class AggregatorAccount:
     available_balance: float | None
     name: str | None = None
     mask: str | None = None  # last 4 digits, shown so the user can recognize the account
+    institution_logo: str | None = None  # base64 PNG of the bank's logo
 
 
 @dataclass

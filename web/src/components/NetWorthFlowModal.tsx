@@ -4,6 +4,7 @@ import { fetchIncomeWindow, fetchNetWorth, fetchSpendingWindow, type ItemizedIte
 import { colorForCategory } from "../lib/chartColors";
 import { formatMoney } from "../lib/format";
 import { periodInfo, type Period } from "../lib/period";
+import { BankName } from "./BankLogo";
 import { TransactionSearch } from "./TransactionSearch";
 
 type FlowGroup = "income" | "spending";
@@ -778,8 +779,9 @@ function AccountBreakdown({ breakdown }: { breakdown: NetWorthHistory | null }) 
   if (breakdown.accounts.length === 0) {
     return <p className="mt-4 text-sm text-ink-faint">No account balances synced yet.</p>;
   }
-  const accountName = (a: NetWorthHistory["accounts"][number]) =>
-    `${a.institution} ${a.name ?? a.type}${a.mask ? ` ••${a.mask}` : ""}`;
+  const accountName = (a: NetWorthHistory["accounts"][number]) => (
+    <BankName bank={a.institution}>{`${a.institution} ${a.name ?? a.type}${a.mask ? ` ••${a.mask}` : ""}`}</BankName>
+  );
 
   return (
     <div className="mt-4 rounded-xl border border-border">

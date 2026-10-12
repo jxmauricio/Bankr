@@ -21,7 +21,10 @@ import hmac
 import json
 import logging
 import time
+from base64 import b64encode
+from urllib.parse import urlparse
 
+import httpx
 import plaid
 from jose import jwt as jose_jwt
 from jose import jws
@@ -29,6 +32,8 @@ from jose.exceptions import JOSEError
 from plaid.api import plaid_api
 from plaid.model.accounts_get_request import AccountsGetRequest
 from plaid.model.country_code import CountryCode
+from plaid.model.institutions_get_by_id_request import InstitutionsGetByIdRequest
+from plaid.model.institutions_get_by_id_request_options import InstitutionsGetByIdRequestOptions
 from plaid.model.item_get_request import ItemGetRequest
 from plaid.model.item_remove_request import ItemRemoveRequest
 from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchangeRequest
@@ -95,6 +100,21 @@ def _map_account_type(plaid_type: str, plaid_subtype: str | None) -> str:
     return plaid_type
 
 
+def _site_icon(site_url: str | None) -> str | None:
+    """Base64 PNG icon for a bank's website, via Google's favicon service."""
+    domain = urlparse(site_url or "").hostname
+    if not domain:
+        return None
+    response = httpx.get(
+        "https://www.google.com/s2/favicons",
+        params={"domain": domain.removeprefix("www."), "sz": 64},
+        timeout=5,
+        follow_redirects=True,
+    )
+    response.raise_for_status()
+    return b64encode(response.content).decode() if response.content else None
+
+
 class PlaidClient:
     def create_link_token(self, user_id: str) -> str:
         client = _client()
@@ -126,6 +146,7 @@ class PlaidClient:
         client = _client()
         response = client.accounts_get(AccountsGetRequest(access_token=access_token))
         institution_name = response.item.institution_name or "Linked Bank"
+        institution_logo = self._institution_logo(client, response.item.institution_id)
 
         accounts = []
         for account in response.accounts:
@@ -142,9 +163,31 @@ class PlaidClient:
                     available_balance=float(balances.available) if balances.available is not None else None,
                     name=account.official_name or account.name,
                     mask=account.mask,
+                    institution_logo=institution_logo,
                 )
             )
         return accounts
+
+    @staticmethod
+    def _institution_logo(client: plaid_api.PlaidApi, institution_id: str | None) -> str | None:
+        """Plaid's base64 PNG logo for the bank, else its website's icon, else
+        None. Plaid has no logo for some banks (Chase, ins_56). Cosmetic, so a
+        failure here must never break linking or syncing."""
+        if not institution_id:
+            return None
+        try:
+            response = client.institutions_get_by_id(
+                InstitutionsGetByIdRequest(
+                    institution_id=institution_id,
+                    country_codes=[CountryCode("US")],
+                    options=InstitutionsGetByIdRequestOptions(include_optional_metadata=True),
+                )
+            )
+            institution = response.institution
+            return institution.logo or _site_icon(institution.url)
+        except Exception:
+            logger.warning("plaid: couldn't fetch logo for institution %s", institution_id, exc_info=True)
+            return None
 
     def sync_transactions(self, access_token: str, cursor: str | None) -> TransactionSyncResult:
         """Drain /transactions/sync from `cursor` until has_more is false.

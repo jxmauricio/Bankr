@@ -5,6 +5,7 @@ import { RuleOffer } from "./RuleOffer";
 import { TransactionEditor } from "./TransactionEditor";
 import { formatMoney } from "../lib/format";
 import { isTyping } from "../lib/useView";
+import { BankName } from "./BankLogo";
 import { accountLabel, merchantOf, signedAmount, topCategory } from "../lib/transactions";
 
 /** A chat answer figure from this conversation, and the question that produced it. */
@@ -133,11 +134,11 @@ export function TransactionDetails({
   const cited = citations.filter((c) => citesThis(c.query, txn));
   const short = merchant.split(" ·")[0];
 
-  const fields: [string, string][] = [
+  const fields: [string, ReactNode][] = [
     ["Status", txn.is_pending ? "Pending — amount may change" : "Posted"],
     ["Date", shortDate(txn.date)],
-    ["Account", accountLabel(txn.account)],
-    ["Bank", txn.account.institution],
+    ["Account", <BankName bank={txn.account.institution}>{accountLabel(txn.account)}</BankName>],
+    ["Bank", <BankName bank={txn.account.institution} />],
     ["Category", category],
     ["Counts as", txn.is_excluded ? "Nothing — excluded from totals" : (KIND_LABEL[txn.category_type ?? ""] ?? "Not categorized")],
   ];

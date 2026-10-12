@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { AddBankButton } from "./AddBankButton";
+import { BankLogo, BankName } from "./BankLogo";
 import { RulesSettings } from "./RulesSettings";
 import { ApiError, deleteAccount, disconnectBank, fetchLinkedBanks, type LinkedBank } from "../lib/api";
 
@@ -11,19 +12,10 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   investment: "Investment",
 };
 
-// A bank like Chase can hold a dozen accounts; a run-on list of all of them
-// buries the Disconnect button. Name the first few and count the rest.
-const MAX_ACCOUNTS_SHOWN = 3;
-
+// "Checking · Savings · Credit card": which kinds of account, not every one.
 function describeAccounts(accounts: LinkedBank["accounts"]) {
-  const shown = accounts.slice(0, MAX_ACCOUNTS_SHOWN).map(describeAccount);
-  const hidden = accounts.length - shown.length;
-  return hidden > 0 ? `${shown.join(" · ")} · +${hidden} more` : shown.join(" · ");
-}
-
-function describeAccount(a: LinkedBank["accounts"][number]) {
-  const label = a.name || ACCOUNT_TYPE_LABELS[a.account_type] || a.account_type;
-  return a.mask ? `${label} ··${a.mask}` : label;
+  const kinds = new Set(accounts.map((a) => ACCOUNT_TYPE_LABELS[a.account_type] ?? a.account_type));
+  return [...kinds].join(" · ");
 }
 
 export function SettingsModal({
@@ -130,12 +122,15 @@ export function SettingsModal({
           {banks?.map((bank) => (
             <li key={bank.id} className="rounded-[14px] border border-line p-3">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-ink">{bank.institution_name}</p>
-                  <p className="mt-0.5 text-xs text-ink-faint">{describeAccounts(bank.accounts)}</p>
-                  {bank.status === "error" && (
-                    <p className="mt-1 text-xs text-negative">Needs attention: sign in to this bank again.</p>
-                  )}
+                <div className="flex min-w-0 items-center gap-3">
+                  <BankLogo name={bank.institution_name} logo={bank.institution_logo} />
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-ink">{bank.institution_name}</p>
+                    <p className="mt-0.5 text-xs text-ink-faint">{describeAccounts(bank.accounts)}</p>
+                    {bank.status === "error" && (
+                      <p className="mt-1 text-xs text-negative">Needs attention: sign in to this bank again.</p>
+                    )}
+                  </div>
                 </div>
                 {confirmingBankId !== bank.id && (
                   <button
@@ -151,7 +146,7 @@ export function SettingsModal({
               {confirmingBankId === bank.id && (
                 <div className="mt-3 rounded-xl bg-raised p-3">
                   <p className="text-sm text-ink-soft">
-                    This removes {bank.institution_name} and its transactions from Bankr. You can link it again later.
+                    This removes <BankName bank={bank.institution_name} /> and its transactions from Bankr. You can link it again later.
                   </p>
                   <div className="mt-3 flex gap-2">
                     <button
