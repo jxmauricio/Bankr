@@ -84,7 +84,7 @@ type StreamItem =
 
 let nextId = 0;
 const makeId = () => `item-${nextId++}`;
-// The opening greeting is a placeholder in the list; the starter prompts replace it on screen.
+// The opening greeting is a placeholder in the list; FirstConversation replaces it on screen.
 const GREETING_ID = "greeting";
 
 export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
@@ -109,9 +109,11 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   const [isSending, setIsSending] = useState(false);
   const [statusLabel, setStatusLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // The question whose answer failed, so it can be retried or edited in place.
-  const [failed, setFailed] = useState<{ itemId: string; text: string } | null>(null);
+  // The question whose answer failed (or was stopped), so it can be retried or edited in place.
+  const [failed, setFailed] = useState<{ itemId: string; text: string; stopped?: boolean } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Aborts the in-flight question (the Stop button).
+  const turnAbort = useRef<AbortController | null>(null);
   const [showFlow, setShowFlow] = useState(false);
   const [sourceQuery, setSourceQuery] = useState<SourceQuery | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -207,13 +209,17 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   async function ask(text: string) {
     if (!token || !text.trim() || isSending) return;
     const itemId = makeId();
+    // A stopped question was dropped server-side; don't leave it on screen.
+    if (failed?.stopped) setItems((prev) => prev.filter((i) => i.id !== failed.itemId));
     pushItem({ kind: "user-text", id: itemId, text });
     setError(null);
     setFailed(null);
     setIsSending(true);
     setStatusLabel(null);
+    const abort = new AbortController();
+    turnAbort.current = abort;
     try {
-      const response = await streamChatMessage(token, text, conversationId, setStatusLabel);
+      const response = await streamChatMessage(token, text, conversationId, setStatusLabel, abort.signal);
       setConversationId(response.conversation_id);
       pushItem({
         kind: "assistant-text",
@@ -235,11 +241,18 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
       });
       speakReply(response.reply);
     } catch {
-      setFailed({ itemId, text });
+      // A stop (the server drops the question too) gets the same ask-again /
+      // edit choices as a failure, marked as stopped.
+      setFailed({ itemId, text, stopped: abort.signal.aborted });
     } finally {
+      if (turnAbort.current === abort) turnAbort.current = null;
       setIsSending(false);
       setStatusLabel(null);
     }
+  }
+
+  function stopAsking() {
+    turnAbort.current?.abort();
   }
 
   /** Drop the failed question from the stream, then re-ask it or hand it back to the composer. */
@@ -323,13 +336,6 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   const lastAssistant = [...items].reverse().find((i) => i.kind === "assistant-text");
   const lastAssistantId = lastAssistant?.id;
   const isGreeting = items.length === 1 && Boolean(lastAssistantId?.startsWith(GREETING_ID));
-  const composerSuggestions = isSending
-    ? []
-    : isGreeting
-      ? starterPromptsFor(goals)
-      : lastAssistant?.kind === "assistant-text"
-        ? followUpsFor(lastAssistant)
-        : [];
 
   const summary: MoneySummary = {
     netWorth,
@@ -588,9 +594,11 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                   </div>
                 </div>
               )}
-              {failed && !isSending && (
+              {failed && !isSending && (failed.stopped ? (
+                <AnswerStopped onRetry={() => resolveFailed("retry")} onEdit={() => resolveFailed("edit")} />
+              ) : (
                 <AnswerFailed onRetry={() => resolveFailed("retry")} onEdit={() => resolveFailed("edit")} />
-              )}
+              ))}
               {error && (
                 <p role="alert" className="text-sm text-negative">
                   {error}
@@ -603,9 +611,6 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
             onSubmit={handleSubmit}
             className="mx-auto w-full max-w-2xl shrink-0 px-3 pb-[max(20px,env(safe-area-inset-bottom))] pt-2 sm:px-7"
           >
-            {!voiceMode && composerSuggestions.length > 0 && (
-              <SuggestionChips suggestions={composerSuggestions} onAsk={ask} />
-            )}
             {voiceMode ? (
               <VoicePanel
                 state={voiceState}
@@ -614,6 +619,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                 onTalk={voice.talk}
                 onPause={voice.pause}
                 onInterrupt={toggleVoiceMode}
+                onStop={stopAsking}
                 onExit={voice.stop}
               />
             ) : (
@@ -634,14 +640,25 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                   aria-label="Ask about your money"
                   className="h-11 min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none focus-visible:outline-none placeholder:text-ink-faint"
                 />
-                <button
-                  type="submit"
-                  disabled={isSending || !draft.trim()}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-signal text-bg transition-transform hover:scale-105 disabled:bg-raised disabled:text-ink-faint disabled:hover:scale-100 cursor-pointer"
-                  aria-label="Send"
-                >
-                  <SendIcon />
-                </button>
+                {isSending ? (
+                  <button
+                    type="button"
+                    onClick={stopAsking}
+                    className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-signal text-bg transition-transform hover:scale-105"
+                    aria-label="Stop"
+                  >
+                    <StopIcon />
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={!draft.trim()}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-signal text-bg transition-transform hover:scale-105 disabled:bg-raised disabled:text-ink-faint disabled:hover:scale-100 cursor-pointer"
+                    aria-label="Send"
+                  >
+                    <SendIcon />
+                  </button>
+                )}
               </div>
             )}
             <p className="mt-2 text-center text-xs text-ink-faint">
@@ -830,28 +847,6 @@ function SkeletonLine() {
   return <div className="h-4 animate-pulse rounded bg-raised" />;
 }
 
-/** Follow-ups worth asking next, from what the answer was grounded in. */
-function followUpsFor(item: {
-  sources?: ChatSource[];
-  goalProposal?: GoalProposal | null;
-  clarify?: Clarify | null;
-}): string[] {
-  // A question's choices are the follow-ups.
-  if (item.goalProposal || item.clarify) return [];
-  if (item.sources?.some((s) => s.searched)) return ["Search the last 12 months instead", "What did I spend this month?"];
-  const spending = item.sources?.find((s) => s.query);
-  if (spending?.query) {
-    const category = spending.query.category;
-    return [
-      "Compare with last month",
-      category ? `Show my biggest ${category.toLowerCase()} purchases` : "What are my biggest purchases?",
-      category ? `Set a ${category.toLowerCase()} budget` : "Help me set a spending budget",
-    ];
-  }
-  if (item.sources && item.sources.length > 0) return ["What changed this month?", "Am I on pace for my goals?"];
-  return [];
-}
-
 /** Every source behind an answer, numbered to match the footnotes on its
  * figures. Ones that sum transactions open the exact rows. */
 function SourceTrail({ sources, onOpenSource }: { sources: ChatSource[]; onOpenSource: (query: SourceQuery) => void }) {
@@ -1002,33 +997,6 @@ function ShieldIcon() {
   );
 }
 
-function starterPromptsFor(goals: GoalProgress[]): string[] {
-  const goalName = goals[0]?.name?.trim();
-  return [
-    "What did I spend on food this month?",
-    goalName ? `Am I on pace for ${goalName}?` : "Am I on pace for my goal?",
-    "Which account grew the most this year?",
-    "How steady has my income been?",
-  ];
-}
-
-function SuggestionChips({ suggestions, onAsk }: { suggestions: string[]; onAsk: (text: string) => void }) {
-  return (
-    <div aria-label="Suggested questions" className="mb-2 flex flex-wrap gap-1.5">
-      {suggestions.map((text) => (
-        <button
-          key={text}
-          type="button"
-          onClick={() => onAsk(text)}
-          className="cursor-pointer whitespace-nowrap rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12px] leading-snug text-ink-soft transition-colors hover:border-signal hover:text-ink"
-        >
-          {text}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function BotMark({ failed = false }: { failed?: boolean }) {
   return (
     <div
@@ -1046,6 +1014,14 @@ function SendIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
       <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <rect x="5" y="5" width="14" height="14" rx="2.5" />
     </svg>
   );
 }
@@ -1145,6 +1121,31 @@ function AnswerFailed({ onRetry, onEdit }: { onRetry: () => void; onEdit: () => 
   );
 }
 
+function AnswerStopped({ onRetry, onEdit }: { onRetry: () => void; onEdit: () => void }) {
+  return (
+    <div className="flex items-center gap-3">
+      <BotMark />
+      <div role="status" className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-ink-soft">Stopped</span>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="h-11 cursor-pointer rounded-[14px] bg-raised px-[18px] text-sm font-medium text-ink hover:text-signal-hi"
+        >
+          ↻ Ask again
+        </button>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="h-11 cursor-pointer rounded-[14px] px-3.5 text-sm text-ink-soft hover:text-ink"
+        >
+          Edit question
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Voice mode takes over the composer's slot: idle, listening (you), speaking (Bankr). */
 function VoicePanel({
   state,
@@ -1153,6 +1154,7 @@ function VoicePanel({
   onTalk,
   onPause,
   onInterrupt,
+  onStop,
   onExit,
 }: {
   state: VoiceState;
@@ -1161,6 +1163,7 @@ function VoicePanel({
   onTalk: () => void;
   onPause: () => void;
   onInterrupt: () => void;
+  onStop: () => void;
   onExit: () => void;
 }) {
   const listening = state === "listening";
@@ -1254,13 +1257,23 @@ function VoicePanel({
               Try “How much is in savings?” Answers also appear in the chat with sources.
             </span>
           </div>
-          <button
-            type="button"
-            onClick={onExit}
-            className="h-11 cursor-pointer rounded-[10px] border border-line-strong px-4 text-[13px] text-ink-soft hover:text-ink"
-          >
-            Switch to typing
-          </button>
+          {isWaiting ? (
+            <button
+              type="button"
+              onClick={onStop}
+              className="h-11 cursor-pointer rounded-full border border-line-strong px-[18px] text-[13px] text-ink hover:border-signal"
+            >
+              Stop
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onExit}
+              className="h-11 cursor-pointer rounded-[10px] border border-line-strong px-4 text-[13px] text-ink-soft hover:text-ink"
+            >
+              Switch to typing
+            </button>
+          )}
         </>
       )}
     </div>

@@ -236,3 +236,23 @@ def test_chat_stream_reports_a_failed_turn_as_an_error_event(client, user, monke
     events = _sse_events(response)
     assert [name for name, _ in events] == ["error"]
     assert "couldn't respond" in events[0][1]["message"]
+
+
+def test_cancelled_turn_saves_nothing(db, user, monkeypatch):
+    import pytest
+    from uuid import uuid4
+
+    from app.agent.claude_agent import TurnCancelled
+    from app.services import chat_service
+
+    sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
+    monkeypatch.setattr(
+        claude_agent,
+        "_client",
+        FakeAgentClient(turns=[ScriptedTurn(final_text="Your net worth is $2,100.", tool_calls=[("get_net_worth", {})])]),
+    )
+
+    with pytest.raises(TurnCancelled):
+        chat_service.send_message(db, user.id, uuid4(), "what's my net worth?", is_cancelled=lambda: True)
+
+    assert db.query(ChatMessage).filter(ChatMessage.user_id == user.id).count() == 0

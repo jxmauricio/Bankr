@@ -1,17 +1,20 @@
+import asyncio
 import json
 import logging
 import math
 import queue
 import re
 import threading
+import time
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.agent.claude_agent import TurnCancelled
 from app.auth import get_current_user
 from app.db.base import get_db, get_session_factory
 from app.db.models import User
@@ -25,6 +28,9 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 # Idle gap after which the stream sends an SSE comment, so a proxy doesn't
 # close a connection that's just waiting on a slow model round.
 _KEEPALIVE_SECONDS = 15
+# How often the stream checks for events and for the client having gone, so a
+# stop is noticed within a fraction of a second instead of at the next keepalive.
+_POLL_SECONDS = 0.2
 
 
 class ChatRequest(BaseModel):
@@ -353,6 +359,7 @@ def chat(
 
 @router.post("/stream", dependencies=[Depends(limit_chat_by_user)])
 def chat_stream(
+    request: Request,
     body: ChatRequest,
     user: User = Depends(get_current_user),
     session_factory: sessionmaker = Depends(get_session_factory),
@@ -365,12 +372,14 @@ def chat_stream(
       event: error   data: {"message": "..."}                         (instead of done)
 
     The turn runs in a worker thread with its own DB session (this request's
-    session is closed before the body streams). If the client disconnects the
-    turn still finishes and is saved, so the reply is there when they reopen
-    the conversation."""
+    session is closed before the body streams). Disconnecting is how a client
+    cancels: the turn stops at its next tool call or before the reply is
+    saved, and the user's message is removed again (see
+    chat_service.send_message), so a stopped question leaves no trace."""
     conversation_id = body.conversation_id or uuid4()
     user_id = user.id
     events: queue.Queue[tuple[str, dict] | None] = queue.Queue()
+    cancelled = threading.Event()
 
     def run_turn() -> None:
         try:
@@ -381,27 +390,42 @@ def chat_stream(
                     conversation_id,
                     body.message,
                     on_status=lambda label: events.put(("status", {"label": label})),
+                    is_cancelled=cancelled.is_set,
                 )
             response = ChatResponse(conversation_id=conversation_id, reply=reply, **_answer_parts(reply, sources))
             events.put(("done", response.model_dump(mode="json")))
+        except TurnCancelled:
+            logger.info("Streaming chat turn cancelled by the client")
         except Exception:
             logger.exception("Streaming chat turn failed")
             events.put(("error", {"message": "Bankr couldn't respond. Try again."}))
         finally:
             events.put(None)
 
-    def stream():
+    async def stream():
         threading.Thread(target=run_turn, daemon=True).start()
-        while True:
-            try:
-                item = events.get(timeout=_KEEPALIVE_SECONDS)
-            except queue.Empty:
-                yield ": keepalive\n\n"
-                continue
-            if item is None:
-                return
-            event, data = item
-            yield f"event: {event}\ndata: {json.dumps(data)}\n\n"
+        last_sent = time.monotonic()
+        try:
+            while True:
+                try:
+                    item = events.get_nowait()
+                except queue.Empty:
+                    if await request.is_disconnected():
+                        return
+                    if time.monotonic() - last_sent >= _KEEPALIVE_SECONDS:
+                        last_sent = time.monotonic()
+                        yield ": keepalive\n\n"
+                    await asyncio.sleep(_POLL_SECONDS)
+                    continue
+                if item is None:
+                    return
+                event, data = item
+                last_sent = time.monotonic()
+                yield f"event: {event}\ndata: {json.dumps(data)}\n\n"
+        finally:
+            # Runs on a normal end too, when the turn is already over; on a
+            # client disconnect it's the signal to stop the worker.
+            cancelled.set()
 
     return StreamingResponse(
         stream(),

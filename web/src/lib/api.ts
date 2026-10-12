@@ -829,18 +829,22 @@ export interface ChatResponse extends AnswerParts {
  * Sends a chat turn over Server-Sent Events (POST /chat/stream): onStatus
  * fires with a progress line ("Looking up Dining spending…") before each tool
  * runs, and the promise resolves with the final reply. A stream that ends
- * without a reply rejects with an ApiError like any other failure.
+ * without a reply rejects with an ApiError like any other failure. Aborting
+ * `signal` cancels the turn: the connection closes, the server stops the turn
+ * and drops the question, and the promise rejects with an AbortError.
  */
 export async function streamChatMessage(
   token: string,
   message: string,
   conversationId: string | null,
-  onStatus: (label: string) => void
+  onStatus: (label: string) => void,
+  signal?: AbortSignal
 ): Promise<ChatResponse> {
   const response = await fetch(new URL(BASE_URL + "/chat/stream"), {
     method: "POST",
     headers: buildHeaders(token, true),
     body: JSON.stringify({ message, conversation_id: conversationId }),
+    signal,
   });
   if (!response.ok || !response.body) {
     const body = await response.json().catch(() => null);
