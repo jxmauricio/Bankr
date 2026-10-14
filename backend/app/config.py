@@ -104,8 +104,10 @@ class Settings(BaseSettings):
     # OpenAI-compatible clients. Not just a safety limit: with none set,
     # OpenRouter reserves credit for each provider's full output limit
     # (100k+ tokens), and a key with a spending limit then only reaches
-    # providers with a small limit -- in practice one slow host.
-    agent_max_output_tokens: int = 8192
+    # providers with a small limit -- in practice one slow host. 1024 is
+    # enough for a 6-line reply plus tool-call JSON; higher and some hosts
+    # finish the answer and then loop on the same closing offer.
+    agent_max_output_tokens: int = 1024
     agent_thinking_budget_tokens: int = 2048
 
     # Web search tool the agent can call for anything time-sensitive (current

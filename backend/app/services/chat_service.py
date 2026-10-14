@@ -31,6 +31,10 @@ _PREVIEW_MAX_CHARS = 120
 # about the month before?" working. The full conversation stays in the DB
 # and in the UI -- only what the model sees is trimmed.
 MAX_HISTORY_MESSAGES = 20
+# A looping reply can be 100k+ characters; feeding that back on the next
+# turn blows the context and teaches the model to ramble. The UI still
+# shows the stored text; only the model's copy is trimmed.
+MAX_HISTORY_CHARS = 2000
 
 
 def _conversation_history(db: Session, user_id: UUID, conversation_id: UUID) -> list[dict]:
@@ -46,7 +50,13 @@ def _conversation_history(db: Session, user_id: UUID, conversation_id: UUID) -> 
     # cut through the middle of an exchange would leave.
     while rows and rows[0].role != "user":
         rows.pop(0)
-    return [{"role": row.role, "content": row.content} for row in rows]
+    return [{"role": row.role, "content": _history_content(row.content)} for row in rows]
+
+
+def _history_content(content: str) -> str:
+    if len(content) <= MAX_HISTORY_CHARS:
+        return content
+    return content[:MAX_HISTORY_CHARS].rsplit(" ", 1)[0] + "…"
 
 
 def send_message(
