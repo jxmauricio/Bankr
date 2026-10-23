@@ -6,6 +6,7 @@ import { App } from './App.tsx'
 import { CrashFallback } from './components/CrashFallback.tsx'
 import { initMonitoring } from './lib/monitoring.ts'
 import { SessionProvider } from './lib/session.tsx'
+import { ThemeProvider } from './lib/theme.tsx'
 import { PrivacyPage } from './pages/PrivacyPage.tsx'
 import { ProfilePage } from './pages/ProfilePage.tsx'
 
@@ -18,14 +19,16 @@ const isProfilePage = window.location.pathname === '/profile'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary fallback={<CrashFallback />}>
-      {isPrivacyPage ? (
-        <PrivacyPage />
-      ) : (
-        <SessionProvider>
-          {isProfilePage ? <ProfilePage /> : <App />}
-        </SessionProvider>
-      )}
-    </ErrorBoundary>
+    <ThemeProvider>
+      <ErrorBoundary fallback={<CrashFallback />}>
+        {isPrivacyPage ? (
+          <PrivacyPage />
+        ) : (
+          <SessionProvider>
+            {isProfilePage ? <ProfilePage /> : <App />}
+          </SessionProvider>
+        )}
+      </ErrorBoundary>
+    </ThemeProvider>
   </StrictMode>,
 )

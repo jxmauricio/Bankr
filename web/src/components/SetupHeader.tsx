@@ -1,3 +1,5 @@
+import { ThemeToggle } from "./ThemeToggle";
+
 /** Wordmark plus the two-step onboarding progress (link accounts → first goal). */
 export function SetupHeader({ step, linkedLabel }: { step: 1 | 2; linkedLabel?: string }) {
   const steps = [
@@ -9,7 +11,9 @@ export function SetupHeader({ step, linkedLabel }: { step: 1 | 2; linkedLabel?: 
       <span className="font-display text-2xl font-bold tracking-tight text-ink">
         Bankr
       </span>
-      <ol aria-label="Setup progress" className="flex gap-6 text-[13px]">
+      <div className="flex items-center gap-3">
+        <ThemeToggle />
+        <ol aria-label="Setup progress" className="flex gap-6 text-[13px]">
         {steps.map(({ n, label }) => {
           const done = n < step;
           const current = n === step;
@@ -30,7 +34,8 @@ export function SetupHeader({ step, linkedLabel }: { step: 1 | 2; linkedLabel?: 
             </li>
           );
         })}
-      </ol>
+        </ol>
+      </div>
     </header>
   );
 }

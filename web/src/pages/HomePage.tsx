@@ -34,6 +34,7 @@ import { MoneyCard, MoneyPill, type MoneySummary } from "../components/MoneyRail
 import { useCashFlow } from "../lib/useCashFlow";
 import { ProfileMenu } from "../components/ProfileMenu";
 import { PeriodFilter } from "../components/PeriodFilter";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { loadPeriod, savePeriod, type Period as TimePeriod } from "../lib/period";
 import { BankLogosProvider } from "../lib/bankLogos";
 import { RelinkBanner } from "../components/StatusBanners";
@@ -433,6 +434,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
           <div className="hidden lg:block">
             <PeriodFilter period={period} onChange={changePeriod} />
           </div>
+          <ThemeToggle />
           {token && (
             <InsightsBell
               token={token}

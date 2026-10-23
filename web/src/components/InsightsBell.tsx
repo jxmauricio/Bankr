@@ -78,7 +78,7 @@ export function InsightsBell({
           <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
         </svg>
         {unread > 0 && (
-          <span className="absolute right-1.5 top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-signal px-1 font-tabular text-[10px] font-semibold text-bg">
+          <span className="absolute right-1.5 top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-signal px-1 font-tabular text-[10px] font-semibold text-on-signal">
             {unread > 9 ? "9+" : unread}
           </span>
         )}

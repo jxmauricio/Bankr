@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { ApiError, login, signUp } from "../lib/api";
 import { useSession } from "../lib/session";
+import { ThemeToggle } from "../components/ThemeToggle";
 
 const inputClass =
   "h-12 w-full rounded-[10px] border border-control bg-surface px-3.5 text-[15px] text-ink outline-none focus:border-signal aria-[invalid=true]:border-negative";
@@ -32,7 +33,10 @@ export function AuthPage() {
   const isSignup = mode === "signup";
 
   return (
-    <div className="flex min-h-screen flex-wrap bg-bg">
+    <div className="relative flex min-h-screen flex-wrap bg-bg">
+      <div className="absolute right-3 top-3 z-10 sm:right-5 sm:top-5">
+        <ThemeToggle />
+      </div>
       {/* Editorial side */}
       <section className="flex min-w-0 flex-[1_1_480px] flex-col justify-between gap-8 border-line px-6 pb-0 pt-10 sm:gap-12 sm:px-14 sm:py-12 min-[960px]:border-r">
         <div className="flex items-baseline gap-2.5">

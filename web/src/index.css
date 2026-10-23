@@ -1,59 +1,56 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap");
 @import "tailwindcss";
 
-/* The Copilot-style redesign (Desktop page of the "Bankr iOS Redesign" canvas,
- * https://claude.ai/artifact/LMSyVZe6cymbvqQN6D2HZD): navy dark, blue-on-white
- * light, the system font. Dark is the default; light follows the system, and
- * [data-theme] on <html> forces either. Every value below is also in the light
- * block, so add a token to both. */
+/* Light (default): cool gray-white, money green, a real red, Plus Jakarta Sans.
+ * Night: the navy Copilot surfaces, with the same green and red.
+ * [data-theme] on <html> picks one; the top-bar toggle sets it. Add tokens to both. */
 @theme {
-  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif;
-  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
-  /* Figures: the same face with fixed-width digits (see .font-mono below), so amounts line up. */
-  --font-mono: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans", ui-rounded, system-ui, sans-serif;
+  --font-body: "Plus Jakarta Sans", ui-rounded, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", ui-rounded, system-ui, sans-serif;
+  --font-mono: "Plus Jakarta Sans", ui-rounded, system-ui, sans-serif;
 
-  --color-bg: #0B1426;
-  --color-surface: #111C33;
-  --color-raised: #18243F;
-  --color-line: #1D2A47;
-  --color-line-strong: #26365A;
-  --color-control: #5D6B8A;
-  --color-ink: #F2F5FA;
-  --color-ink-soft: #9AA8C4;
-  --color-ink-faint: #8391AF;
-  --color-signal: #6EA8FF;
-  --color-signal-hi: #9CC3FF;
-  --color-signal-wash: rgb(110 168 255 / 0.12);
-  --color-on-signal: #0B1426;
-  --color-user: #1E3A6E;
-  --color-on-user: #F2F5FA;
-  --color-spend: #B79CFF;
-  --color-positive: #3DDC84;
-  --color-positive-soft: rgb(61 220 132 / 0.12);
-  --color-negative: #FF7A6B;
-  --color-negative-soft: rgb(255 122 107 / 0.1);
-  --color-warn: #F5A54A;
-  --color-warn-soft: rgb(245 165 74 / 0.1);
-  --color-scrim: rgb(4 9 20 / 0.72);
-  --color-border: #1D2A47;
-  --color-surface-dark: #0B1426;
-  --color-accent: #6EA8FF;
-  --color-accent-strong: #9CC3FF;
-  --color-accent-soft: rgb(110 168 255 / 0.12);
-  --color-danger: #FF7A6B;
-  --color-danger-soft: rgb(255 122 107 / 0.1);
-  --color-gold: #F5A54A;
-  --color-gold-strong: #F5A54A;
-  --color-gold-soft: rgb(245 165 74 / 0.1);
+  --color-bg: #f3f5f8;
+  --color-surface: #ffffff;
+  --color-raised: #e8ecf1;
+  --color-line: #e2e6ec;
+  --color-line-strong: #cdd4de;
+  --color-control: #9aa3b0;
+  --color-ink: #12151c;
+  --color-ink-soft: #4b5565;
+  --color-ink-faint: #7b8494;
+  --color-signal: #00a36c;
+  --color-signal-hi: #00875a;
+  --color-signal-wash: rgb(0 163 108 / 0.1);
+  --color-on-signal: #ffffff;
+  --color-user: #00a36c;
+  --color-on-user: #ffffff;
+  --color-spend: #e4252d;
+  --color-positive: #00a36c;
+  --color-positive-soft: rgb(0 163 108 / 0.12);
+  --color-negative: #e4252d;
+  --color-negative-soft: rgb(228 37 45 / 0.1);
+  --color-warn: #e59a12;
+  --color-warn-soft: rgb(229 154 18 / 0.14);
+  --color-scrim: rgb(15 23 42 / 0.4);
+  --color-border: #e2e6ec;
+  --color-surface-dark: #f3f5f8;
+  --color-accent: #00a36c;
+  --color-accent-strong: #00875a;
+  --color-accent-soft: rgb(0 163 108 / 0.1);
+  --color-danger: #e4252d;
+  --color-danger-soft: rgb(228 37 45 / 0.1);
+  --color-gold: #e59a12;
+  --color-gold-strong: #e59a12;
+  --color-gold-soft: rgb(229 154 18 / 0.14);
 
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 16px;
   --radius-xl: 24px;
-  --shadow-card: none;
-  --shadow-menu: 0 8px 24px rgb(0 0 0 / 0.35);
-  --shadow-modal: 0 24px 64px rgb(0 0 0 / 0.55);
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow-menu: 0 8px 24px rgb(15 23 42 / 0.12);
+  --shadow-modal: 0 24px 64px rgb(15 23 42 / 0.18);
   --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
 
   --animate-thinking: thinking 1.3s ease-in-out infinite;
@@ -65,90 +62,49 @@
   --animate-view: view-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-:root {
-  color-scheme: dark;
+:root,
+[data-theme="light"] {
+  color-scheme: light;
 }
 
-/* Light: when the system asks for it (unless forced dark), or when forced. */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --color-bg: #F3F5F9;
-    --color-surface: #FFFFFF;
-    --color-raised: #E9EDF3;
-    --color-line: #E2E7EF;
-    --color-line-strong: #D3DAE5;
-    --color-control: #8A94A6;
-    --color-ink: #0E1A2B;
-    --color-ink-soft: #5A6678;
-    --color-ink-faint: #667085;
-    --color-signal: #2F6FE0;
-    --color-signal-hi: #1D4ED8;
-    --color-signal-wash: rgb(47 111 224 / 0.08);
-    --color-on-signal: #FFFFFF;
-    --color-user: #DCE7FB;
-    --color-on-user: #0E1A2B;
-    --color-spend: #7C5CE0;
-    --color-positive: #15803D;
-    --color-positive-soft: rgb(21 128 61 / 0.1);
-    --color-negative: #C93A2B;
-    --color-negative-soft: rgb(201 58 43 / 0.08);
-    --color-warn: #B45309;
-    --color-warn-soft: rgb(180 83 9 / 0.1);
-    --color-scrim: rgb(16 24 40 / 0.4);
-    --color-border: #E2E7EF;
-    --color-surface-dark: #F3F5F9;
-    --color-accent: #2F6FE0;
-    --color-accent-strong: #1D4ED8;
-    --color-accent-soft: rgb(47 111 224 / 0.08);
-    --color-danger: #C93A2B;
-    --color-danger-soft: rgb(201 58 43 / 0.08);
-    --color-gold: #B45309;
-    --color-gold-strong: #B45309;
-    --color-gold-soft: rgb(180 83 9 / 0.1);
-    --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05);
-    --shadow-menu: 0 8px 24px rgb(16 24 40 / 0.12);
-    --shadow-modal: 0 24px 64px rgb(16 24 40 / 0.18);
-    color-scheme: light;
-  }
-}
-[data-theme="light"] {
-  --color-bg: #F3F5F9;
-  --color-surface: #FFFFFF;
-  --color-raised: #E9EDF3;
-  --color-line: #E2E7EF;
-  --color-line-strong: #D3DAE5;
-  --color-control: #8A94A6;
-  --color-ink: #0E1A2B;
-  --color-ink-soft: #5A6678;
-  --color-ink-faint: #667085;
-  --color-signal: #2F6FE0;
-  --color-signal-hi: #1D4ED8;
-  --color-signal-wash: rgb(47 111 224 / 0.08);
-  --color-on-signal: #FFFFFF;
-  --color-user: #DCE7FB;
-  --color-on-user: #0E1A2B;
-  --color-spend: #7C5CE0;
-  --color-positive: #15803D;
-  --color-positive-soft: rgb(21 128 61 / 0.1);
-  --color-negative: #C93A2B;
-  --color-negative-soft: rgb(201 58 43 / 0.08);
-  --color-warn: #B45309;
-  --color-warn-soft: rgb(180 83 9 / 0.1);
-  --color-scrim: rgb(16 24 40 / 0.4);
-  --color-border: #E2E7EF;
-  --color-surface-dark: #F3F5F9;
-  --color-accent: #2F6FE0;
-  --color-accent-strong: #1D4ED8;
-  --color-accent-soft: rgb(47 111 224 / 0.08);
-  --color-danger: #C93A2B;
-  --color-danger-soft: rgb(201 58 43 / 0.08);
-  --color-gold: #B45309;
-  --color-gold-strong: #B45309;
-  --color-gold-soft: rgb(180 83 9 / 0.1);
-  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05);
-  --shadow-menu: 0 8px 24px rgb(16 24 40 / 0.12);
-  --shadow-modal: 0 24px 64px rgb(16 24 40 / 0.18);
-  color-scheme: light;
+[data-theme="dark"] {
+  --color-bg: #0b1426;
+  --color-surface: #111c33;
+  --color-raised: #18243f;
+  --color-line: #1d2a47;
+  --color-line-strong: #26365a;
+  --color-control: #5d6b8a;
+  --color-ink: #f2f5fa;
+  --color-ink-soft: #9aa8c4;
+  --color-ink-faint: #8391af;
+  --color-signal: #2dd48a;
+  --color-signal-hi: #5ee4a8;
+  --color-signal-wash: rgb(45 212 138 / 0.12);
+  --color-on-signal: #0b1426;
+  --color-user: #0d7a54;
+  --color-on-user: #f2f5fa;
+  --color-spend: #ff4d4f;
+  --color-positive: #2dd48a;
+  --color-positive-soft: rgb(45 212 138 / 0.12);
+  --color-negative: #ff4d4f;
+  --color-negative-soft: rgb(255 77 79 / 0.12);
+  --color-warn: #f5a54a;
+  --color-warn-soft: rgb(245 165 74 / 0.1);
+  --color-scrim: rgb(4 9 20 / 0.72);
+  --color-border: #1d2a47;
+  --color-surface-dark: #0b1426;
+  --color-accent: #2dd48a;
+  --color-accent-strong: #5ee4a8;
+  --color-accent-soft: rgb(45 212 138 / 0.12);
+  --color-danger: #ff4d4f;
+  --color-danger-soft: rgb(255 77 79 / 0.12);
+  --color-gold: #f5a54a;
+  --color-gold-strong: #f5a54a;
+  --color-gold-soft: rgb(245 165 74 / 0.1);
+  --shadow-card: none;
+  --shadow-menu: 0 8px 24px rgb(0 0 0 / 0.35);
+  --shadow-modal: 0 24px 64px rgb(0 0 0 / 0.55);
+  color-scheme: dark;
 }
 
 @keyframes thinking {

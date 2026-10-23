@@ -24,5 +24,5 @@ export function merchantOf(t: TransactionRow): string {
 export function signedAmount(amount: number): { text: string; className: string } {
   return amount > 0
     ? { text: `+${formatMoney(amount)}`, className: "text-signal" }
-    : { text: `−${formatMoney(Math.abs(amount))}`, className: "text-ink" };
+    : { text: `−${formatMoney(Math.abs(amount))}`, className: "text-negative" };
 }
