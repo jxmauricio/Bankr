@@ -1,6 +1,6 @@
 import { router, usePathname } from "expo-router";
 import { TabList, TabSlot, Tabs, TabTrigger, type TabTriggerSlotProps } from "expo-router/ui";
-import { createContext, use, useEffect, useRef, type ReactNode, type Ref } from "react";
+import { createContext, use, useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
@@ -21,12 +21,13 @@ export default function TabsLayout() {
   const styles = useStyles();
   const scroller = useRef<ScrollView>(null);
   const reveal = (x: number) => scroller.current?.scrollTo({ x: Math.max(0, x - space.xl), animated: true });
+  const focused = useOpenTab();
 
   return (
     <RevealContext value={reveal}>
       <Tabs style={styles.root}>
         <SafeAreaView edges={["top"]} style={styles.header}>
-          <TopBar />
+          <TopBar onChat={focused === 0} />
         </SafeAreaView>
         <ScrollView
           ref={scroller}
@@ -41,7 +42,7 @@ export default function TabsLayout() {
             </TabTrigger>
           ))}
         </ScrollView>
-        <SwipeBetweenTabs />
+        <SwipeBetweenTabs focused={focused} />
         {/* Declares the routes; the pills above are what's shown. Tabs only reads triggers from a TabList that is its direct child. */}
         <TabList style={styles.hidden}>
           {TABS.map((t) => (
@@ -61,6 +62,19 @@ const TABS = [
   { name: "plan", href: "/plan", label: "Plan" },
 ] as const;
 
+/**
+ * The open tab's place in TABS. A sheet over the tabs (accounts, chat
+ * history, a filter) has its own path, so this keeps the last tab while one
+ * is open instead of falling back to the first.
+ */
+function useOpenTab() {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(() => Math.max(0, TABS.findIndex((t) => t.href === pathname)));
+  const onTab = TABS.findIndex((t) => t.href === pathname);
+  if (onTab !== -1 && onTab !== open) setOpen(onTab);
+  return onTab === -1 ? open : onTab;
+}
+
 /** How a page settles after a swipe or a tap on a neighbouring pill. */
 const SETTLE = { duration: 260, easing: Easing.out(Easing.cubic) };
 
@@ -75,11 +89,9 @@ const PagerContext = createContext<{ position: SharedValue<number>; width: numbe
  * drag counts, so vertical scrolling is untouched; the horizontal chip rows
  * use gesture-handler's ScrollView so they scroll instead of paging.
  */
-function SwipeBetweenTabs() {
+function SwipeBetweenTabs({ focused }: { focused: number }) {
   const styles = useStyles();
   const { width } = useWindowDimensions();
-  const pathname = usePathname();
-  const focused = Math.max(0, TABS.findIndex((t) => t.href === pathname));
   const position = useSharedValue(focused);
   const start = useSharedValue(focused);
   // The tab a swipe just settled on (-1 for none), so its navigation doesn't animate again.
@@ -157,10 +169,9 @@ function Page({ index, loaded, render }: { index: number; loaded: boolean; rende
 }
 
 /** Settings on the left; chat history on the Chat tab, otherwise sync from the bank. */
-function TopBar() {
+function TopBar({ onChat }: { onChat: boolean }) {
   const styles = useStyles();
   const { syncFromBank, isSyncing } = useMoney();
-  const onChat = usePathname() === "/";
   return (
     <View style={styles.bar}>
       <IconButton icon="settings" label="Accounts and goals" variant="plain" onPress={() => router.push("/money")} />
