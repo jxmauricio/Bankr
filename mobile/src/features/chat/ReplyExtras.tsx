@@ -4,7 +4,8 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { openSource } from "@/features/source/openSource";
 import type { ChartHeadline, ChatSource, SourceQuery, TransactionRecord, ViewLink } from "@/lib/api";
 import { formatDate, formatMoney } from "@/lib/format";
-import { colors, radius, space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
+import { makeStyles } from "@/theme/theme";
 import { Text } from "@/ui";
 
 // The pieces the web app's StreamEntry draws around a reply
@@ -12,6 +13,7 @@ import { Text } from "@/ui";
 
 /** The answer first: the range, one big number, one line of context. */
 export function AnswerHeadline({ headline }: { headline: ChartHeadline }) {
+  const styles = useStyles();
   const tone = headline.tone === "pos" ? "positive" : headline.tone === "neg" ? "negative" : "default";
   const sign = headline.tone === "pos" && headline.value > 0 ? "+" : headline.tone === "neg" && headline.value < 0 ? "−" : "";
   return (
@@ -46,6 +48,7 @@ function recordDate(iso: string): string {
 
 /** The one record a quick question is about ("did my paycheck come in?"). */
 export function RecordCard({ record, query }: { record: TransactionRecord; query: SourceQuery | null }) {
+  const styles = useStyles();
   const name = record.merchant_name ?? record.category ?? "Transaction";
   const initials = name
     .split(/\s+/)
@@ -81,6 +84,7 @@ export function RecordCard({ record, query }: { record: TransactionRecord; query
 
 /** An empty search's working: what was looked for, when, and where. */
 export function SearchedBox({ source }: { source: ChatSource }) {
+  const styles = useStyles();
   const searched = source.searched!;
   return (
     <View style={styles.searchedWrap}>
@@ -102,6 +106,7 @@ export function SearchedBox({ source }: { source: ChatSource }) {
 
 /** "3 sources ▾": the lookups the answer was grounded in, collapsed until asked for. */
 export function SourceTrail({ sources }: { sources: ChatSource[] }) {
+  const styles = useStyles();
   const [open, setOpen] = useState(false);
   return (
     <View style={styles.trail}>
@@ -138,6 +143,7 @@ export function SourceTrail({ sources }: { sources: ChatSource[] }) {
 
 /** "See them in Transactions →" and friends: pictures that didn't fit in the answer's one chart. */
 export function ViewLinks({ links }: { links: ViewLink[] }) {
+  const styles = useStyles();
   return (
     <View style={styles.trail}>
       {links.map((link, i) => (
@@ -156,6 +162,7 @@ export function ViewLinks({ links }: { links: ViewLink[] }) {
 }
 
 export function OpenInCashFlow() {
+  const styles = useStyles();
   return (
     <Pressable onPress={openCashFlow} style={({ pressed }) => [styles.accentChip, pressed && styles.pressed]}>
       <Text variant="label" tone="accent">
@@ -169,59 +176,61 @@ export function openCashFlow() {
   router.navigate("/cash-flow");
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1, gap: 2 },
-  pressed: { opacity: 0.6 },
-  headline: { gap: 2 },
-  record: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.md,
-    padding: space.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.raised,
-  },
-  initials: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.accentWash,
-  },
-  searchedWrap: { gap: space.sm },
-  searched: {
-    gap: space.xs,
-    padding: space.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: colors.lineStrong,
-  },
-  trail: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: space.sm },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.sm,
-    paddingHorizontal: space.md,
-    minHeight: 36,
-    borderRadius: radius.pill,
-    backgroundColor: colors.raised,
-  },
-  outline: {
-    paddingHorizontal: space.lg,
-    minHeight: 40,
-    justifyContent: "center",
-    borderRadius: radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.lineStrong,
-  },
-  accentChip: {
-    alignSelf: "flex-start",
-    paddingHorizontal: space.lg,
-    minHeight: 40,
-    justifyContent: "center",
-    borderRadius: radius.pill,
-    backgroundColor: colors.accentWash,
-  },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    flex: { flex: 1, gap: 2 },
+    pressed: { opacity: 0.6 },
+    headline: { gap: 2 },
+    record: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: space.md,
+      padding: space.md,
+      borderRadius: radius.md,
+      backgroundColor: colors.raised,
+    },
+    initials: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.accentWash,
+    },
+    searchedWrap: { gap: space.sm },
+    searched: {
+      gap: space.xs,
+      padding: space.md,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderStyle: "dashed",
+      borderColor: colors.lineStrong,
+    },
+    trail: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: space.sm },
+    chip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: space.sm,
+      paddingHorizontal: space.md,
+      minHeight: 36,
+      borderRadius: radius.pill,
+      backgroundColor: colors.raised,
+    },
+    outline: {
+      paddingHorizontal: space.lg,
+      minHeight: 40,
+      justifyContent: "center",
+      borderRadius: radius.pill,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.lineStrong,
+    },
+    accentChip: {
+      alignSelf: "flex-start",
+      paddingHorizontal: space.lg,
+      minHeight: 40,
+      justifyContent: "center",
+      borderRadius: radius.pill,
+      backgroundColor: colors.accentWash,
+    },
+  })
+);

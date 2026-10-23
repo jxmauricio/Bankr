@@ -1,10 +1,12 @@
 import { useState, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
 import { useMoney } from "@/features/money/MoneyContext";
 import { ApiError, createGoal, createRule, moveBudgetMoney, type ActionProposal, type GoalProposal } from "@/lib/api";
 import { formatMoney, SAVE_NAME_SUGGESTIONS, SPEND_CATEGORIES, TRACKING_WINDOWS } from "@/lib/format";
 import { useToken } from "@/lib/session";
-import { colors, radius, space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
+import { makeStyles } from "@/theme/theme";
 import { Button, Text, TextField } from "@/ui";
 
 // Ported from web/src/components/GoalProposalCard.tsx and ActionProposalCard.tsx.
@@ -268,6 +270,7 @@ function ProposalShell({
   detail: string | null;
   children: ReactNode;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.card}>
       <View style={styles.head}>
@@ -295,6 +298,7 @@ function Chips({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const styles = useStyles();
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
       {options.map((o) => {
@@ -330,6 +334,7 @@ function Actions({
   onConfirm: () => void;
   onDismiss: () => void;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.actions}>
       <View style={styles.action}>
@@ -343,6 +348,7 @@ function Actions({
 }
 
 function Done({ text }: { text: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.done}>
       <Text variant="caption" tone="accent">
@@ -360,28 +366,30 @@ function ErrorText({ text }: { text: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    alignSelf: "stretch",
-    gap: space.md,
-    padding: space.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.accentBorder,
-    backgroundColor: colors.accentWash,
-  },
-  head: { gap: space.xs },
-  chips: { gap: space.sm },
-  chip: {
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.raised,
-  },
-  chipSelected: { borderColor: colors.accent },
-  actions: { flexDirection: "row", gap: space.sm },
-  action: { flex: 1 },
-  done: { alignSelf: "stretch", padding: space.lg, borderRadius: radius.lg, backgroundColor: colors.surface },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    card: {
+      alignSelf: "stretch",
+      gap: space.md,
+      padding: space.lg,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.accentBorder,
+      backgroundColor: colors.accentWash,
+    },
+    head: { gap: space.xs },
+    chips: { gap: space.sm },
+    chip: {
+      paddingHorizontal: space.md,
+      paddingVertical: space.sm,
+      borderRadius: radius.sm,
+      borderWidth: 1,
+      borderColor: colors.line,
+      backgroundColor: colors.raised,
+    },
+    chipSelected: { borderColor: colors.accent },
+    actions: { flexDirection: "row", gap: space.sm },
+    action: { flex: 1 },
+    done: { alignSelf: "stretch", padding: space.lg, borderRadius: radius.lg, backgroundColor: colors.surface },
+  })
+);

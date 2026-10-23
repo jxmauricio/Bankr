@@ -1,5 +1,6 @@
 import { Text as RNText, type TextProps as RNTextProps } from "react-native";
-import { tones, type Tone, type TypeVariant, type as typeScale } from "@/theme/tokens";
+import { useTone } from "@/theme/theme";
+import { type Tone, type TypeVariant, type as typeScale } from "@/theme/tokens";
 
 export interface TextProps extends RNTextProps {
   variant?: TypeVariant;
@@ -8,5 +9,6 @@ export interface TextProps extends RNTextProps {
 }
 
 export function Text({ variant = "body", tone = "default", align, style, ...rest }: TextProps) {
-  return <RNText style={[typeScale[variant], { color: tones[tone], textAlign: align }, style]} {...rest} />;
+  const color = useTone(tone);
+  return <RNText style={[typeScale[variant], { color, textAlign: align }, style]} {...rest} />;
 }

@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { useMemo } from "react";
-import { RefreshControl, ScrollView, SectionList, StyleSheet, View } from "react-native";
+import { RefreshControl, SectionList, StyleSheet, View } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
 import { useMoney } from "@/features/money/MoneyContext";
 import { useTransactionFilters } from "@/features/transactions/FiltersContext";
 import {
@@ -16,7 +17,8 @@ import {
 import type { TransactionRow } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
 import { merchantOf, signedAmount, topCategory } from "@/lib/transactions";
-import { colors, space } from "@/theme/tokens";
+import { space } from "@/theme/tokens";
+import { makeStyles, useColors } from "@/theme/theme";
 import {
   Button,
   Card,
@@ -41,6 +43,8 @@ import {
  * "Transactions · filter chips" board in the Bankr Mobile design.
  */
 export default function TransactionsScreen() {
+  const styles = useStyles();
+  const colors = useColors();
   const { syncFromBank, isSyncing } = useMoney();
   const { filters, update, list } = useTransactionFilters();
   const { status, data, error, retry } = list;
@@ -198,19 +202,21 @@ function TransactionItem({ transaction, group }: { transaction: TransactionRow; 
   );
 }
 
-const styles = StyleSheet.create({
-  search: { paddingHorizontal: space.lg, paddingTop: space.md + 2 },
-  // Horizontal rows keep their height; the list below takes what's left.
-  row: { flexGrow: 0, flexShrink: 0 },
-  chips: { gap: space.sm, paddingHorizontal: space.lg, paddingTop: space.sm + 2, paddingBottom: space.sm + 2 },
-  quick: { gap: 6, paddingHorizontal: space.lg, paddingBottom: space.sm + 2 },
-  listContent: { paddingBottom: space.xxl },
-  summary: { marginHorizontal: space.lg, marginTop: space.xs, gap: space.md },
-  totals: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  total: { flex: 1, gap: 2 },
-  totalEnd: { alignItems: "flex-end" },
-  totalFigure: { fontSize: 24, letterSpacing: -0.8 },
-  divider: { width: 1, alignSelf: "stretch", backgroundColor: colors.line, marginHorizontal: space.md },
-  note: { padding: space.lg },
-  empty: { padding: space.xl, gap: space.md, alignItems: "center" },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    search: { paddingHorizontal: space.lg, paddingTop: space.md + 2 },
+    // Horizontal rows keep their height; the list below takes what's left.
+    row: { flexGrow: 0, flexShrink: 0 },
+    chips: { gap: space.sm, paddingHorizontal: space.lg, paddingTop: space.sm + 2, paddingBottom: space.sm + 2 },
+    quick: { gap: 6, paddingHorizontal: space.lg, paddingBottom: space.sm + 2 },
+    listContent: { paddingBottom: space.xxl },
+    summary: { marginHorizontal: space.lg, marginTop: space.xs, gap: space.md },
+    totals: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    total: { flex: 1, gap: 2 },
+    totalEnd: { alignItems: "flex-end" },
+    totalFigure: { fontSize: 24, letterSpacing: -0.8 },
+    divider: { width: 1, alignSelf: "stretch", backgroundColor: colors.line, marginHorizontal: space.md },
+    note: { padding: space.lg },
+    empty: { padding: space.xl, gap: space.md, alignItems: "center" },
+  })
+);

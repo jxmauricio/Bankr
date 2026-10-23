@@ -16,12 +16,15 @@ import {
 import { useChat, type ChatItem } from "@/features/chat/useChat";
 import { NetWorthCard } from "@/features/money/NetWorthCard";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
-import { colors, radius, space, type } from "@/theme/tokens";
+import { radius, space, type } from "@/theme/tokens";
+import { makeStyles, useColors } from "@/theme/theme";
 import { Chip, groupPosition, Icon, IconButton, ListRow, Screen, SectionHeader, Text } from "@/ui";
 
 const SUGGESTIONS = ["How much did I spend this month?", "What are my biggest subscriptions?", "Am I on track for my goals?"];
 
 export default function ChatScreen() {
+  const styles = useStyles();
+  const colors = useColors();
   const chat = useChat();
   const [draft, setDraft] = useState("");
   const list = useRef<FlatList<ChatItem>>(null);
@@ -122,6 +125,7 @@ function Message({
   onChoose: (text: string) => void;
   disabled: boolean;
 }) {
+  const styles = useStyles();
   if (item.kind === "user") {
     return (
       <View style={styles.userBubble}>
@@ -167,6 +171,8 @@ function Message({
 
 /** Net worth at a glance, then the starter questions as one grouped list. */
 function EmptyChat({ onPick }: { onPick: (text: string) => void }) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={styles.empty}>
       <View style={styles.inset}>
@@ -188,45 +194,47 @@ function EmptyChat({ onPick }: { onPick: (text: string) => void }) {
   );
 }
 
-const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  messages: { paddingHorizontal: space.lg, paddingVertical: space.xl, gap: space.lg, flexGrow: 1 },
-  userBubble: {
-    alignSelf: "flex-end",
-    maxWidth: "80%",
-    backgroundColor: colors.userBubble,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    borderBottomLeftRadius: radius.lg,
-    borderBottomRightRadius: 6,
-    paddingHorizontal: space.md + 2,
-    paddingVertical: space.sm + 2,
-  },
-  assistant: { alignSelf: "stretch", gap: space.md },
-  failed: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap" },
-  // The empty state runs edge to edge: grouped rows bring their own side margins.
-  empty: { flex: 1, gap: space.xs, marginHorizontal: -space.lg, marginTop: -space.md },
-  inset: { paddingHorizontal: space.lg },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
-  composer: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: space.sm,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.sm,
-  },
-  input: {
-    ...type.body,
-    flex: 1,
-    minHeight: 44,
-    maxHeight: 120,
-    color: colors.ink,
-    backgroundColor: colors.raised,
-    borderWidth: 1,
-    borderColor: colors.lineStrong,
-    borderRadius: 22,
-    paddingHorizontal: space.lg + 2,
-    paddingTop: space.md - 1,
-    paddingBottom: space.md - 1,
-  },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    fill: { flex: 1 },
+    messages: { paddingHorizontal: space.lg, paddingVertical: space.xl, gap: space.lg, flexGrow: 1 },
+    userBubble: {
+      alignSelf: "flex-end",
+      maxWidth: "80%",
+      backgroundColor: colors.userBubble,
+      borderTopLeftRadius: radius.lg,
+      borderTopRightRadius: radius.lg,
+      borderBottomLeftRadius: radius.lg,
+      borderBottomRightRadius: 6,
+      paddingHorizontal: space.md + 2,
+      paddingVertical: space.sm + 2,
+    },
+    assistant: { alignSelf: "stretch", gap: space.md },
+    failed: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap" },
+    // The empty state runs edge to edge: grouped rows bring their own side margins.
+    empty: { flex: 1, gap: space.xs, marginHorizontal: -space.lg, marginTop: -space.md },
+    inset: { paddingHorizontal: space.lg },
+    chips: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+    composer: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      gap: space.sm,
+      paddingHorizontal: space.lg,
+      paddingVertical: space.sm,
+    },
+    input: {
+      ...type.body,
+      flex: 1,
+      minHeight: 44,
+      maxHeight: 120,
+      color: colors.ink,
+      backgroundColor: colors.raised,
+      borderWidth: 1,
+      borderColor: colors.lineStrong,
+      borderRadius: 22,
+      paddingHorizontal: space.lg + 2,
+      paddingTop: space.md - 1,
+      paddingBottom: space.md - 1,
+    },
+  })
+);

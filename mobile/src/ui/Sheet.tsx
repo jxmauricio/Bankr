@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors, space } from "@/theme/tokens";
+import { space } from "@/theme/tokens";
+import { makeStyles } from "@/theme/theme";
 import { Text } from "./Text";
 
 /** The inside of a bottom sheet: a title row, scrolling content, and an optional fixed footer. */
@@ -18,6 +19,7 @@ export function Sheet({
   scroll?: boolean;
   children: ReactNode;
 }) {
+  const styles = useStyles();
   return (
     <SafeAreaView style={styles.root} edges={["bottom"]}>
       <View style={styles.head}>
@@ -38,17 +40,19 @@ export function Sheet({
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  head: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: space.lg,
-    paddingTop: space.xl,
-    paddingBottom: space.sm,
-  },
-  body: { paddingHorizontal: space.lg, paddingBottom: space.lg, gap: space.md },
-  fill: { flex: 1 },
-  footer: { paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.md },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: colors.bg },
+    head: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: space.lg,
+      paddingTop: space.xl,
+      paddingBottom: space.sm,
+    },
+    body: { paddingHorizontal: space.lg, paddingBottom: space.lg, gap: space.md },
+    fill: { flex: 1 },
+    footer: { paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.md },
+  })
+);

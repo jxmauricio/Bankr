@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
-import { KIND_COLOR, sides, whole, type FlowTarget } from "@/features/cashflow/flow";
+import { useKindColors, sides, whole, type FlowTarget } from "@/features/cashflow/flow";
 import { Sankey } from "@/features/cashflow/Sankey";
 import { SpendingPaceChart } from "@/features/cashflow/SpendingPaceChart";
 import { useMoney } from "@/features/money/MoneyContext";
@@ -10,11 +10,15 @@ import { DEFAULT_FILTERS } from "@/features/transactions/filtering";
 import { fetchCashFlow, fetchSpendingPace } from "@/lib/api";
 import { PERIOD_OPTIONS, periodInfo } from "@/lib/period";
 import { useResource } from "@/lib/useResource";
-import { colors, radius, space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
+import { makeStyles, useColors } from "@/theme/theme";
 import { Card, ErrorState, Loading, Screen, SegmentedControl, Text } from "@/ui";
 
 /** Where money came from and went for the period, then this month's spending pace. Mirrors the web CashFlowView. */
 export default function CashFlowScreen() {
+  const styles = useStyles();
+  const kindColors = useKindColors();
+  const colors = useColors();
   const { period, setPeriod } = usePeriod();
   const { syncFromBank, isSyncing, syncVersion } = useMoney();
   const window = periodInfo(period).window;
@@ -87,12 +91,12 @@ export default function CashFlowScreen() {
                     onPress={() => c.target && openTransactions(c.target)}
                     style={({ pressed }) => [styles.row, i > 0 && styles.rowLine, pressed && styles.pressed]}
                   >
-                    <View style={[styles.swatch, { backgroundColor: KIND_COLOR[c.kind] }]} />
+                    <View style={[styles.swatch, { backgroundColor: kindColors[c.kind] }]} />
                     <Text numberOfLines={1} style={styles.flex}>
                       {c.name}
                     </Text>
                     <View style={styles.bar}>
-                      <View style={[styles.barFill, { width: `${(c.amount / maxRow) * 100}%`, backgroundColor: KIND_COLOR[c.kind] }]} />
+                      <View style={[styles.barFill, { width: `${(c.amount / maxRow) * 100}%`, backgroundColor: kindColors[c.kind] }]} />
                     </View>
                     <Text variant="money" style={styles.amount}>
                       {whole(c.amount)}
@@ -113,19 +117,21 @@ export default function CashFlowScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  content: { padding: space.lg, paddingBottom: space.xxl, gap: space.md },
-  intro: { paddingHorizontal: space.xs },
-  placeholder: { height: 320 },
-  rows: { paddingTop: space.md + 2, paddingBottom: space.xs, gap: 0 },
-  rowsHeader: { flexDirection: "row", justifyContent: "space-between", paddingBottom: space.xs },
-  row: { flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 44 },
-  rowLine: { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth },
-  pressed: { opacity: 0.6 },
-  swatch: { width: 8, height: 8, borderRadius: 2 },
-  flex: { flex: 1 },
-  bar: { width: 60, height: 4, borderRadius: radius.pill, backgroundColor: colors.line, overflow: "hidden" },
-  barFill: { height: 4, borderRadius: radius.pill },
-  amount: { minWidth: 72, textAlign: "right" },
-  chevron: { width: 10 },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    content: { padding: space.lg, paddingBottom: space.xxl, gap: space.md },
+    intro: { paddingHorizontal: space.xs },
+    placeholder: { height: 320 },
+    rows: { paddingTop: space.md + 2, paddingBottom: space.xs, gap: 0 },
+    rowsHeader: { flexDirection: "row", justifyContent: "space-between", paddingBottom: space.xs },
+    row: { flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 44 },
+    rowLine: { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth },
+    pressed: { opacity: 0.6 },
+    swatch: { width: 8, height: 8, borderRadius: 2 },
+    flex: { flex: 1 },
+    bar: { width: 60, height: 4, borderRadius: radius.pill, backgroundColor: colors.line, overflow: "hidden" },
+    barFill: { height: 4, borderRadius: radius.pill },
+    amount: { minWidth: 72, textAlign: "right" },
+    chevron: { width: 10 },
+  })
+);

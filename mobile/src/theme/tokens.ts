@@ -5,11 +5,16 @@
  *
  * Values follow the "Bankr Mobile" design in Claude Design
  * (https://claude.ai/artifact/PLuTHqLnEE4qZ9W8Mhodxt), which shares its
- * palette with the web app's @theme (web/src/index.css).
+ * dark palette with the web app's @theme (web/src/index.css). The light
+ * palette is the "Light mode" row of the Bankr iOS Redesign canvas
+ * (https://claude.ai/artifact/LMSyVZe6cymbvqQN6D2HZD).
+ *
+ * Colors follow the system appearance: read them with useColors() or
+ * makeStyles() from ./theme, never from a palette directly.
  */
 import type { TextStyle } from "react-native";
 
-export const colors = {
+export const darkColors = {
   bg: "#0B0D10",
   surface: "#12151A",
   raised: "#191D24",
@@ -38,9 +43,44 @@ export const colors = {
   warn: "#F5A54A",
   warnWash: "rgba(245, 165, 74, 0.1)",
   scrim: "rgba(5, 6, 8, 0.72)",
+  /** Behind a label drawn over a chart, so it reads against any fill. */
+  chartLabel: "rgba(5, 6, 8, 0.72)",
   /** Behind bank logos, which are drawn for a light background. */
   logoBacking: "#FFFFFF",
-} as const;
+};
+
+export type Colors = typeof darkColors;
+
+/** Soft gray-white page, white cards, navy ink and a blue accent. */
+export const lightColors: Colors = {
+  bg: "#F3F5F9",
+  surface: "#FFFFFF",
+  raised: "#E9EDF3",
+  line: "#E2E7EF",
+  lineStrong: "#D3DAE5",
+
+  ink: "#0E1A2B",
+  inkSoft: "#5A6678",
+  inkFaint: "#667085",
+
+  accent: "#2F6FE0",
+  accentStrong: "#1D4ED8",
+  accentWash: "rgba(47, 111, 224, 0.08)",
+  accentBorder: "rgba(47, 111, 224, 0.35)",
+  onAccent: "#FFFFFF",
+  userBubble: "#DCE7FB",
+
+  spend: "#7C5CE0",
+  positive: "#15803D",
+  positiveWash: "rgba(21, 128, 61, 0.1)",
+  negative: "#C93A2B",
+  negativeWash: "rgba(201, 58, 43, 0.08)",
+  warn: "#B45309",
+  warnWash: "rgba(180, 83, 9, 0.1)",
+  scrim: "rgba(16, 24, 40, 0.4)",
+  chartLabel: "rgba(255, 255, 255, 0.88)",
+  logoBacking: "#FFFFFF",
+};
 
 export const space = {
   xs: 4,
@@ -103,16 +143,18 @@ export const type = {
 export type TypeVariant = keyof typeof type;
 
 /** Semantic text colors, so screens say what a value means, not what color it is. */
-export const tones = {
-  default: colors.ink,
-  soft: colors.inkSoft,
-  faint: colors.inkFaint,
-  accent: colors.accent,
-  positive: colors.positive,
-  spend: colors.spend,
-  negative: colors.negative,
-  warn: colors.warn,
-  onAccent: colors.onAccent,
-} as const;
+export function tones(colors: Colors) {
+  return {
+    default: colors.ink,
+    soft: colors.inkSoft,
+    faint: colors.inkFaint,
+    accent: colors.accent,
+    positive: colors.positive,
+    spend: colors.spend,
+    negative: colors.negative,
+    warn: colors.warn,
+    onAccent: colors.onAccent,
+  };
+}
 
-export type Tone = keyof typeof tones;
+export type Tone = keyof ReturnType<typeof tones>;

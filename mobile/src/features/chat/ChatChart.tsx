@@ -4,7 +4,8 @@ import { openSource } from "@/features/source/openSource";
 import type { ChartPoint, ChartSpec } from "@/lib/api";
 import { colorForCategory, hasCategoryColor } from "@/lib/chartColors";
 import { formatDate, formatMoney } from "@/lib/format";
-import { colors, radius, space } from "@/theme/tokens";
+import { radius, space, type Colors } from "@/theme/tokens";
+import { makeStyles, useColors } from "@/theme/theme";
 import { Text } from "@/ui";
 import { openCashFlow } from "./ReplyExtras";
 
@@ -20,6 +21,7 @@ import { openCashFlow } from "./ReplyExtras";
  * tapping a bar opens its rows in the transactions sheet instead.
  */
 export function ChatChart({ chart }: { chart: ChartSpec }) {
+  const styles = useStyles();
   if (chart.points.length === 0) return null;
   const rowsByPoint = chart.points.some((p) => p.query);
 
@@ -63,7 +65,7 @@ export function ChatChart({ chart }: { chart: ChartSpec }) {
   );
 }
 
-function barColor(label: string): string {
+function barColor(label: string, colors: Colors): string {
   if (/^\d+ others$/.test(label)) return colors.inkFaint;
   return hasCategoryColor(label) ? colorForCategory(label) : colors.accent;
 }
@@ -91,6 +93,7 @@ function PointButton({
   style?: object;
   children: ReactNode;
 }) {
+  const styles = useStyles();
   const label = summary ?? pointSummary(point);
   if (!point.query) {
     return (
@@ -113,6 +116,7 @@ function PointButton({
 }
 
 function Bar({ fraction, color }: { fraction: number; color: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.barTrack}>
       <View style={[styles.barFill, { width: `${Math.max(fraction * 100, 2)}%`, backgroundColor: color }]} />
@@ -139,6 +143,8 @@ function Change({ value, previous }: { value: number; previous: number }) {
 }
 
 function Breakdown({ chart }: { chart: ChartSpec }) {
+  const styles = useStyles();
+  const colors = useColors();
   const points = chart.points;
   const max = Math.max(...points.map((p) => p.value));
   const hasPrevious = points.some((p) => p.previous != null);
@@ -146,7 +152,7 @@ function Breakdown({ chart }: { chart: ChartSpec }) {
     <View style={styles.stack}>
       <View style={styles.shareStrip}>
         {points.map((p) => (
-          <View key={p.label} style={{ flex: p.share ?? 0, backgroundColor: barColor(p.label) }} />
+          <View key={p.label} style={{ flex: p.share ?? 0, backgroundColor: barColor(p.label, colors) }} />
         ))}
       </View>
       {hasPrevious && (
@@ -167,7 +173,7 @@ function Breakdown({ chart }: { chart: ChartSpec }) {
           style={[styles.breakdownRow, i > 0 && styles.rowLine]}
         >
           <View style={styles.rowTop}>
-            <View style={[styles.swatch, { backgroundColor: barColor(p.label) }]} />
+            <View style={[styles.swatch, { backgroundColor: barColor(p.label, colors) }]} />
             <Text variant="caption" tone="soft" numberOfLines={1} style={styles.flex}>
               {p.label}
             </Text>
@@ -182,7 +188,7 @@ function Breakdown({ chart }: { chart: ChartSpec }) {
               {formatMoney(p.value)}
             </Text>
           </View>
-          <Bar fraction={max ? p.value / max : 0} color={barColor(p.label)} />
+          <Bar fraction={max ? p.value / max : 0} color={barColor(p.label, colors)} />
         </PointButton>
       ))}
     </View>
@@ -192,6 +198,8 @@ function Breakdown({ chart }: { chart: ChartSpec }) {
 // --- then vs now --------------------------------------------------------------
 
 function Compare({ chart }: { chart: ChartSpec }) {
+  const styles = useStyles();
+  const colors = useColors();
   const [previous, current] = chart.points;
   const max = Math.max(previous.value, current.value);
   const change = chart.change;
@@ -247,6 +255,8 @@ function Columns({
   average?: number | null;
   height?: number;
 }) {
+  const styles = useStyles();
+  const colors = useColors();
   const points = chart.points;
   const values = points.map((p) => Math.abs(p.value));
   const sorted = [...values].sort((a, b) => b - a);
@@ -311,6 +321,7 @@ function Columns({
 }
 
 function Trend({ chart }: { chart: ChartSpec }) {
+  const colors = useColors();
   const points = chart.points;
   return (
     <Columns
@@ -323,6 +334,7 @@ function Trend({ chart }: { chart: ChartSpec }) {
 }
 
 function Daily({ chart }: { chart: ChartSpec }) {
+  const colors = useColors();
   return (
     <Columns
       chart={chart}
@@ -335,6 +347,8 @@ function Daily({ chart }: { chart: ChartSpec }) {
 }
 
 function Merchant({ chart }: { chart: ChartSpec }) {
+  const styles = useStyles();
+  const colors = useColors();
   const peak = Math.max(...chart.points.map((p) => p.value));
   return (
     <View style={styles.stack}>
@@ -369,6 +383,8 @@ function Merchant({ chart }: { chart: ChartSpec }) {
 // --- what's coming up ------------------------------------------------------------
 
 function Recurring({ chart }: { chart: ChartSpec }) {
+  const styles = useStyles();
+  const colors = useColors();
   const today = chart.today ? new Date(`${chart.today}T00:00`) : null;
   const horizon = chart.horizon ? new Date(`${chart.horizon}T00:00`) : null;
   const span = today && horizon ? horizon.getTime() - today.getTime() : 0;
@@ -458,6 +474,8 @@ function Recurring({ chart }: { chart: ChartSpec }) {
 // --- what moved net worth ----------------------------------------------------------
 
 function NetWorth({ chart }: { chart: ChartSpec }) {
+  const styles = useStyles();
+  const colors = useColors();
   const points = chart.points;
   const gains = Math.max(0, ...points.map((p) => p.value));
   const drags = Math.max(0, ...points.map((p) => -p.value));
@@ -519,71 +537,73 @@ function NetWorth({ chart }: { chart: ChartSpec }) {
   );
 }
 
-const styles = StyleSheet.create({
-  figure: { alignSelf: "stretch", gap: space.md, padding: space.lg, borderRadius: radius.lg, backgroundColor: colors.raised },
-  caption: { flexDirection: "row", alignItems: "baseline", gap: space.md },
-  flex: { flex: 1 },
-  pressed: { opacity: 0.6 },
-  stack: { gap: space.sm },
-  footer: { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: space.md },
-  barTrack: { height: 8, borderRadius: radius.pill, backgroundColor: colors.line, overflow: "hidden" },
-  barFill: { height: 8, borderRadius: radius.pill },
-  shareStrip: { flexDirection: "row", height: 14, gap: 2, borderRadius: 4, overflow: "hidden" },
-  tableHead: { flexDirection: "row", gap: space.md },
-  breakdownRow: { gap: 6, paddingVertical: space.sm },
-  rowLine: { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth },
-  rowTop: { flexDirection: "row", alignItems: "center", gap: space.sm },
-  swatch: { width: 8, height: 8, borderRadius: 2 },
-  amount: { minWidth: 76, textAlign: "right" },
-  compareRow: { gap: 4, paddingVertical: 6 },
-  pill: { alignSelf: "flex-start", borderRadius: radius.pill, paddingHorizontal: space.sm, paddingVertical: 3 },
-  columns: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    borderBottomColor: colors.lineStrong,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  column: { flex: 1, height: "100%", alignItems: "center", justifyContent: "flex-end", gap: 4, minWidth: 0 },
-  columnBar: { width: "100%", maxWidth: 40, borderTopLeftRadius: 6, borderTopRightRadius: 6, overflow: "hidden" },
-  partial: { borderWidth: 1, borderBottomWidth: 0, borderStyle: "dashed" },
-  break: { position: "absolute", left: 0, right: 0, top: 8, height: 4, backgroundColor: colors.raised, transform: [{ skewY: "-12deg" }] },
-  average: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    zIndex: 1,
-    borderTopWidth: 1,
-    borderStyle: "dashed",
-    borderTopColor: colors.inkFaint,
-  },
-  averageLabel: { position: "absolute", right: 0, top: -16, backgroundColor: colors.raised, paddingHorizontal: 4 },
-  columnLabels: { flexDirection: "row" },
-  columnLabel: { flex: 1, textAlign: "center" },
-  stats: { flexDirection: "row", gap: space.sm },
-  stat: { flex: 1, gap: 2, padding: space.sm, borderRadius: radius.md, backgroundColor: colors.surface },
-  timeline: { height: 64 },
-  timelineLine: { position: "absolute", left: 0, right: 0, top: 32, height: 1, backgroundColor: colors.lineStrong },
-  timelineStart: { position: "absolute", left: 0, bottom: 0 },
-  timelineEnd: { position: "absolute", right: 0, bottom: 0 },
-  timelineMark: { position: "absolute", top: 0, height: 64, width: 0, alignItems: "center" },
-  dot: {
-    position: "absolute",
-    top: 27,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.accent,
-    borderWidth: 2,
-    borderColor: colors.raised,
-  },
-  markAbove: { position: "absolute", top: 8, width: 48, textAlign: "center" },
-  markBelow: { position: "absolute", top: 40, width: 48, textAlign: "center" },
-  nextCol: { width: 56, textAlign: "right" },
-  recurringRow: { minHeight: 44 },
-  recurringName: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: space.sm },
-  netRow: { gap: 4, paddingVertical: 4 },
-  divergeTrack: { height: 16 },
-  zero: { position: "absolute", top: 0, bottom: 0, width: 1, backgroundColor: colors.lineStrong },
-  diverge: { position: "absolute", top: 2, height: 12, borderRadius: 3 },
-  netTotal: { borderTopColor: colors.lineStrong, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: space.sm },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    figure: { alignSelf: "stretch", gap: space.md, padding: space.lg, borderRadius: radius.lg, backgroundColor: colors.raised },
+    caption: { flexDirection: "row", alignItems: "baseline", gap: space.md },
+    flex: { flex: 1 },
+    pressed: { opacity: 0.6 },
+    stack: { gap: space.sm },
+    footer: { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: space.md },
+    barTrack: { height: 8, borderRadius: radius.pill, backgroundColor: colors.line, overflow: "hidden" },
+    barFill: { height: 8, borderRadius: radius.pill },
+    shareStrip: { flexDirection: "row", height: 14, gap: 2, borderRadius: 4, overflow: "hidden" },
+    tableHead: { flexDirection: "row", gap: space.md },
+    breakdownRow: { gap: 6, paddingVertical: space.sm },
+    rowLine: { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth },
+    rowTop: { flexDirection: "row", alignItems: "center", gap: space.sm },
+    swatch: { width: 8, height: 8, borderRadius: 2 },
+    amount: { minWidth: 76, textAlign: "right" },
+    compareRow: { gap: 4, paddingVertical: 6 },
+    pill: { alignSelf: "flex-start", borderRadius: radius.pill, paddingHorizontal: space.sm, paddingVertical: 3 },
+    columns: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      borderBottomColor: colors.lineStrong,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    column: { flex: 1, height: "100%", alignItems: "center", justifyContent: "flex-end", gap: 4, minWidth: 0 },
+    columnBar: { width: "100%", maxWidth: 40, borderTopLeftRadius: 6, borderTopRightRadius: 6, overflow: "hidden" },
+    partial: { borderWidth: 1, borderBottomWidth: 0, borderStyle: "dashed" },
+    break: { position: "absolute", left: 0, right: 0, top: 8, height: 4, backgroundColor: colors.raised, transform: [{ skewY: "-12deg" }] },
+    average: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      zIndex: 1,
+      borderTopWidth: 1,
+      borderStyle: "dashed",
+      borderTopColor: colors.inkFaint,
+    },
+    averageLabel: { position: "absolute", right: 0, top: -16, backgroundColor: colors.raised, paddingHorizontal: 4 },
+    columnLabels: { flexDirection: "row" },
+    columnLabel: { flex: 1, textAlign: "center" },
+    stats: { flexDirection: "row", gap: space.sm },
+    stat: { flex: 1, gap: 2, padding: space.sm, borderRadius: radius.md, backgroundColor: colors.surface },
+    timeline: { height: 64 },
+    timelineLine: { position: "absolute", left: 0, right: 0, top: 32, height: 1, backgroundColor: colors.lineStrong },
+    timelineStart: { position: "absolute", left: 0, bottom: 0 },
+    timelineEnd: { position: "absolute", right: 0, bottom: 0 },
+    timelineMark: { position: "absolute", top: 0, height: 64, width: 0, alignItems: "center" },
+    dot: {
+      position: "absolute",
+      top: 27,
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: colors.accent,
+      borderWidth: 2,
+      borderColor: colors.raised,
+    },
+    markAbove: { position: "absolute", top: 8, width: 48, textAlign: "center" },
+    markBelow: { position: "absolute", top: 40, width: 48, textAlign: "center" },
+    nextCol: { width: 56, textAlign: "right" },
+    recurringRow: { minHeight: 44 },
+    recurringName: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: space.sm },
+    netRow: { gap: 4, paddingVertical: 4 },
+    divergeTrack: { height: 16 },
+    zero: { position: "absolute", top: 0, bottom: 0, width: 1, backgroundColor: colors.lineStrong },
+    diverge: { position: "absolute", top: 2, height: 12, borderRadius: 3 },
+    netTotal: { borderTopColor: colors.lineStrong, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: space.sm },
+  })
+);

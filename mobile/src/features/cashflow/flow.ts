@@ -1,6 +1,6 @@
 // Ported from web/src/pages/CashFlowView.tsx (sides and its node types).
 import type { CashFlowBreakdown } from "@/lib/api";
-import { colors } from "@/theme/tokens";
+import { useColors } from "@/theme/theme";
 
 export const MAX_CATEGORIES = 8;
 
@@ -19,13 +19,17 @@ export interface FlowNode {
   target?: FlowTarget;
 }
 
-export const KIND_COLOR: Record<Kind, string> = {
+/** Each kind's color in the current appearance. */
+export function useKindColors(): Record<Kind, string> {
+  const colors = useColors();
+  return {
   income: colors.accent,
   deficit: colors.warn,
   spend: colors.spend,
   transfer: colors.inkSoft,
   kept: colors.positive,
-};
+  };
+}
 
 export const whole = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
 

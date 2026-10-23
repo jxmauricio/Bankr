@@ -6,9 +6,9 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "bankr",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "com.bankr.app",
+      "bundleIdentifier": "com.jxmauricio.bankr",
       "supportsTablet": false
     },
     "android": {

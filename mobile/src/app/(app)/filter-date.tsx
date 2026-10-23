@@ -4,7 +4,8 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { useTransactionFilters } from "@/features/transactions/FiltersContext";
 import { DATE_PRESETS, iso, parseIso, rangeLabel, windowRange } from "@/features/transactions/filtering";
 import { RangeCalendar } from "@/features/transactions/RangeCalendar";
-import { colors, radius, space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
+import { makeStyles } from "@/theme/theme";
 import { Button, Sheet, Text } from "@/ui";
 
 type Draft = { preset: string | "custom"; start: string | null; end: string | null };
@@ -14,6 +15,7 @@ type Draft = { preset: string | "custom"; start: string | null; end: string | nu
  * "Show transactions"; closing the sheet keeps the old dates.
  */
 export default function DateFilterSheet() {
+  const styles = useStyles();
   const { filters, update } = useTransactionFilters();
   const today = iso(new Date());
 
@@ -98,19 +100,21 @@ export default function DateFilterSheet() {
   );
 }
 
-const styles = StyleSheet.create({
-  presets: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
-  preset: {
-    width: "48.5%",
-    minHeight: 44,
-    justifyContent: "center",
-    paddingHorizontal: space.md,
-    borderRadius: radius.md - 2,
-    borderWidth: 1,
-  },
-  presetOn: { borderColor: colors.accent, backgroundColor: colors.accentWash },
-  presetOff: { borderColor: colors.line, backgroundColor: colors.surface },
-  actions: { flexDirection: "row", gap: space.sm },
-  reset: { flex: 1 },
-  apply: { flex: 2 },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    presets: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+    preset: {
+      width: "48.5%",
+      minHeight: 44,
+      justifyContent: "center",
+      paddingHorizontal: space.md,
+      borderRadius: radius.md - 2,
+      borderWidth: 1,
+    },
+    presetOn: { borderColor: colors.accent, backgroundColor: colors.accentWash },
+    presetOff: { borderColor: colors.line, backgroundColor: colors.surface },
+    actions: { flexDirection: "row", gap: space.sm },
+    reset: { flex: 1 },
+    apply: { flex: 2 },
+  })
+);

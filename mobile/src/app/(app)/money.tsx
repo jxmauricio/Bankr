@@ -3,11 +3,14 @@ import { BankLogo } from "@/features/bank/BankLogos";
 import { useLinkBank } from "@/features/bank/useLinkBank";
 import { isStale, useMoney } from "@/features/money/MoneyContext";
 import { formatMoney, formatRelativeTime } from "@/lib/format";
-import { colors, radius, space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
+import { makeStyles, useColors } from "@/theme/theme";
 import { Button, Card, Text } from "@/ui";
 
 /** The money sheet: net worth, accounts and goals, opened from the top bar's settings button or the net worth card. */
 export default function MoneySheet() {
+  const styles = useStyles();
+  const colors = useColors();
   const { netWorth, goals, syncFromBank, isSyncing, syncError, banksChanged } = useMoney();
   const linking = useLinkBank(banksChanged);
   const stale = isStale(netWorth.as_of) && !isSyncing;
@@ -97,7 +100,8 @@ export default function MoneySheet() {
                 {account.mask ? ` •••• ${account.mask}` : ""}
               </Text>
             </View>
-            <Text variant="money" tone={account.kind === "liability" ? "negative" : "default"}>
+            {/* A card balance is normal, not a problem: the minus sign says it's owed, so it stays neutral. Red is for real trouble. */}
+            <Text variant="money">
               {formatMoney(account.kind === "liability" ? -account.balance : account.balance)}
             </Text>
           </View>
@@ -113,11 +117,13 @@ export default function MoneySheet() {
   );
 }
 
-const styles = StyleSheet.create({
-  content: { padding: space.lg, gap: space.md },
-  split: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.sm },
-  flex: { flex: 1 },
-  goal: { gap: space.xs },
-  track: { height: 6, borderRadius: radius.pill, backgroundColor: colors.line, overflow: "hidden" },
-  fill: { height: "100%", borderRadius: radius.pill },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    content: { padding: space.lg, gap: space.md },
+    split: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.sm },
+    flex: { flex: 1 },
+    goal: { gap: space.xs },
+    track: { height: 6, borderRadius: radius.pill, backgroundColor: colors.line, overflow: "hidden" },
+    fill: { height: "100%", borderRadius: radius.pill },
+  })
+);

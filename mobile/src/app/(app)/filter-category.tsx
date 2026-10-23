@@ -6,11 +6,13 @@ import { categoryOptions, dateLabel } from "@/features/transactions/filtering";
 import { colorForCategory, hasCategoryColor } from "@/lib/chartColors";
 import { formatMoney } from "@/lib/format";
 import { CheckRow, ClearButton } from "@/features/transactions/FilterRows";
-import { colors, space } from "@/theme/tokens";
+import { space } from "@/theme/tokens";
+import { useColors } from "@/theme/theme";
 import { Button, SearchField, Sheet, Text } from "@/ui";
 
 /** Pick any number of categories; each shows its count and spend for the chosen dates. */
 export default function CategoryFilterSheet() {
+  const colors = useColors();
   const { filters, update, list } = useTransactionFilters();
   const [picked, setPicked] = useState<string[]>(filters.categories);
   const [find, setFind] = useState("");
