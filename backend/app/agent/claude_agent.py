@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from app.agent import tools
 from app.agent.agent_client import ToolSpec, build_agent_client
+from app.agent.reply_text import clip_reply
 from app.db.models import LinkedAccount
 from app.db.seed_categories import DEFAULT_CATEGORIES
 from app.integrations.web_search import build_web_search_client
@@ -156,7 +157,9 @@ say the card shows the rest.
 - A goal or status: amount out of target with the percent, then one sentence \
 on pace or the next step.
 Only "- " bullets and **bold** are allowed: no headers, italics, tables, \
-numbered or nested lists, or emoji. Keep the whole reply to about 6 lines.
+numbered or nested lists, or emoji. Keep the whole reply to about 6 lines. \
+After the answer, at most one follow-up question, then stop. Do not restate \
+the answer after a tool result, and never rephrase the same offer.
 
 Budgets: for "am I over budget", "how much can I still spend", or how a \
 monthly budget is going, call get_budget_status and lead with what's left \
@@ -913,6 +916,6 @@ def run_agent_turn(
     system = SYSTEM_PROMPT + _date_context(db, user_id)
     # Only passed when wanted, so AgentClient stand-ins without it still work.
     streaming = {"on_text": stream_text} if on_text else {}
-    reply = _client.run_turn(system, TOOL_DEFINITIONS, messages, call_tool, **streaming)
+    reply = clip_reply(_client.run_turn(system, TOOL_DEFINITIONS, messages, call_tool, **streaming))
     check_cancelled()
     return reply, sources

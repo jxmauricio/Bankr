@@ -392,7 +392,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
 
   return (
     <BankLogosProvider banks={banks}>
-    <div className="relative flex h-dvh flex-col">
+    <div className="relative flex h-dvh flex-col overflow-hidden">
       <header className="relative z-30 flex min-h-16 shrink-0 items-center justify-between gap-1 border-b border-line bg-bg px-1.5 py-2 sm:gap-2 sm:px-6">
         <div className="flex shrink-0 items-center gap-3">
           <ChatHistoryMenu token={token} onSelectConversation={loadConversation} onNewChat={startNewChat} />
@@ -506,7 +506,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
         />
       )}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Desktop money rail: its own column, scrolling apart from the chat. */}
         <aside
           aria-label="Your money"
@@ -569,12 +569,16 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
           </main>
         )}
 
-        {/* Chat stays mounted while hidden so its scroll position and draft survive a view switch. */}
-        <main hidden={view !== "chat"} className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <div
-            ref={streamRef}
-            className="flex-1 overflow-y-auto px-4 py-3 [mask-image:linear-gradient(to_bottom,transparent_0,#000_28px)] sm:px-7"
-          >
+        {/* Chat stays mounted while hidden so its scroll position and draft survive a view switch.
+            `hidden` vs `flex` must be class-based: Tailwind's `flex` would otherwise override
+            the HTML hidden attribute and keep this column in layout on other views. */}
+        <main className={`min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${view === "chat" ? "flex" : "hidden"}`}>
+          <div className="relative min-h-0 flex-1">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 top-0 z-10 h-7 bg-gradient-to-b from-bg to-transparent"
+            />
+            <div ref={streamRef} className="absolute inset-0 overflow-y-auto px-4 py-3 sm:px-7">
             <div className="mx-auto flex max-w-2xl flex-col gap-4 pt-2">
               {brokenBanks.length > 0 && <RelinkBanner banks={brokenBanks} onManage={() => setShowSettings(true)} />}
               {isGreeting && <FirstConversation accountCount={accountCount} />}
@@ -616,6 +620,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                   {error}
                 </p>
               )}
+            </div>
             </div>
           </div>
 

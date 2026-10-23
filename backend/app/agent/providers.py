@@ -168,7 +168,7 @@ class OpenAICompatibleAgentClient:
         model: str,
         default_headers: dict | None = None,
         extra_body: dict | None = None,
-        max_output_tokens: int = 8192,
+        max_output_tokens: int = 1024,
     ):
         self._client = openai.OpenAI(api_key=api_key, base_url=base_url, default_headers=default_headers)
         self._model = model
@@ -332,7 +332,7 @@ class OpenRouterAgentClient(OpenAICompatibleAgentClient):
         extended_thinking: bool = False,
         thinking_budget_tokens: int = 2048,
         provider_sort: str = "",
-        max_output_tokens: int = 8192,
+        max_output_tokens: int = 1024,
     ):
         headers = {"X-Title": app_name}
         if site_url:
