@@ -1,7 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { FlatList, StyleSheet, TextInput, View } from "react-native";
-import { AppHeader } from "@/features/money/AppHeader";
 import { AssistantText } from "@/features/chat/AssistantText";
 import { ChatChart } from "@/features/chat/ChatChart";
 import { ActionProposalCard, GoalProposalCard } from "@/features/chat/ProposalCards";
@@ -15,9 +14,10 @@ import {
   ViewLinks,
 } from "@/features/chat/ReplyExtras";
 import { useChat, type ChatItem } from "@/features/chat/useChat";
+import { NetWorthCard } from "@/features/money/NetWorthCard";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
 import { colors, radius, space, type } from "@/theme/tokens";
-import { Chip, IconButton, Screen, Text } from "@/ui";
+import { Chip, groupPosition, Icon, IconButton, ListRow, Screen, SectionHeader, Text } from "@/ui";
 
 const SUGGESTIONS = ["How much did I spend this month?", "What are my biggest subscriptions?", "Am I on track for my goals?"];
 
@@ -45,9 +45,8 @@ export default function ChatScreen() {
   }
 
   return (
-    <Screen padded={false}>
-      {/* A new chat starts from the history sheet's "New chat" row. */}
-      <AppHeader leading={<IconButton icon="menu" label="Chat history" onPress={() => router.push("/history")} />} />
+    // The tab bar above owns the top inset; chat history is in its trailing button.
+    <Screen padded={false} edges={["bottom"]}>
       <View ref={body} style={[styles.fill, { paddingBottom: keyboardInset }]}>
         <FlatList
           ref={list}
@@ -166,13 +165,23 @@ function Message({
   );
 }
 
+/** Net worth at a glance, then the starter questions as one grouped list. */
 function EmptyChat({ onPick }: { onPick: (text: string) => void }) {
   return (
     <View style={styles.empty}>
-      <Text variant="title">Ask your money anything.</Text>
-      <View style={styles.chips}>
-        {SUGGESTIONS.map((s) => (
-          <Chip key={s} label={s} onPress={() => onPick(s)} />
+      <View style={styles.inset}>
+        <NetWorthCard />
+      </View>
+      <View>
+        <SectionHeader title="Ask Bankr" />
+        {SUGGESTIONS.map((s, i) => (
+          <ListRow
+            key={s}
+            title={s}
+            group={groupPosition(i, SUGGESTIONS.length)}
+            onPress={() => onPick(s)}
+            trailing={<Icon name="chevronRight" color={colors.inkFaint} size={16} />}
+          />
         ))}
       </View>
     </View>
@@ -195,16 +204,16 @@ const styles = StyleSheet.create({
   },
   assistant: { alignSelf: "stretch", gap: space.md },
   failed: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap" },
-  empty: { flex: 1, justifyContent: "center", gap: space.lg },
+  // The empty state runs edge to edge: grouped rows bring their own side margins.
+  empty: { flex: 1, gap: space.xs, marginHorizontal: -space.lg, marginTop: -space.md },
+  inset: { paddingHorizontal: space.lg },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   composer: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: space.sm,
     paddingHorizontal: space.lg,
-    paddingVertical: space.md,
-    borderTopColor: colors.line,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingVertical: space.sm,
   },
   input: {
     ...type.body,
@@ -212,11 +221,11 @@ const styles = StyleSheet.create({
     minHeight: 44,
     maxHeight: 120,
     color: colors.ink,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.raised,
     borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radius.md,
-    paddingHorizontal: space.md + 2,
+    borderColor: colors.lineStrong,
+    borderRadius: 22,
+    paddingHorizontal: space.lg + 2,
     paddingTop: space.md - 1,
     paddingBottom: space.md - 1,
   },

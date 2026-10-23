@@ -13,10 +13,12 @@ export function IconButton({
   icon: IconName;
   label: string;
   onPress: () => void;
-  variant?: "primary" | "secondary";
+  /** "plain" is a bare accent icon, for the top bar. */
+  variant?: "primary" | "secondary" | "plain";
   disabled?: boolean;
 }) {
   const primary = variant === "primary";
+  const plain = variant === "plain";
   return (
     <Pressable
       accessibilityRole="button"
@@ -25,16 +27,24 @@ export function IconButton({
       onPress={onPress}
       disabled={disabled}
       hitSlop={4}
-      style={({ pressed }) => [styles.base, primary ? styles.primary : styles.secondary, (pressed || disabled) && styles.dimmed]}
+      style={({ pressed }) => [
+        styles.base,
+        primary ? styles.primary : plain ? null : styles.secondary,
+        (pressed || disabled) && styles.dimmed,
+      ]}
     >
-      <Icon name={icon} color={primary ? colors.onAccent : colors.inkSoft} />
+      <Icon
+        name={icon}
+        color={primary ? colors.onAccent : plain ? colors.accent : colors.inkSoft}
+        size={plain ? 24 : 20}
+      />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   base: { width: 44, height: 44, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
-  primary: { backgroundColor: colors.accent },
+  primary: { backgroundColor: colors.accent, borderRadius: radius.pill },
   secondary: { backgroundColor: colors.surface },
   dimmed: { opacity: 0.45 },
 });

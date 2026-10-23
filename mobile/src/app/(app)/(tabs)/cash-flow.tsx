@@ -3,7 +3,6 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-n
 import { KIND_COLOR, sides, whole, type FlowTarget } from "@/features/cashflow/flow";
 import { Sankey } from "@/features/cashflow/Sankey";
 import { SpendingPaceChart } from "@/features/cashflow/SpendingPaceChart";
-import { AppHeader } from "@/features/money/AppHeader";
 import { useMoney } from "@/features/money/MoneyContext";
 import { usePeriod } from "@/features/period/PeriodContext";
 import { useTransactionFilters } from "@/features/transactions/FiltersContext";
@@ -40,19 +39,16 @@ export default function CashFlowScreen() {
   const empty = f !== null && f.income === 0 && f.spending === 0 && (f.transfer_in ?? 0) === 0 && (f.transfer_out ?? 0) === 0;
 
   return (
-    <Screen padded={false}>
-      <AppHeader />
+    // The tab bar above owns the top inset.
+    <Screen padded={false} edges={[]}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={isSyncing} onRefresh={syncFromBank} tintColor={colors.accent} />}
       >
-        <View style={styles.intro}>
-          <Text variant="title">Cash flow</Text>
-          <Text variant="caption" tone="soft">
-            Where your money came from and where it went{f ? ` · ${f.label}` : ""}. Tap a category to see its transactions.
-          </Text>
-        </View>
         <SegmentedControl label="Period" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
+        <Text variant="caption" tone="soft" style={styles.intro}>
+          Where your money came from and where it went{f ? ` · ${f.label}` : ""}. Tap a category to see its transactions.
+        </Text>
 
         {flow.status === "error" && !f ? (
           <Card>
@@ -74,6 +70,14 @@ export default function CashFlowScreen() {
               <Sankey flow={f} {...data} onPick={openTransactions} />
             </Card>
             <Card style={styles.rows}>
+              <View style={styles.rowsHeader}>
+                <Text variant="section" tone="soft">
+                  Where it went
+                </Text>
+                <Text variant="section" tone="soft">
+                  Amount
+                </Text>
+              </View>
               {data.right.map((c, i) => {
                 const maxRow = Math.max(...data.right.map((r) => r.amount), 1);
                 return (
@@ -110,10 +114,11 @@ export default function CashFlowScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: space.lg, gap: space.md },
-  intro: { gap: space.xs },
+  content: { padding: space.lg, paddingBottom: space.xxl, gap: space.md },
+  intro: { paddingHorizontal: space.xs },
   placeholder: { height: 320 },
-  rows: { paddingVertical: space.xs, gap: 0 },
+  rows: { paddingTop: space.md + 2, paddingBottom: space.xs, gap: 0 },
+  rowsHeader: { flexDirection: "row", justifyContent: "space-between", paddingBottom: space.xs },
   row: { flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 44 },
   rowLine: { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth },
   pressed: { opacity: 0.6 },

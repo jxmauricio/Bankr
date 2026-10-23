@@ -1,7 +1,6 @@
 import { router } from "expo-router";
 import { useMemo } from "react";
 import { RefreshControl, ScrollView, SectionList, StyleSheet, View } from "react-native";
-import { AppHeader } from "@/features/money/AppHeader";
 import { useMoney } from "@/features/money/MoneyContext";
 import { useTransactionFilters } from "@/features/transactions/FiltersContext";
 import {
@@ -17,8 +16,24 @@ import {
 import type { TransactionRow } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
 import { merchantOf, signedAmount, topCategory } from "@/lib/transactions";
-import { colors, radius, space } from "@/theme/tokens";
-import { Button, ErrorState, FilterChip, Initial, ListRow, Loading, ResetChip, Screen, SearchField, Text, ToggleChip } from "@/ui";
+import { colors, space } from "@/theme/tokens";
+import {
+  Button,
+  Card,
+  ErrorState,
+  FilterChip,
+  groupPosition,
+  Initial,
+  ListRow,
+  Loading,
+  ResetChip,
+  Screen,
+  SearchField,
+  SectionHeader,
+  Text,
+  ToggleChip,
+  type GroupPosition,
+} from "@/ui";
 
 /**
  * Search, a row of filter chips (each opens its sheet), one-tap quick filters,
@@ -53,8 +68,8 @@ export default function TransactionsScreen() {
   }
 
   return (
-    <Screen padded={false}>
-      <AppHeader />
+    // The tab bar above owns the top inset.
+    <Screen padded={false} edges={[]}>
       <View style={styles.search}>
         <SearchField
           value={filters.query}
@@ -105,40 +120,39 @@ export default function TransactionsScreen() {
           stickySectionHeadersEnabled
           keyboardDismissMode="on-drag"
           refreshControl={<RefreshControl refreshing={isSyncing} onRefresh={syncFromBank} tintColor={colors.accent} />}
+          contentContainerStyle={styles.listContent}
           renderSectionHeader={({ section }) => (
-            <View style={styles.dayHeader}>
-              <Text variant="meta" tone="faint">
-                {section.title}
-              </Text>
-              {section.out > 0 && (
-                <Text variant="moneySmall" tone="faint">
-                  −{formatMoney(section.out)}
-                </Text>
-              )}
-            </View>
+            <SectionHeader title={section.title} trailing={section.out > 0 ? `−${formatMoney(section.out)}` : null} />
           )}
-          renderItem={({ item }) => <TransactionItem transaction={item} />}
+          renderItem={({ item, index, section }) => (
+            <TransactionItem transaction={item} group={groupPosition(index, section.data.length)} />
+          )}
           ListHeaderComponent={
             data ? (
-              <View style={styles.summary} accessible accessibilityLabel={summaryLabel(totals)}>
-                <Text variant="caption" tone="soft">
-                  {totals.count} {totals.count === 1 ? "transaction" : "transactions"}
-                </Text>
-                <View style={styles.totals}>
-                  <Text variant="moneySmall">
-                    {formatMoney(totals.out)}{" "}
-                    <Text variant="caption" tone="faint">
-                      out
+              <Card style={styles.summary}>
+                <View accessible accessibilityLabel={summaryLabel(totals)} style={styles.totals}>
+                  <View style={styles.total}>
+                    <Text variant="moneyLarge" style={styles.totalFigure}>
+                      {formatMoney(totals.out)}
                     </Text>
-                  </Text>
-                  <Text variant="moneySmall" tone="positive">
-                    {formatMoney(totals.in)}{" "}
-                    <Text variant="caption" tone="faint">
-                      in
+                    <Text variant="caption" tone="soft">
+                      spent
                     </Text>
-                  </Text>
+                  </View>
+                  <View style={styles.divider} />
+                  <View style={[styles.total, styles.totalEnd]}>
+                    <Text variant="moneyLarge" tone="positive" style={styles.totalFigure}>
+                      {formatMoney(totals.in)}
+                    </Text>
+                    <Text variant="caption" tone="soft">
+                      earned
+                    </Text>
+                  </View>
                 </View>
-              </View>
+                <Text variant="meta" tone="soft">
+                  {totals.count} {totals.count === 1 ? "transaction" : "transactions"} · {dateLabel(filters.date)}
+                </Text>
+              </Card>
             ) : null
           }
           ListFooterComponent={
@@ -166,11 +180,12 @@ function summaryLabel(t: { count: number; out: number; in: number }): string {
   return `${t.count} transactions, ${formatMoney(t.out)} out, ${formatMoney(t.in)} in`;
 }
 
-function TransactionItem({ transaction }: { transaction: TransactionRow }) {
+function TransactionItem({ transaction, group }: { transaction: TransactionRow; group: GroupPosition }) {
   const amount = signedAmount(transaction.amount);
   const subtitle = [topCategory(transaction), transaction.is_pending ? "Pending" : null].filter(Boolean).join(" · ");
   return (
     <ListRow
+      group={group}
       leading={<Initial name={merchantOf(transaction)} />}
       title={merchantOf(transaction)}
       subtitle={subtitle}
@@ -189,27 +204,13 @@ const styles = StyleSheet.create({
   row: { flexGrow: 0, flexShrink: 0 },
   chips: { gap: space.sm, paddingHorizontal: space.lg, paddingTop: space.sm + 2, paddingBottom: space.sm + 2 },
   quick: { gap: 6, paddingHorizontal: space.lg, paddingBottom: space.sm + 2 },
-  summary: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    justifyContent: "space-between",
-    gap: space.sm,
-    marginHorizontal: space.lg,
-    marginBottom: space.xs,
-    paddingHorizontal: space.md + 2,
-    paddingVertical: space.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  totals: { flexDirection: "row", gap: space.md },
-  dayHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: space.lg,
-    paddingTop: space.md + 2,
-    paddingBottom: space.xs,
-    backgroundColor: colors.bg,
-  },
+  listContent: { paddingBottom: space.xxl },
+  summary: { marginHorizontal: space.lg, marginTop: space.xs, gap: space.md },
+  totals: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  total: { flex: 1, gap: 2 },
+  totalEnd: { alignItems: "flex-end" },
+  totalFigure: { fontSize: 24, letterSpacing: -0.8 },
+  divider: { width: 1, alignSelf: "stretch", backgroundColor: colors.line, marginHorizontal: space.md },
   note: { padding: space.lg },
   empty: { padding: space.xl, gap: space.md, alignItems: "center" },
 });

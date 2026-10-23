@@ -4,7 +4,7 @@ export { Chip } from "./Chip";
 export { FilterChip, ResetChip, ToggleChip } from "./FilterChip";
 export { Icon, type IconName } from "./Icon";
 export { IconButton } from "./IconButton";
-export { Initial, ListRow, SectionHeader } from "./ListRow";
+export { groupPosition, Initial, ListRow, SectionHeader, type GroupPosition } from "./ListRow";
 export { Screen } from "./Screen";
 export { SearchField } from "./SearchField";
 export { SegmentedControl } from "./SegmentedControl";

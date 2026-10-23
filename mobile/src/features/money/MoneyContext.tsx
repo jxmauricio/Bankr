@@ -1,7 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { GoalProgressResponse, NetWorthHistory } from "@/lib/api";
 
-/** Balances and goals the signed-in shell already loaded, shared with the header pill and money sheet. */
+/** Balances and goals the signed-in shell already loaded, shared with the net worth card and money sheet. */
 export interface Money {
   netWorth: NetWorthHistory;
   goals: GoalProgressResponse;

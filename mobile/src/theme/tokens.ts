@@ -82,7 +82,11 @@ export const type = {
   /** Secondary lines under a row's title: category, date, account. */
   meta: { fontSize: 12, fontFamily: fonts.regular },
   /** Tab bar labels. */
-  tab: { fontSize: 11, fontFamily: fonts.medium },
+  tab: { fontSize: 15, fontFamily: fonts.medium },
+  /** The app's name, centered in the top bar. */
+  brand: { fontSize: 26, fontFamily: fonts.semibold, letterSpacing: -0.6 },
+  /** Uppercase label over a group of cards or rows ("ASK BANKR", "TODAY"). */
+  section: { fontSize: 12, fontFamily: fonts.semibold, letterSpacing: 0.8, textTransform: "uppercase" },
   /** Bold inside a chat answer: the key number. */
   strong: { fontSize: 15, fontFamily: fonts.semibold, lineHeight: 22 },
   /** Small uppercase label over a headline figure ("OCT 1–16 · FOOD"). */

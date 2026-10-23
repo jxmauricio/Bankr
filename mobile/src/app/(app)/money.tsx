@@ -5,7 +5,7 @@ import { formatMoney, formatRelativeTime } from "@/lib/format";
 import { colors, radius, space } from "@/theme/tokens";
 import { Button, Card, Text } from "@/ui";
 
-/** The money sheet: net worth, accounts and goals, opened from the header pill. */
+/** The money sheet: net worth, accounts and goals, opened from the top bar's settings button or the net worth card. */
 export default function MoneySheet() {
   const { netWorth, goals, syncFromBank, isSyncing, syncError } = useMoney();
   const stale = isStale(netWorth.as_of) && !isSyncing;
