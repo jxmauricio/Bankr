@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { colors, radius, space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
+import { makeStyles } from "@/theme/theme";
 import { Text } from "./Text";
 
 /** Equal-width, mutually exclusive options in one track. Keep labels short (the design uses "3 months", "Year"). */
@@ -14,6 +15,7 @@ export function SegmentedControl<T extends string>({
   onChange: (value: T) => void;
   label: string;
 }) {
+  const styles = useStyles();
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} style={styles.track}>
       {options.map((o) => {
@@ -36,15 +38,17 @@ export function SegmentedControl<T extends string>({
   );
 }
 
-const styles = StyleSheet.create({
-  track: { flexDirection: "row", gap: 2, padding: 3, borderRadius: radius.md, backgroundColor: colors.surface },
-  option: {
-    flex: 1,
-    minHeight: 38,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: space.xs,
-    borderRadius: radius.md - 3,
-  },
-  selected: { backgroundColor: colors.raised },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    track: { flexDirection: "row", gap: 2, padding: 3, borderRadius: radius.md, backgroundColor: colors.surface },
+    option: {
+      flex: 1,
+      minHeight: 38,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: space.xs,
+      borderRadius: radius.md - 3,
+    },
+    selected: { backgroundColor: colors.raised },
+  })
+);

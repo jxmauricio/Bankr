@@ -5,17 +5,13 @@ import {
   SpaceGrotesk_600SemiBold,
 } from "@expo-google-fonts/space-grotesk";
 import { useFonts } from "expo-font";
-import { DarkTheme, Stack, ThemeProvider } from "expo-router";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SessionProvider, useSession } from "@/lib/session";
-import { colors } from "@/theme/tokens";
-
-const navTheme = {
-  ...DarkTheme,
-  colors: { ...DarkTheme.colors, background: colors.bg, card: colors.bg, primary: colors.accent, text: colors.ink, border: colors.line },
-};
+import { useColors, useScheme } from "@/theme/theme";
 
 // Keep the splash up until the fonts are in, so text never renders in the
 // system font first and then jumps.
@@ -31,6 +27,16 @@ export default function RootLayout() {
   });
   const ready = fontsLoaded || fontError !== null;
 
+  const scheme = useScheme();
+  const colors = useColors();
+  const navTheme = useMemo(() => {
+    const base = scheme === "light" ? DefaultTheme : DarkTheme;
+    return {
+      ...base,
+      colors: { ...base.colors, background: colors.bg, card: colors.bg, primary: colors.accent, text: colors.ink, border: colors.line },
+    };
+  }, [scheme, colors]);
+
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
@@ -39,17 +45,20 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <SessionProvider>
-      <ThemeProvider value={navTheme}>
-        <StatusBar style="light" />
-        <RootStack />
-      </ThemeProvider>
-    </SessionProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SessionProvider>
+        <ThemeProvider value={navTheme}>
+          <StatusBar style={scheme === "light" ? "dark" : "light"} />
+          <RootStack />
+        </ThemeProvider>
+      </SessionProvider>
+    </GestureHandlerRootView>
   );
 }
 
 /** Signed out sees only sign-in; signed in sees only the app. */
 function RootStack() {
+  const colors = useColors();
   const { isAuthenticated } = useSession();
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>

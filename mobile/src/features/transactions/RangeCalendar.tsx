@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { colors, radius, space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
+import { makeStyles } from "@/theme/theme";
 import { IconButton, Text } from "@/ui";
 import { iso } from "./filtering";
 
@@ -26,6 +27,7 @@ export function RangeCalendar({
   today: string;
   onPick: (day: string) => void;
 }) {
+  const styles = useStyles();
   const y = month.getFullYear();
   const m = month.getMonth();
   const lead = new Date(y, m, 1).getDay();
@@ -90,21 +92,23 @@ export function RangeCalendar({
   );
 }
 
-const styles = StyleSheet.create({
-  box: {
-    gap: space.sm,
-    padding: space.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surface,
-  },
-  head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  row: { flexDirection: "row" },
-  grid: { flexDirection: "row", flexWrap: "wrap", rowGap: 4 },
-  cell: { width: `${100 / 7}%`, alignItems: "center" },
-  day: { width: "100%", height: 40, alignItems: "center", justifyContent: "center", borderRadius: 10 },
-  inside: { backgroundColor: colors.accentWash },
-  edge: { backgroundColor: colors.accent },
-  future: { opacity: 0.35 },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    box: {
+      gap: space.sm,
+      padding: space.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.line,
+      backgroundColor: colors.surface,
+    },
+    head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    row: { flexDirection: "row" },
+    grid: { flexDirection: "row", flexWrap: "wrap", rowGap: 4 },
+    cell: { width: `${100 / 7}%`, alignItems: "center" },
+    day: { width: "100%", height: 40, alignItems: "center", justifyContent: "center", borderRadius: 10 },
+    inside: { backgroundColor: colors.accentWash },
+    edge: { backgroundColor: colors.accent },
+    future: { opacity: 0.35 },
+  })
+);

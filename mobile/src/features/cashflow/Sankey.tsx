@@ -2,9 +2,10 @@ import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import Svg, { G, Path, Rect } from "react-native-svg";
 import type { CashFlowBreakdown } from "@/lib/api";
-import { colors, radius } from "@/theme/tokens";
+import { radius } from "@/theme/tokens";
+import { makeStyles, useColors } from "@/theme/theme";
 import { Text } from "@/ui";
-import { KIND_COLOR, whole, type FlowNode, type FlowTarget } from "./flow";
+import { useKindColors, whole, type FlowNode, type FlowTarget } from "./flow";
 
 // Phone geometry, in points. The web version is a fixed 980-wide canvas with
 // labels on both outer sides; a phone can't spare that, so left labels sit
@@ -52,6 +53,9 @@ export function Sankey({
   total: number;
   onPick: (target: FlowTarget) => void;
 }) {
+  const styles = useStyles();
+  const kindColors = useKindColors();
+  const colors = useColors();
   const [width, setWidth] = useState(0);
   const [focus, setFocus] = useState<string | null>(null);
 
@@ -75,10 +79,10 @@ export function Sankey({
   let mIn = midY;
   for (const node of left) {
     const h = node.amount * k;
-    rects.push({ x: XL, y, h: Math.max(h, 2), color: KIND_COLOR[node.kind] });
+    rects.push({ x: XL, y, h: Math.max(h, 2), color: kindColors[node.kind] });
     links.push({
       d: ribbon(XL + NODE_W, y, y + h, XM, mIn, mIn + h),
-      color: KIND_COLOR[node.kind],
+      color: kindColors[node.kind],
       name: node.name,
     });
     labels.push({ node, side: "left", y: y + h / 2 });
@@ -95,11 +99,11 @@ export function Sankey({
       x: XR,
       y: yr,
       h: Math.max(h, 2),
-      color: KIND_COLOR[node.kind],
+      color: kindColors[node.kind],
     });
     links.push({
       d: ribbon(XM + NODE_W, mOut, mOut + h, XR, yr, yr + h),
-      color: KIND_COLOR[node.kind],
+      color: kindColors[node.kind],
       name: node.name,
     });
     labels.push({ node, side: "right", y: yr + h / 2 });
@@ -188,7 +192,7 @@ export function Sankey({
                   <Text variant="caption" numberOfLines={1}>
                     {node.name}
                   </Text>
-                  <Text variant="citation" style={{ color: KIND_COLOR[node.kind] }}>
+                  <Text variant="citation" style={{ color: kindColors[node.kind] }}>
                     {/* The left column is narrow on a phone, so its labels skip the share. */}
                     {side === "left" ? whole(node.amount) : `${whole(node.amount)} · ${pct(node.amount)}`}
                   </Text>
@@ -202,19 +206,21 @@ export function Sankey({
   );
 }
 
-const styles = StyleSheet.create({
-  total: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "baseline",
-  },
-  label: {
-    position: "absolute",
-    height: LABEL_H,
-    justifyContent: "center",
-    paddingHorizontal: 4,
-    borderRadius: radius.sm,
-  },
-  // Left labels sit over the ribbons, so give them a backing to stay readable.
-  leftLabel: { backgroundColor: colors.scrim },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    total: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+    },
+    label: {
+      position: "absolute",
+      height: LABEL_H,
+      justifyContent: "center",
+      paddingHorizontal: 4,
+      borderRadius: radius.sm,
+    },
+    // Left labels sit over the ribbons, so give them a backing to stay readable.
+    leftLabel: { backgroundColor: colors.chartLabel },
+  })
+);

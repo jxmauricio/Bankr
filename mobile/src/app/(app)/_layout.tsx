@@ -14,7 +14,7 @@ import { BankLogosProvider } from "@/features/bank/BankLogos";
 import { LinkBankScreen } from "@/features/bank/LinkBankScreen";
 import { PeriodProvider } from "@/features/period/PeriodContext";
 import { TransactionFiltersProvider } from "@/features/transactions/FiltersContext";
-import { colors } from "@/theme/tokens";
+import { useColors } from "@/theme/theme";
 import { Button, ComingSoon, ErrorState, Loading, Screen } from "@/ui";
 
 type Gate =
@@ -28,6 +28,7 @@ type Gate =
  * bank yet, no goals means goal setup, otherwise the tabs.
  */
 export default function SignedInLayout() {
+  const colors = useColors();
   const { token, signOut } = useSession();
   const [gate, setGate] = useState<Gate>({ step: "loading" });
 
@@ -129,13 +130,13 @@ export default function SignedInLayout() {
               <TransactionFiltersProvider>
                 <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
                   <Stack.Screen name="(tabs)" />
-                  <Stack.Screen name="money" options={sheet([0.6, 1])} />
-                  <Stack.Screen name="history" options={sheet([0.6, 1])} />
-                  <Stack.Screen name="source" options={sheet([0.75, 1])} />
-                  <Stack.Screen name="filter-date" options={sheet([0.92])} />
-                  <Stack.Screen name="filter-category" options={sheet([0.75, 1])} />
-                  <Stack.Screen name="filter-account" options={sheet([0.6, 1])} />
-                  <Stack.Screen name="filter-direction" options={sheet([0.42])} />
+                  <Stack.Screen name="money" options={sheet([0.6, 1], colors.bg)} />
+                  <Stack.Screen name="history" options={sheet([0.6, 1], colors.bg)} />
+                  <Stack.Screen name="source" options={sheet([0.75, 1], colors.bg)} />
+                  <Stack.Screen name="filter-date" options={sheet([0.92], colors.bg)} />
+                  <Stack.Screen name="filter-category" options={sheet([0.75, 1], colors.bg)} />
+                  <Stack.Screen name="filter-account" options={sheet([0.6, 1], colors.bg)} />
+                  <Stack.Screen name="filter-direction" options={sheet([0.42], colors.bg)} />
                 </Stack>
               </TransactionFiltersProvider>
             </BankLogosProvider>
@@ -146,11 +147,11 @@ export default function SignedInLayout() {
 }
 
 /** A native sheet that rests at the given heights (fractions of the screen). */
-function sheet(detents: number[]) {
+function sheet(detents: number[], background: string) {
   return {
     presentation: "formSheet" as const,
     sheetAllowedDetents: detents,
     sheetGrabberVisible: true,
-    contentStyle: { backgroundColor: colors.bg },
+    contentStyle: { backgroundColor: background },
   };
 }

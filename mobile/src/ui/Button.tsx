@@ -1,5 +1,6 @@
 import { ActivityIndicator, Pressable, StyleSheet } from "react-native";
-import { colors, radius, space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
+import { makeStyles, useColors } from "@/theme/theme";
 import { Text } from "./Text";
 
 type Variant = "primary" | "secondary" | "ghost";
@@ -17,6 +18,8 @@ export function Button({
   loading?: boolean;
   disabled?: boolean;
 }) {
+  const styles = useStyles();
+  const colors = useColors();
   const inactive = disabled || loading;
   return (
     <Pressable
@@ -37,16 +40,18 @@ export function Button({
   );
 }
 
-const styles = StyleSheet.create({
-  base: {
-    minHeight: 48,
-    borderRadius: radius.md,
-    paddingHorizontal: space.lg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primary: { backgroundColor: colors.accent },
-  secondary: { backgroundColor: colors.raised },
-  ghost: { backgroundColor: "transparent" },
-  dimmed: { opacity: 0.6 },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    base: {
+      minHeight: 48,
+      borderRadius: radius.md,
+      paddingHorizontal: space.lg,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    primary: { backgroundColor: colors.accent },
+    secondary: { backgroundColor: colors.raised },
+    ghost: { backgroundColor: "transparent" },
+    dimmed: { opacity: 0.6 },
+  })
+);

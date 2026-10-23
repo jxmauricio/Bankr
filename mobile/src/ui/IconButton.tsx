@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet } from "react-native";
-import { colors, radius } from "@/theme/tokens";
+import { radius } from "@/theme/tokens";
+import { makeStyles, useColors } from "@/theme/theme";
 import { Icon, type IconName } from "./Icon";
 
 /** A 44pt square holding one icon: header actions, the composer's send. Always give it a label. */
@@ -17,6 +18,8 @@ export function IconButton({
   variant?: "primary" | "secondary" | "plain";
   disabled?: boolean;
 }) {
+  const styles = useStyles();
+  const colors = useColors();
   const primary = variant === "primary";
   const plain = variant === "plain";
   return (
@@ -42,9 +45,11 @@ export function IconButton({
   );
 }
 
-const styles = StyleSheet.create({
-  base: { width: 44, height: 44, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
-  primary: { backgroundColor: colors.accent, borderRadius: radius.pill },
-  secondary: { backgroundColor: colors.surface },
-  dimmed: { opacity: 0.45 },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    base: { width: 44, height: 44, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
+    primary: { backgroundColor: colors.accent, borderRadius: radius.pill },
+    secondary: { backgroundColor: colors.surface },
+    dimmed: { opacity: 0.45 },
+  })
+);

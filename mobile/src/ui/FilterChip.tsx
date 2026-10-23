@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { colors, radius, space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
+import { makeStyles, useColors } from "@/theme/theme";
 import { Icon, type IconName } from "./Icon";
 import { Text } from "./Text";
 
@@ -21,6 +22,8 @@ export function FilterChip({
   onPress: () => void;
   onClear?: () => void;
 }) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={[styles.chip, active ? styles.active : styles.idle]}>
       <Pressable
@@ -57,6 +60,7 @@ export function FilterChip({
 
 /** A small on/off filter, for one-tap questions ("Pending", "Over $100"). */
 export function ToggleChip({ label, on, onToggle }: { label: string; on: boolean; onToggle: () => void }) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="switch"
@@ -73,6 +77,8 @@ export function ToggleChip({ label, on, onToggle }: { label: string; on: boolean
 
 /** Clears every filter at once; shown first in a chip row while anything is filtered. */
 export function ResetChip({ onPress }: { onPress: () => void }) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <Pressable
       accessibilityRole="button"
@@ -87,23 +93,25 @@ export function ResetChip({ onPress }: { onPress: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
-  chip: { flexDirection: "row", alignItems: "center", minHeight: 36, borderRadius: radius.pill, borderWidth: 1 },
-  idle: { borderColor: colors.lineStrong },
-  active: { borderColor: colors.accent, backgroundColor: colors.accentWash },
-  body: { flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: space.md, paddingRight: space.md, minHeight: 36 },
-  clear: { minHeight: 36, justifyContent: "center", paddingRight: space.md, marginLeft: -space.xs },
-  pressed: { opacity: 0.6 },
-  reset: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    minHeight: 36,
-    paddingHorizontal: space.md,
-    borderRadius: radius.pill,
-    backgroundColor: colors.raised,
-  },
-  toggle: { minHeight: 32, justifyContent: "center", paddingHorizontal: space.sm + 2, borderRadius: radius.sm, borderWidth: 1 },
-  toggleOn: { borderColor: colors.accent, backgroundColor: colors.accentWash },
-  toggleOff: { borderColor: colors.line, backgroundColor: colors.surface },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    chip: { flexDirection: "row", alignItems: "center", minHeight: 36, borderRadius: radius.pill, borderWidth: 1 },
+    idle: { borderColor: colors.lineStrong },
+    active: { borderColor: colors.accent, backgroundColor: colors.accentWash },
+    body: { flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: space.md, paddingRight: space.md, minHeight: 36 },
+    clear: { minHeight: 36, justifyContent: "center", paddingRight: space.md, marginLeft: -space.xs },
+    pressed: { opacity: 0.6 },
+    reset: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      minHeight: 36,
+      paddingHorizontal: space.md,
+      borderRadius: radius.pill,
+      backgroundColor: colors.raised,
+    },
+    toggle: { minHeight: 32, justifyContent: "center", paddingHorizontal: space.sm + 2, borderRadius: radius.sm, borderWidth: 1 },
+    toggleOn: { borderColor: colors.accent, backgroundColor: colors.accentWash },
+    toggleOff: { borderColor: colors.line, backgroundColor: colors.surface },
+  })
+);

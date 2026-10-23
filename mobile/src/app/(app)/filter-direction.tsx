@@ -2,7 +2,8 @@ import { router } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useTransactionFilters } from "@/features/transactions/FiltersContext";
 import type { Direction } from "@/features/transactions/filtering";
-import { colors, radius, space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
+import { makeStyles } from "@/theme/theme";
 import { Sheet, Text } from "@/ui";
 
 const OPTIONS: { value: Direction; label: string; detail: string }[] = [
@@ -13,6 +14,7 @@ const OPTIONS: { value: Direction; label: string; detail: string }[] = [
 
 /** Money in, money out, or both. One tap applies it. */
 export default function DirectionFilterSheet() {
+  const styles = useStyles();
   const { filters, update } = useTransactionFilters();
   return (
     <Sheet title="In / Out" scroll={false}>
@@ -42,9 +44,11 @@ export default function DirectionFilterSheet() {
   );
 }
 
-const styles = StyleSheet.create({
-  list: { gap: space.sm },
-  option: { gap: 2, minHeight: 56, justifyContent: "center", paddingHorizontal: space.md + 2, borderRadius: radius.md, borderWidth: 1 },
-  on: { borderColor: colors.accent, backgroundColor: colors.accentWash },
-  off: { borderColor: colors.line, backgroundColor: colors.surface },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    list: { gap: space.sm },
+    option: { gap: 2, minHeight: 56, justifyContent: "center", paddingHorizontal: space.md + 2, borderRadius: radius.md, borderWidth: 1 },
+    on: { borderColor: colors.accent, backgroundColor: colors.accentWash },
+    off: { borderColor: colors.line, backgroundColor: colors.surface },
+  })
+);

@@ -2,7 +2,8 @@ import { useState } from "react";
 import { StyleSheet, View, type GestureResponderEvent } from "react-native";
 import Svg, { Circle, Line, Path, Text as SvgText } from "react-native-svg";
 import type { SpendingPace } from "@/lib/api";
-import { colors, radius, space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
+import { makeStyles, useColors } from "@/theme/theme";
 import { Card, Text } from "@/ui";
 import { whole } from "./flow";
 
@@ -42,6 +43,8 @@ const PAD_T = 8;
  * Drag across the chart to compare the two on any day so far.
  */
 export function SpendingPaceChart({ pace }: { pace: SpendingPace }) {
+  const styles = useStyles();
+  const colors = useColors();
   const [width, setWidth] = useState(0);
   const [scrub, setScrub] = useState<number | null>(null);
 
@@ -179,6 +182,7 @@ export function SpendingPaceChart({ pace }: { pace: SpendingPace }) {
 }
 
 function LegendSwatch({ color, label, dashed }: { color: string; label: string; dashed?: boolean }) {
+  const styles = useStyles();
   return (
     <View style={styles.legendItem}>
       <Svg width={18} height={4}>
@@ -191,11 +195,13 @@ function LegendSwatch({ color, label, dashed }: { color: string; label: string; 
   );
 }
 
-const styles = StyleSheet.create({
-  headline: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: space.sm },
-  delta: { borderRadius: radius.pill, paddingHorizontal: space.sm, paddingVertical: 3 },
-  readout: { flexDirection: "row", flexWrap: "wrap", columnGap: space.md, marginTop: space.xs },
-  legend: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
-  legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  insight: { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: space.sm },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    headline: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: space.sm },
+    delta: { borderRadius: radius.pill, paddingHorizontal: space.sm, paddingVertical: 3 },
+    readout: { flexDirection: "row", flexWrap: "wrap", columnGap: space.md, marginTop: space.xs },
+    legend: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
+    legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+    insight: { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: space.sm },
+  })
+);

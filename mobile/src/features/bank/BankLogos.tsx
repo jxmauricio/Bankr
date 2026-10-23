@@ -2,7 +2,8 @@ import { createContext, Fragment, useContext, useMemo, type ReactNode } from "re
 import { Image, StyleSheet, View } from "react-native";
 import { fetchLinkedBanks } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
-import { colors, radius } from "@/theme/tokens";
+import { radius } from "@/theme/tokens";
+import { makeStyles } from "@/theme/theme";
 import { Text } from "@/ui";
 
 // Ported from web/src/lib/bankLogos.tsx and web/src/components/BankLogo.tsx.
@@ -28,6 +29,7 @@ const logoUri = (logo: string) => `data:image/png;base64,${logo}`;
 
 /** A bank's logo, or its first letter until one is available. */
 export function BankLogo({ name, size = 32 }: { name: string; size?: number }) {
+  const styles = useStyles();
   const logo = useBankLogos().get(name);
   if (logo) return <Image source={{ uri: logoUri(logo) }} style={[styles.logo, { width: size, height: size }]} />;
   return (
@@ -41,6 +43,7 @@ export function BankLogo({ name, size = 32 }: { name: string; size?: number }) {
 
 /** Plain text in which every mention of a connected bank gets its small logo. Render inside a Text. */
 export function BankText({ text }: { text: string }) {
+  const styles = useStyles();
   const logos = useBankLogos();
   const pattern = useMemo(() => {
     const names = [...logos.keys()].sort((a, b) => b.length - a.length);
@@ -66,8 +69,10 @@ export function BankText({ text }: { text: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  logo: { borderRadius: radius.sm, backgroundColor: colors.logoBacking },
-  fallback: { borderRadius: radius.sm, backgroundColor: colors.raised, alignItems: "center", justifyContent: "center" },
-  inline: { width: 16, height: 16, borderRadius: 3, backgroundColor: colors.logoBacking },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    logo: { borderRadius: radius.sm, backgroundColor: colors.logoBacking },
+    fallback: { borderRadius: radius.sm, backgroundColor: colors.raised, alignItems: "center", justifyContent: "center" },
+    inline: { width: 16, height: 16, borderRadius: 3, backgroundColor: colors.logoBacking },
+  })
+);

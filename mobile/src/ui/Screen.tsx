@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { ScrollView, StyleSheet, View, type ViewStyle } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
-import { colors, space } from "@/theme/tokens";
+import { space } from "@/theme/tokens";
+import { makeStyles } from "@/theme/theme";
 
 /**
  * The page every screen sits on. `scroll` wraps the content in a ScrollView;
@@ -21,6 +22,7 @@ export function Screen({
   edges?: Edge[];
   contentStyle?: ViewStyle;
 }) {
+  const styles = useStyles();
   const inner = [padded && styles.padded, contentStyle];
   return (
     <SafeAreaView style={styles.root} edges={edges}>
@@ -35,8 +37,10 @@ export function Screen({
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  fill: { flex: 1 },
-  padded: { padding: space.lg, gap: space.md },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: colors.bg },
+    fill: { flex: 1 },
+    padded: { padding: space.lg, gap: space.md },
+  })
+);

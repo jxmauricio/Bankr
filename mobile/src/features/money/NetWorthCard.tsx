@@ -3,7 +3,8 @@ import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 import { formatMoney } from "@/lib/format";
-import { colors, radius, space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
+import { makeStyles, useColors } from "@/theme/theme";
 import { Text } from "@/ui";
 import { useMoney } from "./MoneyContext";
 
@@ -24,6 +25,8 @@ const CHART_HEIGHT = 84;
  * Tapping the figure opens the money sheet (accounts and goals).
  */
 export function NetWorthCard() {
+  const styles = useStyles();
+  const colors = useColors();
   const { netWorth } = useMoney();
   const [range, setRange] = useState<RangeId>("1M");
   const [width, setWidth] = useState(0);
@@ -89,6 +92,7 @@ export function NetWorthCard() {
 }
 
 function Line({ points, width, color }: { points: number[]; width: number; color: string }) {
+  const colors = useColors();
   const min = Math.min(...points);
   const max = Math.max(...points);
   const span = max - min || 1;
@@ -108,22 +112,24 @@ function Line({ points, width, color }: { points: number[]; width: number; color
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderColor: colors.line,
-    borderWidth: 1,
-    borderRadius: radius.md + 2,
-    paddingTop: space.lg + 2,
-    paddingBottom: space.md + 2,
-    paddingHorizontal: space.lg,
-    gap: space.md,
-  },
-  figure: { alignItems: "center", gap: 2 },
-  pressed: { opacity: 0.6 },
-  amount: { fontSize: 36 },
-  chart: { height: CHART_HEIGHT },
-  ranges: { flexDirection: "row", justifyContent: "center", gap: 6 },
-  range: { minWidth: 44, height: 30, paddingHorizontal: space.md, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-  rangeOn: { backgroundColor: colors.raised },
-});
+const useStyles = makeStyles((colors) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: colors.surface,
+      borderColor: colors.line,
+      borderWidth: 1,
+      borderRadius: radius.md + 2,
+      paddingTop: space.lg + 2,
+      paddingBottom: space.md + 2,
+      paddingHorizontal: space.lg,
+      gap: space.md,
+    },
+    figure: { alignItems: "center", gap: 2 },
+    pressed: { opacity: 0.6 },
+    amount: { fontSize: 36 },
+    chart: { height: CHART_HEIGHT },
+    ranges: { flexDirection: "row", justifyContent: "center", gap: 6 },
+    range: { minWidth: 44, height: 30, paddingHorizontal: space.md, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+    rangeOn: { backgroundColor: colors.raised },
+  })
+);
