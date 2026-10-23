@@ -9,6 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.jxmauricio.bankr",
+      "appleTeamId": "C8XQ9B9W25",
       "supportsTablet": false
     },
     "android": {
