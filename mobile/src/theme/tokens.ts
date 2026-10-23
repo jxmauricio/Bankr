@@ -99,45 +99,39 @@ export const radius = {
 } as const;
 
 /**
- * Space Grotesk for words, JetBrains Mono for every figure (the Claude Design
- * mockup, "Bankr Mobile"). Each weight is its own family on native, so text
- * styles name a family and never set fontWeight. Loaded in app/_layout.tsx.
+ * The system font: San Francisco on iOS, Roboto on Android (the Bankr iOS
+ * Redesign canvas), so there are no font files to load. Figures use tabular
+ * digits so amounts line up in columns.
  */
-export const fonts = {
-  regular: "SpaceGrotesk_400Regular",
-  medium: "SpaceGrotesk_500Medium",
-  semibold: "SpaceGrotesk_600SemiBold",
-  mono: "JetBrainsMono_400Regular",
-  monoMedium: "JetBrainsMono_500Medium",
-} as const;
+const figures: TextStyle = { fontVariant: ["tabular-nums"] };
 
 /** Named text styles. Add a variant here rather than styling Text inline. */
 export const type = {
-  display: { fontSize: 32, fontFamily: fonts.semibold, letterSpacing: -0.6, lineHeight: 38 },
-  title: { fontSize: 22, fontFamily: fonts.semibold, letterSpacing: -0.4 },
-  heading: { fontSize: 17, fontFamily: fonts.semibold },
-  body: { fontSize: 15, fontFamily: fonts.regular, lineHeight: 22 },
-  label: { fontSize: 14, fontFamily: fonts.medium },
-  caption: { fontSize: 13, fontFamily: fonts.regular },
+  display: { fontSize: 32, fontWeight: "700", letterSpacing: -0.8, lineHeight: 38 },
+  title: { fontSize: 22, fontWeight: "700", letterSpacing: -0.5 },
+  heading: { fontSize: 17, fontWeight: "600" },
+  body: { fontSize: 15, fontWeight: "400", lineHeight: 22 },
+  label: { fontSize: 15, fontWeight: "500" },
+  caption: { fontSize: 13, fontWeight: "400" },
   /** Secondary lines under a row's title: category, date, account. */
-  meta: { fontSize: 12, fontFamily: fonts.regular },
+  meta: { fontSize: 13, fontWeight: "400" },
   /** Tab bar labels. */
-  tab: { fontSize: 15, fontFamily: fonts.medium },
+  tab: { fontSize: 15, fontWeight: "600" },
   /** The app's name, centered in the top bar. */
-  brand: { fontSize: 26, fontFamily: fonts.semibold, letterSpacing: -0.6 },
+  brand: { fontSize: 26, fontWeight: "700", letterSpacing: -0.6 },
   /** Uppercase label over a group of cards or rows ("ASK BANKR", "TODAY"). */
-  section: { fontSize: 12, fontFamily: fonts.semibold, letterSpacing: 0.8, textTransform: "uppercase" },
+  section: { fontSize: 12, fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase" },
   /** Bold inside a chat answer: the key number. */
-  strong: { fontSize: 15, fontFamily: fonts.semibold, lineHeight: 22 },
+  strong: { fontSize: 15, fontWeight: "600", lineHeight: 22 },
   /** Small uppercase label over a headline figure ("OCT 1–16 · FOOD"). */
-  eyebrow: { fontSize: 11, fontFamily: fonts.mono, letterSpacing: 1.1, textTransform: "uppercase" },
+  eyebrow: { fontSize: 11, fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase" },
   /** The source number next to a checked figure in a chat answer. */
-  citation: { fontSize: 10, fontFamily: fonts.monoMedium },
+  citation: { ...figures, fontSize: 10, fontWeight: "600" },
   /** Money always reads as exact figures. */
-  money: { fontSize: 15, fontFamily: fonts.monoMedium, fontVariant: ["tabular-nums"] },
+  money: { ...figures, fontSize: 15, fontWeight: "600" },
   /** Figures in summaries and day headers. */
-  moneySmall: { fontSize: 13, fontFamily: fonts.mono, fontVariant: ["tabular-nums"] },
-  moneyLarge: { fontSize: 32, fontFamily: fonts.monoMedium, letterSpacing: -1.3, fontVariant: ["tabular-nums"] },
+  moneySmall: { ...figures, fontSize: 13, fontWeight: "500" },
+  moneyLarge: { ...figures, fontSize: 34, fontWeight: "700", letterSpacing: -1 },
 } satisfies Record<string, TextStyle>;
 
 export type TypeVariant = keyof typeof type;

@@ -246,7 +246,7 @@ export function NetWorthFlowModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-scrim px-4"
       onClick={onClose}
       role="presentation"
     >
@@ -469,7 +469,7 @@ function SpendingPie({
               d={donutPath(PIE_CX, PIE_CY, PIE_INNER, PIE_OUTER, start, end)}
               fill={colorForCategory(slice.name)}
               opacity={isFocus ? 1 : 0.35}
-              stroke={selected?.name === slice.name ? "#ffffff" : "var(--color-surface)"}
+              stroke={selected?.name === slice.name ? "var(--color-ink)" : "var(--color-surface)"}
               strokeWidth={selected?.name === slice.name ? 2 : 1.5}
               className="cursor-pointer outline-none"
               role="button"
@@ -669,7 +669,7 @@ function FlowSvg({
             height={Math.max(y1 - y0, 2)}
             rx={2}
             fill={node.color}
-            stroke={isSelected ? "#ffffff" : "none"}
+            stroke={isSelected ? "var(--color-ink)" : "none"}
             strokeWidth={isSelected ? 1.5 : 0}
             {...groupInteractionProps(node.id)}
           >

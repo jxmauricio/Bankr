@@ -42,7 +42,7 @@ export function UpcomingBills({
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full cursor-pointer flex-col gap-1 rounded-[20px] bg-surface p-4 text-left hover:bg-raised"
+      className="flex w-full cursor-pointer flex-col gap-1 card p-4 text-left hover:bg-raised"
     >
       <span className="font-mono text-[11px] tracking-[0.12em] text-ink-faint">BILLS THIS WEEK</span>
       {due.length ? (

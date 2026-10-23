@@ -57,6 +57,8 @@ import { InsightsBell } from "../components/InsightsBell";
 import { CashFlowView } from "./CashFlowView";
 import type { Citation } from "../components/TransactionDetails";
 
+const BACKGROUND_SYNC_MS = 5 * 60 * 1000;
+
 const GREETING = "Ask me anything about your money — what you've spent, what's coming in, or whether you're on pace for your goal.";
 // Not scoped to a user/token: a different account landing on a stale id
 // just 404s inside loadConversation and falls back to the greeting, same as
@@ -167,19 +169,41 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
     savePeriod(next);
   }
 
-  async function refreshFromBank() {
-    if (!token || isRefreshing) return;
-    setIsRefreshing(true);
-    setError(null);
+  // One sync at a time, whether it came from the button, login/reload or the timer.
+  const syncInFlight = useRef(false);
+
+  async function syncFromBank({ silent = false }: { silent?: boolean } = {}) {
+    if (!token || syncInFlight.current) return;
+    syncInFlight.current = true;
+    if (!silent) {
+      setIsRefreshing(true);
+      setError(null);
+    }
     try {
       await resyncAccounts(token);
       await loadStandingState();
+      setPlanVersion((v) => v + 1);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't refresh from your bank. Try again.");
+      if (!silent) setError(err instanceof ApiError ? err.message : "Couldn't refresh from your bank. Try again.");
     } finally {
-      setIsRefreshing(false);
+      syncInFlight.current = false;
+      if (!silent) setIsRefreshing(false);
     }
   }
+
+  const refreshFromBank = () => syncFromBank();
+
+  // A fresh sync whenever this mounts (login or full page reload), then every
+  // 5 minutes in the background while the tab is visible.
+  useEffect(() => {
+    if (!token) return;
+    syncFromBank();
+    const timer = setInterval(() => {
+      if (!document.hidden) syncFromBank({ silent: true });
+    }, BACKGROUND_SYNC_MS);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   async function refreshGoalProgress() {
     if (!token) return;
@@ -396,10 +420,8 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
       <header className="relative z-30 flex min-h-16 shrink-0 items-center justify-between gap-1 border-b border-line bg-bg px-1.5 py-2 sm:gap-2 sm:px-6">
         <div className="flex shrink-0 items-center gap-3">
           <ChatHistoryMenu token={token} onSelectConversation={loadConversation} onNewChat={startNewChat} />
-          <span className="hidden font-display text-[21px] font-semibold tracking-tight text-ink sm:inline">
-            bankr<span className="text-signal">_</span>
-          </span>
-          <span className="hidden rounded-full bg-signal-wash px-2.5 py-1 font-mono text-[10px] tracking-[0.12em] text-signal md:inline">PRIVATE BETA</span>
+          <span className="hidden font-display text-[22px] font-bold tracking-[-0.02em] text-ink sm:inline">Bankr</span>
+          <span className="hidden rounded-full bg-signal-wash px-2.5 py-1 text-[11px] font-semibold tracking-[0.08em] text-signal md:inline">PRIVATE BETA</span>
         </div>
         <div className="absolute left-1/2 hidden -translate-x-1/2 lg:block">
           <ViewTabs view={view} onChange={setView} />
@@ -440,7 +462,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
               type="button"
               aria-label="Close your money"
               onClick={() => setMoneyOpen(false)}
-              className="fixed inset-0 -z-10 cursor-default bg-[rgb(5_6_8/0.72)]"
+              className="fixed inset-0 -z-10 cursor-default bg-scrim"
             />
             <section
               id="money-sheet"
@@ -507,10 +529,10 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
       )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Desktop money rail: its own column, scrolling apart from the chat. */}
+        {/* Desktop money rail: its own column on the right, scrolling apart from the chat. */}
         <aside
           aria-label="Your money"
-          className="hidden w-[320px] shrink-0 flex-col gap-3.5 overflow-y-auto border-r border-line p-5 lg:flex"
+          className="hidden w-[340px] shrink-0 flex-col gap-4 overflow-y-auto border-l border-line p-5 lg:order-last lg:flex"
         >
           <MoneyCard summary={summary} onNetWorthClick={openFlow} onRefresh={refreshFromBank} />
           {token && <UpcomingBills token={token} refreshKey={monthRollup} version={planVersion} onOpen={() => openPlan("recurring")} />}
@@ -600,11 +622,11 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                 <div className="flex items-start gap-3">
                   <BotMark />
                   {replySoFar ? (
-                    <div className="max-w-full rounded-[6px_20px_20px_20px] bg-surface px-5 py-[18px] text-[15px] leading-[1.65] text-ink">
+                    <div className="max-w-full rounded-[6px_20px_20px_20px] border border-line bg-surface shadow-card px-5 py-[18px] text-[15px] leading-[1.65] text-ink">
                       <AssistantText text={replySoFar} />
                     </div>
                   ) : (
-                    <div className="rounded-[6px_20px_20px_20px] bg-surface px-[18px] py-3.5">
+                    <div className="rounded-[6px_20px_20px_20px] border border-line bg-surface shadow-card px-[18px] py-3.5">
                       <ThinkingIndicator label={statusLabel} />
                     </div>
                   )}
@@ -722,7 +744,7 @@ function StreamEntry({
         <article className="flex items-start gap-3">
          <BotMark />
          <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
-          <div className="flex max-w-full flex-col gap-3 rounded-[6px_20px_20px_20px] bg-surface px-5 py-[18px] text-[15px] leading-[1.65] text-ink">
+          <div className="flex max-w-full flex-col gap-3 rounded-[6px_20px_20px_20px] border border-line bg-surface shadow-card px-5 py-[18px] text-[15px] leading-[1.65] text-ink">
             {headline && <AnswerHeadline headline={headline} />}
             <AssistantText text={item.text} figures={{ citations: item.citations ?? [], sources, onOpen: onOpenSource }} />
             {item.records?.map((record, i) => (
@@ -775,7 +797,7 @@ function StreamEntry({
     case "user-text":
       return (
         <div className="flex justify-end">
-          <div className="max-w-[78%] rounded-[20px_20px_6px_20px] bg-user px-[18px] py-3 text-[15px] leading-normal text-white">
+          <div className="max-w-[78%] rounded-[20px_20px_6px_20px] bg-user px-[18px] py-3 text-[15px] leading-normal text-on-user">
             {item.text}
           </div>
         </div>
@@ -807,7 +829,7 @@ function TopicCard({
   const headline = topic === "spending" ? rollup?.spending : rollup?.income;
 
   return (
-    <div className="rounded-[20px] bg-surface p-5">
+    <div className="card p-5">
       <div className="flex items-baseline justify-between">
         <h3 className="text-sm font-medium capitalize text-ink-soft">
           {topic} · {rollup?.label ?? period}
@@ -1124,7 +1146,7 @@ function AnswerFailed({ onRetry, onEdit }: { onRetry: () => void; onEdit: () => 
   return (
     <div className="flex items-start gap-3">
       <BotMark failed />
-      <div role="alert" className="flex flex-1 flex-col gap-3 rounded-[6px_20px_20px_20px] bg-surface px-[18px] py-4">
+      <div role="alert" className="flex flex-1 flex-col gap-3 rounded-[6px_20px_20px_20px] border border-line bg-surface shadow-card px-[18px] py-4">
         <p className="text-[15px] leading-relaxed text-ink">
           I couldn’t reach your transaction data just now, so I won’t guess. Nothing in your accounts was changed.
         </p>

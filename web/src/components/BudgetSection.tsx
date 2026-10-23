@@ -80,7 +80,7 @@ export function BudgetSection({
   }
 
   if (failed) return <Shell focus={focus}><p className="py-6 text-center text-sm text-ink-soft">Couldn’t load your budget.</p></Shell>;
-  if (!status) return <div className="h-[320px] animate-pulse rounded-3xl bg-surface" aria-label="Loading budget" />;
+  if (!status) return <div className="h-[320px] animate-pulse card" aria-label="Loading budget" />;
 
   const isCurrent = status.month === status.today.slice(0, 7);
   const allLines = [...status.lines, ...(status.flex ? [status.flex] : [])];
@@ -262,7 +262,7 @@ function Shell({ children, focus }: { children: ReactNode; focus?: boolean }) {
       ref={(el) => {
         if (focus && el) el.scrollIntoView({ behavior: "smooth", block: "start" });
       }}
-      className={`relative flex flex-col gap-4 rounded-3xl bg-surface p-4 md:px-7 md:py-6 ${focus ? "ring-1 ring-signal/40" : ""}`}
+      className={`relative flex flex-col gap-4 card p-4 md:px-7 md:py-6 ${focus ? "ring-1 ring-signal/40" : ""}`}
     >
       {children}
     </section>
@@ -596,7 +596,7 @@ function CoverDialog({
 
   const n = parseFloat(amount);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4" onClick={() => !busy && onClose()} role="presentation">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim px-4" onClick={() => !busy && onClose()} role="presentation">
       <div
         role="dialog"
         aria-modal="true"

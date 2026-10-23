@@ -74,13 +74,13 @@ export function HealthView({
         </div>
 
         {failed ? (
-          <div className="rounded-3xl bg-surface p-4">
+          <div className="card p-4">
             <p className="py-10 text-center text-sm text-ink-soft">Couldn’t load spending health. Switch views to try again.</p>
           </div>
         ) : !data ? (
-          <div className="h-[420px] animate-pulse rounded-3xl bg-surface" aria-label="Loading spending health" />
+          <div className="h-[420px] animate-pulse card" aria-label="Loading spending health" />
         ) : data.income <= 0 ? (
-          <div className="rounded-3xl bg-surface p-4">
+          <div className="card p-4">
             <p className="py-10 text-center text-sm text-ink-soft">
               No income in linked accounts for {data.label}, so there’s nothing to score against.
             </p>
@@ -99,7 +99,7 @@ export function HealthView({
 
             <SplitBar buckets={data.buckets} />
 
-            <section className="rounded-3xl bg-surface px-3.5 py-2 md:px-5 md:py-3">
+            <section className="card px-3.5 py-2 md:px-5 md:py-3">
               <div className="flex items-baseline justify-between gap-3 px-1 py-3">
                 <h2 className="m-0 text-[15px] font-semibold text-ink">By category</h2>
                 <span className="font-mono text-[11px] text-ink-faint">
@@ -131,7 +131,7 @@ function SnapshotCard({ line, onClick }: { line: HealthLine; onClick: () => void
     <button
       type="button"
       onClick={onClick}
-      className="flex cursor-pointer flex-col gap-2 rounded-3xl bg-surface p-4 text-left ring-1 ring-transparent hover:ring-line-strong"
+      className="flex cursor-pointer flex-col gap-2 card p-4 text-left ring-1 ring-transparent hover:ring-line-strong"
     >
       <span className="flex items-center justify-between gap-2">
         <span className="text-[13px] text-ink-soft">{line.id === "saved" ? "Saving" : line.name === "Rent & Housing" ? "Rent" : line.name}</span>
@@ -156,7 +156,7 @@ function SplitBar({ buckets }: { buckets: HealthLine[] }) {
   ];
   const total = Math.max(parts.reduce((s, p) => s + Math.max(p.amount, 0), 0), 1);
   return (
-    <section className="flex flex-col gap-3 rounded-3xl bg-surface p-4 md:p-5">
+    <section className="flex flex-col gap-3 card p-4 md:p-5">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="m-0 text-[15px] font-semibold text-ink">50 / 30 / 20</h2>
         <span className="text-[12px] text-ink-faint">Needs · wants · saved</span>

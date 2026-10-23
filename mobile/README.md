@@ -29,10 +29,11 @@ Before calling a change done: `npx tsc --noEmit` and `npx expo lint`.
 The visual design is still being worked out, so nothing outside two folders
 knows what the app looks like:
 
-- `src/theme/tokens.ts` — every color, spacing step, radius, font and text
-  style. Values follow the "Bankr Mobile" design in Claude Design
-  (https://claude.ai/artifact/PLuTHqLnEE4qZ9W8Mhodxt): Space Grotesk for
-  words, JetBrains Mono for every figure, loaded in `src/app/_layout.tsx`.
+- `src/theme/tokens.ts` — every color, spacing step, radius and text style.
+  Values follow the "Bankr iOS Redesign" canvas in Claude Design
+  (https://claude.ai/artifact/LMSyVZe6cymbvqQN6D2HZD): the system font (San
+  Francisco on iOS) with tabular figures, and a light and a dark palette that
+  follow the system appearance (read through `src/theme/theme.ts`).
 - `src/ui/` — the primitives screens are built from (`Screen`, `Text`,
   `Button`, `IconButton`, `Chip`, `Icon`, `TextField`, `Card`, `ListRow`,
   `SegmentedControl`, loading/error states).

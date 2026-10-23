@@ -56,7 +56,7 @@ export function MoneyCard({
   return (
     <section
       aria-label="Net worth"
-      className="flex flex-col gap-2.5 rounded-[20px] bg-surface p-[18px] ring-[1.5px] ring-signal/55"
+      className="flex flex-col gap-2.5 card p-[18px]"
     >
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-ink-soft">Net worth</span>

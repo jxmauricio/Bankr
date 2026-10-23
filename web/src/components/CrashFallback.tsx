@@ -1,8 +1,8 @@
 export function CrashFallback() {
   return (
     <div className="flex min-h-screen flex-col items-start justify-center gap-4 px-6 sm:mx-auto sm:max-w-md">
-      <span className="font-display text-xl font-semibold tracking-tight text-ink">
-        bankr<span className="text-signal">_</span>
+      <span className="font-display text-xl font-bold tracking-tight text-ink">
+        Bankr
       </span>
       <h1 className="font-display text-[28px] font-medium leading-tight tracking-tight text-ink">
         Something broke on our side.

@@ -25,7 +25,7 @@ export function ActionProposalCard({
   if (status === "dismissed") return null;
   if (status === "done") {
     return (
-      <div className="w-full rounded-[20px] bg-surface p-4">
+      <div className="w-full card p-4">
         <p className="m-0 text-sm text-signal">✓ {done}</p>
       </div>
     );

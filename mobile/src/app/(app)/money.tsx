@@ -4,16 +4,24 @@ import { useLinkBank } from "@/features/bank/useLinkBank";
 import { isStale, useMoney } from "@/features/money/MoneyContext";
 import { formatMoney, formatRelativeTime } from "@/lib/format";
 import { radius, space } from "@/theme/tokens";
+import { useAppearancePref, type AppearancePref } from "@/theme/appearance";
 import { makeStyles, useColors } from "@/theme/theme";
-import { Button, Card, Text } from "@/ui";
+import { Button, Card, SegmentedControl, Text } from "@/ui";
 
-/** The money sheet: net worth, accounts and goals, opened from the top bar's settings button or the net worth card. */
+const APPEARANCE_OPTIONS: { value: AppearancePref; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
+
+/** The money sheet: net worth, accounts, goals and appearance, opened from the top bar's settings button or the net worth card. */
 export default function MoneySheet() {
   const styles = useStyles();
   const colors = useColors();
   const { netWorth, goals, syncFromBank, isSyncing, syncError, banksChanged } = useMoney();
   const linking = useLinkBank(banksChanged);
   const stale = isStale(netWorth.as_of) && !isSyncing;
+  const [appearance, setAppearance] = useAppearancePref();
 
   return (
     <ScrollView
@@ -112,6 +120,14 @@ export default function MoneySheet() {
           </Text>
         )}
         <Button label="Link another bank" variant="secondary" onPress={linking.link} loading={linking.busy} />
+      </Card>
+
+      <Card>
+        <Text variant="heading">Appearance</Text>
+        <SegmentedControl label="Appearance" options={APPEARANCE_OPTIONS} value={appearance} onChange={setAppearance} />
+        <Text variant="meta" tone="faint">
+          System follows your phone’s light and dark setting.
+        </Text>
       </Card>
     </ScrollView>
   );

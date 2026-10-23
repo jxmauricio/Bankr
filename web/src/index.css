@@ -1,41 +1,46 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
-/* Direction D: graphite + signal teal. Dark first; [data-theme="light"] swaps values. */
+/* The Copilot-style redesign (Desktop page of the "Bankr iOS Redesign" canvas,
+ * https://claude.ai/artifact/LMSyVZe6cymbvqQN6D2HZD): navy dark, blue-on-white
+ * light, the system font. Dark is the default; light follows the system, and
+ * [data-theme] on <html> forces either. Every value below is also in the light
+ * block, so add a token to both. */
 @theme {
-  --font-display: "Space Grotesk", system-ui, sans-serif;
-  --font-body: "Space Grotesk", system-ui, sans-serif;
-  --font-sans: "Space Grotesk", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  /* Figures: the same face with fixed-width digits (see .font-mono below), so amounts line up. */
+  --font-mono: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
 
-  --color-bg: #0B0D10;
-  --color-surface: #12151A;
-  --color-raised: #191D24;
-  --color-line: #222731;
-  --color-line-strong: #323946;
-  --color-control: #606879;
-  --color-ink: #E6EAF0;
-  --color-ink-soft: #A3ABBA;
-  --color-ink-faint: #7B8296;
-  --color-signal: #3ED1BF;
-  --color-signal-hi: #7FE6D9;
-  --color-signal-wash: rgb(62 209 191 / 0.08);
-  --color-user: #0F6E6A;
-  /* Spending in income-vs-spending pairs; distinct in hue and lightness from signal. */
+  --color-bg: #0B1426;
+  --color-surface: #111C33;
+  --color-raised: #18243F;
+  --color-line: #1D2A47;
+  --color-line-strong: #26365A;
+  --color-control: #5D6B8A;
+  --color-ink: #F2F5FA;
+  --color-ink-soft: #9AA8C4;
+  --color-ink-faint: #8391AF;
+  --color-signal: #6EA8FF;
+  --color-signal-hi: #9CC3FF;
+  --color-signal-wash: rgb(110 168 255 / 0.12);
+  --color-on-signal: #0B1426;
+  --color-user: #1E3A6E;
+  --color-on-user: #F2F5FA;
   --color-spend: #B79CFF;
-  --color-positive: #4FD18B;
-  --color-positive-soft: rgb(79 209 139 / 0.12);
+  --color-positive: #3DDC84;
+  --color-positive-soft: rgb(61 220 132 / 0.12);
   --color-negative: #FF7A6B;
   --color-negative-soft: rgb(255 122 107 / 0.1);
   --color-warn: #F5A54A;
   --color-warn-soft: rgb(245 165 74 / 0.1);
-
-  /* Legacy names kept so older screens inherit the new palette. */
-  --color-border: #222731;
-  --color-surface-dark: #0B0D10;
-  --color-accent: #3ED1BF;
-  --color-accent-strong: #7FE6D9;
-  --color-accent-soft: rgb(62 209 191 / 0.08);
+  --color-scrim: rgb(4 9 20 / 0.72);
+  --color-border: #1D2A47;
+  --color-surface-dark: #0B1426;
+  --color-accent: #6EA8FF;
+  --color-accent-strong: #9CC3FF;
+  --color-accent-soft: rgb(110 168 255 / 0.12);
   --color-danger: #FF7A6B;
   --color-danger-soft: rgb(255 122 107 / 0.1);
   --color-gold: #F5A54A;
@@ -44,8 +49,9 @@
 
   --radius-sm: 8px;
   --radius-md: 14px;
-  --radius-lg: 20px;
+  --radius-lg: 16px;
   --radius-xl: 24px;
+  --shadow-card: none;
   --shadow-menu: 0 8px 24px rgb(0 0 0 / 0.35);
   --shadow-modal: 0 24px 64px rgb(0 0 0 / 0.55);
   --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -59,25 +65,90 @@
   --animate-view: view-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+:root {
+  color-scheme: dark;
+}
+
+/* Light: when the system asks for it (unless forced dark), or when forced. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --color-bg: #F3F5F9;
+    --color-surface: #FFFFFF;
+    --color-raised: #E9EDF3;
+    --color-line: #E2E7EF;
+    --color-line-strong: #D3DAE5;
+    --color-control: #8A94A6;
+    --color-ink: #0E1A2B;
+    --color-ink-soft: #5A6678;
+    --color-ink-faint: #667085;
+    --color-signal: #2F6FE0;
+    --color-signal-hi: #1D4ED8;
+    --color-signal-wash: rgb(47 111 224 / 0.08);
+    --color-on-signal: #FFFFFF;
+    --color-user: #DCE7FB;
+    --color-on-user: #0E1A2B;
+    --color-spend: #7C5CE0;
+    --color-positive: #15803D;
+    --color-positive-soft: rgb(21 128 61 / 0.1);
+    --color-negative: #C93A2B;
+    --color-negative-soft: rgb(201 58 43 / 0.08);
+    --color-warn: #B45309;
+    --color-warn-soft: rgb(180 83 9 / 0.1);
+    --color-scrim: rgb(16 24 40 / 0.4);
+    --color-border: #E2E7EF;
+    --color-surface-dark: #F3F5F9;
+    --color-accent: #2F6FE0;
+    --color-accent-strong: #1D4ED8;
+    --color-accent-soft: rgb(47 111 224 / 0.08);
+    --color-danger: #C93A2B;
+    --color-danger-soft: rgb(201 58 43 / 0.08);
+    --color-gold: #B45309;
+    --color-gold-strong: #B45309;
+    --color-gold-soft: rgb(180 83 9 / 0.1);
+    --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05);
+    --shadow-menu: 0 8px 24px rgb(16 24 40 / 0.12);
+    --shadow-modal: 0 24px 64px rgb(16 24 40 / 0.18);
+    color-scheme: light;
+  }
+}
 [data-theme="light"] {
-  --color-bg: #F5F7FA;
+  --color-bg: #F3F5F9;
   --color-surface: #FFFFFF;
-  --color-raised: #EEF1F5;
-  --color-line: #E2E6EC;
-  --color-border: #E2E6EC;
-  --color-line-strong: #CDD3DC;
+  --color-raised: #E9EDF3;
+  --color-line: #E2E7EF;
+  --color-line-strong: #D3DAE5;
   --color-control: #8A94A6;
-  --color-ink: #0F1319;
-  --color-ink-soft: #4A5361;
-  --color-ink-faint: #5F6878;
-  --color-signal: #0B7A6E;
-  --color-accent: #0B7A6E;
-  --color-spend: #6D4FD6;
-  --color-positive: #1A7F4B;
-  --color-negative: #C2412F;
-  --color-danger: #C2412F;
-  --color-warn: #9A5B0E;
-  --color-gold: #9A5B0E;
+  --color-ink: #0E1A2B;
+  --color-ink-soft: #5A6678;
+  --color-ink-faint: #667085;
+  --color-signal: #2F6FE0;
+  --color-signal-hi: #1D4ED8;
+  --color-signal-wash: rgb(47 111 224 / 0.08);
+  --color-on-signal: #FFFFFF;
+  --color-user: #DCE7FB;
+  --color-on-user: #0E1A2B;
+  --color-spend: #7C5CE0;
+  --color-positive: #15803D;
+  --color-positive-soft: rgb(21 128 61 / 0.1);
+  --color-negative: #C93A2B;
+  --color-negative-soft: rgb(201 58 43 / 0.08);
+  --color-warn: #B45309;
+  --color-warn-soft: rgb(180 83 9 / 0.1);
+  --color-scrim: rgb(16 24 40 / 0.4);
+  --color-border: #E2E7EF;
+  --color-surface-dark: #F3F5F9;
+  --color-accent: #2F6FE0;
+  --color-accent-strong: #1D4ED8;
+  --color-accent-soft: rgb(47 111 224 / 0.08);
+  --color-danger: #C93A2B;
+  --color-danger-soft: rgb(201 58 43 / 0.08);
+  --color-gold: #B45309;
+  --color-gold-strong: #B45309;
+  --color-gold-soft: rgb(180 83 9 / 0.1);
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05);
+  --shadow-menu: 0 8px 24px rgb(16 24 40 / 0.12);
+  --shadow-modal: 0 24px 64px rgb(16 24 40 / 0.18);
+  color-scheme: light;
 }
 
 @keyframes thinking {
@@ -152,7 +223,8 @@ body {
   font-family: var(--font-body);
 }
 
-.font-tabular {
+.font-tabular,
+.font-mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
@@ -170,7 +242,18 @@ body {
   }
 }
 
-/* A sourced figure in an answer: mono, dotted underline in signal. */
+/* Every card: surface, hairline border, a soft lift in light mode. In the
+ * components layer so a utility on the element (padding, hover) still wins. */
+@layer components {
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+}
+
+/* A sourced figure in an answer: tabular digits, dotted underline in signal. */
 .fig {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;

@@ -64,7 +64,7 @@ export function GoalPaceTrack({
 /** Whole dollars on goal cards; cents only when they matter. */
 const whole = (n: number) => formatMoney(n).replace(/\.00$/, "");
 
-const CARD = "rounded-[20px] bg-surface px-[18px] py-4 pr-10";
+const CARD = "card px-[18px] py-4 pr-10";
 
 /** The rail: a neutral fill for progress, a tick where steady pace would put
  * you today, and a gap between them that is hatched or coloured by whether it
@@ -262,7 +262,7 @@ function DeleteGoalModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-scrim px-4"
       onClick={() => {
         if (!isBusy) onCancel();
       }}

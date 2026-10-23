@@ -6,8 +6,8 @@ export function SetupHeader({ step, linkedLabel }: { step: 1 | 2; linkedLabel?: 
   ];
   return (
     <header className="flex min-h-16 flex-wrap items-center justify-between gap-4 border-b border-line px-6 sm:px-8">
-      <span className="font-display text-2xl font-semibold tracking-tight text-ink">
-        bankr<span className="text-signal">_</span>
+      <span className="font-display text-2xl font-bold tracking-tight text-ink">
+        Bankr
       </span>
       <ol aria-label="Setup progress" className="flex gap-6 text-[13px]">
         {steps.map(({ n, label }) => {

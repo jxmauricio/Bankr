@@ -199,7 +199,7 @@ export function TransactionDetails({
           <span className="font-tabular text-xs text-ink-faint">{longDate(txn.date)}</span>
         </div>
 
-        <dl className="m-0 rounded-[18px] bg-surface px-4 py-1">
+        <dl className="m-0 card px-4 py-1">
           {fields.map(([k, v], i) => (
             <div key={k} className={`flex justify-between gap-4 py-[11px] ${i ? "border-t border-line" : ""}`}>
               <dt className="text-[13px] text-ink-soft">{k}</dt>
@@ -224,7 +224,7 @@ export function TransactionDetails({
         </TransactionEditor>
 
         {txn.merchant_name && (
-          <section className="flex flex-col gap-2.5 rounded-[18px] bg-surface p-4">
+          <section className="flex flex-col gap-2.5 card p-4">
             <div className="flex items-baseline justify-between gap-3">
               <span className="truncate text-[13px] font-semibold text-ink">{merchant} this period</span>
               <span className="shrink-0 font-tabular text-xs text-ink-soft">
@@ -255,7 +255,7 @@ export function TransactionDetails({
 
         {goal && <GoalShare goal={goal} amount={Math.abs(txn.amount)} />}
 
-        <section className="flex flex-col gap-2 rounded-[18px] bg-surface p-4">
+        <section className="flex flex-col gap-2 card p-4">
           <span className="flex items-center gap-1.5 text-[13px] font-semibold text-ink">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-signal)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6l-7-3Z" />
@@ -314,7 +314,7 @@ function GoalShare({ goal, amount }: { goal: GoalProgress; amount: number }) {
   const over = goal.over_budget || (target > 0 && spent > target);
   const status = target > 0 ? (over ? `▲ ${formatMoney(spent - target)} over` : `${formatMoney(target - spent)} left`) : `${formatMoney(spent)} so far`;
   return (
-    <section className="flex flex-col gap-2.5 rounded-[18px] bg-surface p-4">
+    <section className="flex flex-col gap-2.5 card p-4">
       <div className="flex justify-between gap-3 text-[13px]">
         <span>
           <span className="text-ink-soft">Counts toward</span> <span className="font-semibold text-ink">{name}</span>
