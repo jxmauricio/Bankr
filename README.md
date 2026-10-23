@@ -11,6 +11,7 @@ tabs. Full architecture rationale lives in
 | ---------- | --------------------------------------------------------------------------- |
 | `backend/` | FastAPI service — the only thing that talks to Plaid and the LLM. Holds every secret. |
 | `web/`     | React + Vite app, the primary client (see `web/README.md`).                |
+| `mobile/`  | React Native (Expo) app for iOS and Android, in progress (see `mobile/README.md`). |
 | `ios/`     | SwiftUI app, shelved in favor of `web/` but still builds (see `ios/README.md`). |
 | `design/`  | Static design spec / style reference.                                      |
 

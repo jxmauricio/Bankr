@@ -51,6 +51,7 @@ from app.config import settings
 from app.integrations.bank_aggregator import (
     AggregatorAccount,
     AggregatorTransaction,
+    LinkPlatform,
     TransactionSyncResult,
 )
 
@@ -115,8 +116,24 @@ def _site_icon(site_url: str | None) -> str | None:
     return b64encode(response.content).decode() if response.content else None
 
 
+def oauth_return_kwargs(platform: LinkPlatform) -> dict[str, str]:
+    """How OAuth banks send the user back, per client. The web app's
+    redirect URI is a web page, so a phone never gets it: iOS uses its own
+    universal link, Android its package name (Plaid wants no redirect_uri
+    there). Each is omitted when unset, which still links non-OAuth banks."""
+    if platform == "ios":
+        return {"redirect_uri": settings.plaid_ios_redirect_uri} if settings.plaid_ios_redirect_uri else {}
+    if platform == "android":
+        return (
+            {"android_package_name": settings.plaid_android_package_name}
+            if settings.plaid_android_package_name
+            else {}
+        )
+    return {"redirect_uri": settings.plaid_redirect_uri} if settings.plaid_redirect_uri else {}
+
+
 class PlaidClient:
-    def create_link_token(self, user_id: str) -> str:
+    def create_link_token(self, user_id: str, platform: LinkPlatform = "web") -> str:
         client = _client()
         request_kwargs = {
             "client_name": "Bankr",
@@ -131,8 +148,7 @@ class PlaidClient:
         # webhook is a valid, fully-functional choice (see settings.plaid_webhook_url).
         if settings.plaid_webhook_url:
             request_kwargs["webhook"] = settings.plaid_webhook_url
-        if settings.plaid_redirect_uri:
-            request_kwargs["redirect_uri"] = settings.plaid_redirect_uri
+        request_kwargs.update(oauth_return_kwargs(platform))
         response = client.link_token_create(LinkTokenCreateRequest(**request_kwargs))
         return response.link_token
 

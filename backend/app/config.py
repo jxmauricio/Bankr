@@ -63,6 +63,15 @@ class Settings(BaseSettings):
     # Must also be registered under Plaid Dashboard > API > Allowed redirect
     # URIs. Blank omits it, which works for non-OAuth banks only.
     plaid_redirect_uri: str = ""
+    # The mobile app's OAuth return, used instead of plaid_redirect_uri when
+    # the link token is for iOS: an HTTPS universal link the app claims (an
+    # apple-app-site-association file on that domain), also registered in the
+    # Plaid Dashboard. Blank omits it, so iOS links non-OAuth banks only.
+    plaid_ios_redirect_uri: str = ""
+    # The Android app's package name (mobile/app.json android.package), sent
+    # instead of a redirect URI for Android link tokens. Must be registered in
+    # the Plaid Dashboard first, or Plaid rejects the token; blank omits it.
+    plaid_android_package_name: str = ""
 
     # Which backend app/agent/claude_agent.py's tool-use loop talks to (see
     # app/agent/agent_client.py). "openrouter" is the default -- routes to
