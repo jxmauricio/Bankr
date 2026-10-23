@@ -102,8 +102,9 @@ export interface LinkAccountResponse {
   net_worth: number;
 }
 
-export const fetchLinkToken = (token: string) =>
-  request<LinkTokenResponse>("/linked-accounts/link-token", { method: "POST", token });
+/** `platform` tells the backend how OAuth banks send the user back (mobile-only parameter for now). */
+export const fetchLinkToken = (token: string, platform: "web" | "ios" | "android" = "web") =>
+  request<LinkTokenResponse>("/linked-accounts/link-token", { method: "POST", token, query: { platform } });
 
 export const resyncAccounts = (token: string) =>
   request<LinkAccountResponse>("/linked-accounts/sync", { method: "POST", token });

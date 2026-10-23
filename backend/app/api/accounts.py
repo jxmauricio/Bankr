@@ -8,7 +8,7 @@ from app.api.deps import get_aggregator
 from app.auth import get_current_user
 from app.db.base import get_db
 from app.db.models import LinkedAccount, User
-from app.integrations.bank_aggregator import BankAggregatorClient
+from app.integrations.bank_aggregator import BankAggregatorClient, LinkPlatform
 from app.jobs.post_sync import run_post_sync_jobs
 from app.services.account_removal import BankNotFound, RemovalError, disconnect_bank, list_bank_logins
 from app.services.crypto import decrypt_token
@@ -23,12 +23,14 @@ class LinkTokenResponse(BaseModel):
 
 @router.post("/link-token", response_model=LinkTokenResponse)
 def create_link_token(
+    platform: LinkPlatform = "web",
     user: User = Depends(get_current_user),
     aggregator: BankAggregatorClient = Depends(get_aggregator),
 ) -> LinkTokenResponse:
-    """The iOS app calls this first, then hands the returned token to the
-    Plaid Link SDK to launch the hosted bank-login UI."""
-    return LinkTokenResponse(link_token=aggregator.create_link_token(str(user.id)))
+    """A client calls this first, then hands the returned token to Plaid
+    Link to launch the hosted bank-login UI. The mobile app passes
+    ?platform=ios|android so OAuth banks return to the app, not the web."""
+    return LinkTokenResponse(link_token=aggregator.create_link_token(str(user.id), platform))
 
 
 class LinkAccountRequest(BaseModel):

@@ -1,5 +1,6 @@
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { BankLogo } from "@/features/bank/BankLogos";
+import { useLinkBank } from "@/features/bank/useLinkBank";
 import { isStale, useMoney } from "@/features/money/MoneyContext";
 import { formatMoney, formatRelativeTime } from "@/lib/format";
 import { colors, radius, space } from "@/theme/tokens";
@@ -7,7 +8,8 @@ import { Button, Card, Text } from "@/ui";
 
 /** The money sheet: net worth, accounts and goals, opened from the top bar's settings button or the net worth card. */
 export default function MoneySheet() {
-  const { netWorth, goals, syncFromBank, isSyncing, syncError } = useMoney();
+  const { netWorth, goals, syncFromBank, isSyncing, syncError, banksChanged } = useMoney();
+  const linking = useLinkBank(banksChanged);
   const stale = isStale(netWorth.as_of) && !isSyncing;
 
   return (
@@ -100,6 +102,12 @@ export default function MoneySheet() {
             </Text>
           </View>
         ))}
+        {linking.error && (
+          <Text variant="caption" tone="negative" accessibilityRole="alert">
+            {linking.error}
+          </Text>
+        )}
+        <Button label="Link another bank" variant="secondary" onPress={linking.link} loading={linking.busy} />
       </Card>
     </ScrollView>
   );

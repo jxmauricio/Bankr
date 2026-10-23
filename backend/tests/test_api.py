@@ -17,6 +17,35 @@ def test_create_link_token(client):
     assert response.json()["link_token"]
 
 
+def test_link_token_carries_the_client_platform(client):
+    fake = FakeAggregatorClient()
+    app.dependency_overrides[get_aggregator] = lambda: fake
+
+    assert client.post("/linked-accounts/link-token?platform=ios").status_code == 200
+    assert client.post("/linked-accounts/link-token").status_code == 200
+    assert client.post("/linked-accounts/link-token?platform=desktop").status_code == 422
+
+    assert fake.link_token_platforms == ["ios", "web"]
+
+
+def test_oauth_return_differs_by_platform(monkeypatch):
+    # The web app's redirect page must never reach a phone's link token.
+    from app.config import settings
+    from app.integrations.plaid_client import oauth_return_kwargs
+
+    monkeypatch.setattr(settings, "plaid_redirect_uri", "https://web.example/oauth-return")
+    monkeypatch.setattr(settings, "plaid_ios_redirect_uri", "")
+    monkeypatch.setattr(settings, "plaid_android_package_name", "")
+    assert oauth_return_kwargs("web") == {"redirect_uri": "https://web.example/oauth-return"}
+    assert oauth_return_kwargs("ios") == {}
+    assert oauth_return_kwargs("android") == {}
+
+    monkeypatch.setattr(settings, "plaid_ios_redirect_uri", "https://app.example/plaid")
+    monkeypatch.setattr(settings, "plaid_android_package_name", "com.bankr.app")
+    assert oauth_return_kwargs("ios") == {"redirect_uri": "https://app.example/plaid"}
+    assert oauth_return_kwargs("android") == {"android_package_name": "com.bankr.app"}
+
+
 def test_link_account_runs_sync_and_returns_summary(client):
     _with_fake_aggregator(client)
 

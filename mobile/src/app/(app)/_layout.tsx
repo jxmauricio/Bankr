@@ -11,6 +11,7 @@ import {
 import { useSession } from "@/lib/session";
 import { MoneyProvider } from "@/features/money/MoneyContext";
 import { BankLogosProvider } from "@/features/bank/BankLogos";
+import { LinkBankScreen } from "@/features/bank/LinkBankScreen";
 import { PeriodProvider } from "@/features/period/PeriodContext";
 import { TransactionFiltersProvider } from "@/features/transactions/FiltersContext";
 import { colors } from "@/theme/tokens";
@@ -97,27 +98,32 @@ export default function SignedInLayout() {
     }
   }, [token, isSyncing, refresh, signOut]);
 
+  /** After a bank is linked from inside the app: re-read balances, then reload every screen's data. */
+  const banksChanged = useCallback(async () => {
+    await refresh();
+    setSyncVersion((n) => n + 1);
+  }, [refresh]);
+
   switch (gate.step) {
     case "loading":
       return <Loading />;
     case "load-failed":
       return <ErrorState message="Couldn't reach Bankr." onRetry={retry} />;
     case "link-bank":
+      // Linking runs the backend's first sync, so re-reading the gate lands on goal setup or home.
+      return <LinkBankScreen onLinked={retry} />;
     case "set-goal":
-      // Plaid Link and goal setup aren't on mobile yet; finish them on the web.
+      // Goal setup isn't on mobile yet (chat can create goals once home is reachable); finish it on the web.
       return (
         <Screen edges={["top", "bottom"]}>
-          <ComingSoon
-            title={gate.step === "link-bank" ? "Link a bank" : "Set a goal"}
-            detail={`${gate.step === "link-bank" ? "Linking a bank" : "Goal setup"} isn't in the app yet. Finish it on the web, then come back.`}
-          />
+          <ComingSoon title="Set a goal" detail="Goal setup isn't in the app yet. Finish it on the web, then come back." />
           <Button label="Check again" variant="secondary" onPress={retry} />
           <Button label="Sign out" variant="ghost" onPress={signOut} />
         </Screen>
       );
     case "home":
       return (
-        <MoneyProvider value={{ netWorth: gate.netWorth, goals: gate.goals, refresh, syncFromBank, isSyncing, syncError, syncVersion }}>
+        <MoneyProvider value={{ netWorth: gate.netWorth, goals: gate.goals, refresh, banksChanged, syncFromBank, isSyncing, syncError, syncVersion }}>
           <PeriodProvider>
             <BankLogosProvider syncVersion={syncVersion}>
               <TransactionFiltersProvider>

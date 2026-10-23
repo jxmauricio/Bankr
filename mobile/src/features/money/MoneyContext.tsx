@@ -7,6 +7,8 @@ export interface Money {
   goals: GoalProgressResponse;
   /** Re-reads balances and goals from the backend (no bank call). */
   refresh: () => Promise<void>;
+  /** After linking a bank: re-reads balances and reloads every screen. */
+  banksChanged: () => Promise<void>;
   /** Pulls fresh data from the banks, then re-reads everything. */
   syncFromBank: () => Promise<void>;
   isSyncing: boolean;

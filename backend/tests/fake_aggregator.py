@@ -25,6 +25,7 @@ class FakeAggregatorClient:
         )
         self.removed_ids = removed_ids or []
         self.cursors_seen: list[str | None] = []
+        self.link_token_platforms: list[str] = []
         self.item_id = item_id
         self.get_item_id_calls: list[str] = []
         self.verify_webhook_result = verify_webhook_result
@@ -88,7 +89,8 @@ class FakeAggregatorClient:
             ],
         }
 
-    def create_link_token(self, user_id: str) -> str:
+    def create_link_token(self, user_id: str, platform: str = "web") -> str:
+        self.link_token_platforms.append(platform)
         return f"link-sandbox-{user_id}"
 
     def exchange_public_token(self, public_token: str) -> str:

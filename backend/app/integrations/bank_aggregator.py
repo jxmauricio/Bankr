@@ -9,7 +9,7 @@ down its API in July 2026.
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Protocol
+from typing import Literal, Protocol
 
 
 @dataclass
@@ -53,10 +53,15 @@ class TransactionSyncResult:
     next_cursor: str | None = None
 
 
+LinkPlatform = Literal["web", "ios", "android"]
+
+
 class BankAggregatorClient(Protocol):
-    def create_link_token(self, user_id: str) -> str:
+    def create_link_token(self, user_id: str, platform: LinkPlatform = "web") -> str:
         """Return a short-lived token the client SDK uses to launch the
-        aggregator's hosted bank-linking UI."""
+        aggregator's hosted bank-linking UI. `platform` is the client that
+        will open it, since OAuth banks send the user back differently on
+        the web, iOS and Android."""
         ...
 
     def exchange_public_token(self, public_token: str) -> str:
