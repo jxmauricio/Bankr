@@ -41,10 +41,10 @@ function ViewIcon({ view, size = 17 }: { view: View; size?: number }) {
   );
 }
 
-/** Desktop: a segmented control in the middle of the top bar, with its 1–4 shortcuts. */
+/** Desktop: text pills in the middle of the top bar, the open one filled (keys 1–4 still switch). */
 export function ViewTabs({ view, onChange }: { view: View; onChange: (view: View) => void }) {
   return (
-    <nav aria-label="Views" className="flex gap-1 rounded-[18px] border border-line bg-surface p-1">
+    <nav aria-label="Views" className="flex gap-1">
       {VIEWS.map((v) => {
         const current = v.id === view;
         return (
@@ -53,14 +53,13 @@ export function ViewTabs({ view, onChange }: { view: View; onChange: (view: View
             type="button"
             aria-current={current ? "page" : undefined}
             aria-keyshortcuts={v.key}
+            title={`${v.label} (${v.key})`}
             onClick={() => onChange(v.id)}
-            className={`flex h-11 cursor-pointer items-center gap-2 rounded-[14px] px-3 text-sm font-medium transition-colors ${
-              current ? "bg-raised text-ink" : "text-ink-soft hover:text-ink"
+            className={`flex h-9 cursor-pointer items-center rounded-full px-4 text-[15px] transition-colors ${
+              current ? "bg-signal font-semibold text-on-signal" : "font-medium text-ink-soft hover:bg-raised hover:text-ink"
             }`}
           >
-            <ViewIcon view={v.id} />
-            <span>{v.label}</span>
-            <span className="font-mono text-[10px] text-ink-faint">{v.key}</span>
+            {v.label}
           </button>
         );
       })}

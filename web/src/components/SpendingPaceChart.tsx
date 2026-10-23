@@ -58,7 +58,7 @@ export function SpendingPaceChart({ token, refreshKey }: { token: string; refres
   }, [token, refreshKey]);
 
   if (failed) return null;
-  if (!pace) return <div className="h-[200px] animate-pulse rounded-3xl bg-surface" aria-label="Loading spending chart" />;
+  if (!pace) return <div className="h-[200px] animate-pulse card" aria-label="Loading spending chart" />;
 
   const thisRun = pace.this_month.running;
   const lastRun = pace.last_month.running;
@@ -135,7 +135,7 @@ export function SpendingPaceChart({ token, refreshKey }: { token: string; refres
   );
 
   return (
-    <section aria-label="Spending this month compared with last month" className="flex flex-col gap-4 rounded-3xl bg-surface p-4 md:p-6">
+    <section aria-label="Spending this month compared with last month" className="flex flex-col gap-4 card p-4 md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="text-[13px] font-semibold text-ink-soft">

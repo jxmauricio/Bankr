@@ -70,7 +70,7 @@ function SavingsGoalProposalCard({
 
   if (status === "created") {
     return (
-      <div className="w-full rounded-[20px] bg-surface p-4">
+      <div className="w-full card p-4">
         <p className="text-sm text-signal">✓ Goal set — it’s on the left.</p>
       </div>
     );
@@ -193,7 +193,7 @@ function SpendingTrackerProposalCard({
 
   if (status === "created") {
     return (
-      <div className="w-full rounded-[20px] bg-surface p-4">
+      <div className="w-full card p-4">
         <p className="text-sm text-signal">✓ Tracking {name || category} — it’s on the left.</p>
       </div>
     );

@@ -36,8 +36,8 @@ export function AuthPage() {
       {/* Editorial side */}
       <section className="flex min-w-0 flex-[1_1_480px] flex-col justify-between gap-8 border-line px-6 pb-0 pt-10 sm:gap-12 sm:px-14 sm:py-12 min-[960px]:border-r">
         <div className="flex items-baseline gap-2.5">
-          <span className="font-display text-[26px] font-semibold tracking-tight text-ink">
-            bankr<span className="text-signal">_</span>
+          <span className="font-display text-[26px] font-bold tracking-tight text-ink">
+            Bankr
           </span>
           <span className="font-mono text-[10px] tracking-[0.14em] text-signal">PRIVATE BETA</span>
         </div>
@@ -48,7 +48,7 @@ export function AuthPage() {
             <span className="text-ink-soft">Check every answer.</span>
           </h1>
           <figure aria-label="Example answer" className="hidden flex-col gap-3.5 rounded-[20px] border border-line bg-surface p-5 sm:flex">
-            <div className="self-end rounded-[16px_16px_4px_16px] bg-user px-3.5 py-2 text-sm text-white">
+            <div className="self-end rounded-[16px_16px_4px_16px] bg-user px-3.5 py-2 text-sm text-on-user">
               What did I spend on food in August?
             </div>
             <p className="text-sm leading-relaxed text-ink">

@@ -59,7 +59,7 @@ export function TransactionEditor({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-[18px] bg-surface p-4" aria-label="Edit transaction">
+    <section className="flex flex-col gap-3 card p-4" aria-label="Edit transaction">
       {txn.is_split ? (
         <div className="flex flex-col gap-1.5">
           <span className="text-[13px] text-ink-soft">Split across</span>

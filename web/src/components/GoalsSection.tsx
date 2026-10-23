@@ -50,7 +50,7 @@ export function GoalsSection({
 /** No goals yet: an empty pace track and two ways to start one. */
 export function EmptyGoals({ onCreateGoal, onSuggestGoal }: { onCreateGoal: () => void; onSuggestGoal: () => void }) {
   return (
-    <div className="flex flex-col gap-3.5 rounded-[20px] bg-surface p-[22px]">
+    <div className="flex flex-col gap-3.5 card p-[22px]">
       <div aria-hidden className="relative h-1.5 rounded-[3px] bg-line">
         <div className="absolute -top-[5px] left-[40%] h-4 w-0.5 bg-line-strong" />
       </div>

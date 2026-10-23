@@ -138,7 +138,7 @@ export function CashFlowView({
             <p className="py-10 text-center text-sm text-ink-soft">Couldn’t load cash flow. Switch views to try again.</p>
           </Panel>
         ) : !flow || !data ? (
-          <div className="h-[420px] animate-pulse rounded-3xl bg-surface" aria-label="Loading cash flow" />
+          <div className="h-[420px] animate-pulse card" aria-label="Loading cash flow" />
         ) : empty ? (
           <Panel>
             <p className="py-10 text-center text-sm text-ink-soft">No income, spending, or transfers in {flow.label} yet.</p>
@@ -159,7 +159,7 @@ export function CashFlowView({
 }
 
 function Panel({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`rounded-3xl bg-surface p-4 md:px-7 md:py-6 ${className}`}>{children}</div>;
+  return <div className={`card p-4 md:px-7 md:py-6 ${className}`}>{children}</div>;
 }
 
 const W = 980;
@@ -353,7 +353,7 @@ function CompactFlow({
   const maxRow = Math.max(...right.map((r) => r.amount), 1);
   return (
     <div className="flex flex-col gap-3 md:hidden">
-      <div className="flex flex-col gap-2.5 rounded-[18px] bg-surface p-3.5">
+      <div className="flex flex-col gap-2.5 card p-3.5">
         <div className="flex justify-between text-[13px]">
           <span className="text-ink">↓ Money in</span>
           <span className="font-tabular text-signal">{whole(flow.income + (flow.transfer_in ?? 0))}</span>
@@ -378,7 +378,7 @@ function CompactFlow({
           {flow.net > 0 ? <span className="text-positive">Kept {whole(flow.net)}</span> : <span className="text-warn">{whole(-flow.net)} more out than in</span>}
         </div>
       </div>
-      <ul className="rounded-[18px] bg-surface px-3.5 py-1">
+      <ul className="card px-3.5 py-1">
         {right.map((c, i) => {
           const body = (
             <>

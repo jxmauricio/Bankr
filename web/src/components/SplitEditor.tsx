@@ -66,7 +66,7 @@ export function SplitEditor({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-[18px] bg-surface p-4" aria-label="Split transaction">
+    <section className="flex flex-col gap-3 card p-4" aria-label="Split transaction">
       <div className="flex items-baseline justify-between">
         <span className="text-[13px] font-semibold text-ink">Split {formatMoney(size)}</span>
         <span className={`font-tabular text-xs ${remaining === 0 ? "text-ink-faint" : "text-warn"}`}>

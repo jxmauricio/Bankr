@@ -197,7 +197,7 @@ export function TransactionsView({
         </div>
       </div>
 
-      <div className="mb-4 min-h-0 flex-1 overflow-y-auto rounded-[20px] bg-surface lg:mb-5">
+      <div className="mb-4 min-h-0 flex-1 overflow-y-auto card lg:mb-5">
         {failed ? (
           <EmptyState title="Couldn’t load transactions" body="Check your connection and switch views to try again." />
         ) : !list ? (
