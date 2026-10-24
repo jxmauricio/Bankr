@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from app.agent.agent_client import ToolSpec
-from app.agent.providers import MAX_TOOL_ROUNDS, AnthropicAgentClient, OpenRouterAgentClient
+from app.agent.providers import FINAL_ROUND_NUDGE, MAX_TOOL_ROUNDS, AnthropicAgentClient, OpenRouterAgentClient
 from app.db.models import ChatMessage, Goal, InsightLog
 from app.jobs import insights_job
 from app.services import chat_service
@@ -56,6 +56,9 @@ def test_openai_compatible_tool_loop_stops_at_the_cap(monkeypatch):
     assert len(calls) == MAX_TOOL_ROUNDS + 1
     assert all("tool_choice" not in c for c in calls[:-1])
     assert calls[-1]["tool_choice"] == "none"
+    # The tools-disabled call is told to answer, so it doesn't come back empty.
+    # ([-1] is that call's own reply: the client appends to the same list.)
+    assert calls[-1]["messages"][-2] == {"role": "user", "content": FINAL_ROUND_NUDGE}
 
 
 def test_anthropic_tool_loop_stops_at_the_cap(monkeypatch):
@@ -79,6 +82,7 @@ def test_anthropic_tool_loop_stops_at_the_cap(monkeypatch):
     assert reply == "partial answer"
     assert len(calls) == MAX_TOOL_ROUNDS + 1
     assert calls[-1]["tool_choice"] == {"type": "none"}
+    assert calls[-1]["messages"][-2]["content"][-1] == {"type": "text", "text": FINAL_ROUND_NUDGE}
 
 
 def test_history_sent_to_the_model_is_capped_and_starts_on_a_user_turn(db, user):

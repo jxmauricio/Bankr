@@ -24,7 +24,8 @@ def test_task(task, db, ledger):
         started = time.monotonic()
         row = {"task_id": task.id, "suite": task.suite, "trial": trial, "prompt": task.prompt}
         try:
-            reply, sources = run_agent_turn(db, ledger.id, [{"role": "user", "content": task.prompt}])
+            messages = [*task.history, {"role": "user", "content": task.prompt}]
+            reply, sources = run_agent_turn(db, ledger.id, messages)
             outcomes = [(check.__name__, *check(reply, sources)) for check in task.checks]
             failed = [f"{name}: {detail}" for name, ok, detail in outcomes if not ok]
             row.update(reply=reply, sources=sources, failed_checks=failed, passed=not failed)

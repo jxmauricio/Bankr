@@ -32,6 +32,12 @@ from app.agent.agent_client import ToolSpec
 # with tools disabled makes the model answer from what it already gathered.
 MAX_TOOL_ROUNDS = 8
 
+# Sent with the last tool results before that final, tools-disabled call.
+# Without it some models return nothing at all once they can't call a tool.
+FINAL_ROUND_NUDGE = (
+    "You've used all your tool calls for this question. Answer the user now from the tool results above."
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -147,6 +153,8 @@ class AnthropicAgentClient:
                     continue
                 result = call_tool(block.name, block.input)
                 tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": str(result)})
+            if round_number == MAX_TOOL_ROUNDS - 1:
+                tool_results.append({"type": "text", "text": FINAL_ROUND_NUDGE})
             messages.append({"role": "user", "content": tool_results})
             _log_round(round_number, model_seconds, time.monotonic() - started, usage, None)
 
@@ -298,6 +306,8 @@ class OpenAICompatibleAgentClient:
                 args = json.loads(tool_call["function"]["arguments"] or "{}")
                 result = call_tool(tool_call["function"]["name"], args)
                 messages.append({"role": "tool", "tool_call_id": tool_call["id"], "content": json.dumps(result)})
+            if round_number == MAX_TOOL_ROUNDS - 1:
+                messages.append({"role": "user", "content": FINAL_ROUND_NUDGE})
             _log_round(round_number, model_seconds, time.monotonic() - started, usage, served_by)
 
     def complete(self, system: str, user_message: str) -> str:
