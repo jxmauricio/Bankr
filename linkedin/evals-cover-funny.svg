@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="627" viewBox="0 0 1200 627" font-family="Helvetica, Arial, sans-serif">
+  <rect width="1200" height="627" fill="#fde68a"/>
+  <text x="600" y="75" text-anchor="middle" fill="#1f2937" font-size="44" font-weight="800">Me: "How much did I spend this month?"</text>
+
+  <!-- robot -->
+  <line x1="260" y1="150" x2="260" y2="205" stroke="#1f2937" stroke-width="8"/>
+  <circle cx="260" cy="140" r="16" fill="#ef4444" stroke="#1f2937" stroke-width="6"/>
+  <rect x="140" y="205" width="240" height="190" rx="36" fill="#cbd5e1" stroke="#1f2937" stroke-width="8"/>
+  <!-- sunglasses -->
+  <rect x="165" y="250" width="90" height="50" rx="12" fill="#111827"/>
+  <rect x="265" y="250" width="90" height="50" rx="12" fill="#111827"/>
+  <rect x="255" y="268" width="10" height="8" fill="#111827"/>
+  <!-- smirk -->
+  <path d="M185 350 Q260 395 335 340" fill="none" stroke="#1f2937" stroke-width="8" stroke-linecap="round"/>
+  <rect x="170" y="395" width="180" height="90" rx="20" fill="#94a3b8" stroke="#1f2937" stroke-width="8"/>
+  <!-- thumbs up arm -->
+  <rect x="350" y="420" width="70" height="26" rx="13" fill="#94a3b8" stroke="#1f2937" stroke-width="6"/>
+
+  <!-- speech bubble -->
+  <path d="M470 150 h640 a30 30 0 0 1 30 30 v200 a30 30 0 0 1 -30 30 h-540 l-60 50 l20 -50 h-60 a30 30 0 0 1 -30 -30 v-200 a30 30 0 0 1 30 -30z" fill="#ffffff" stroke="#1f2937" stroke-width="6"/>
+  <text x="520" y="235" fill="#1f2937" font-size="40" font-weight="700">You spent <tspan fill="#dc2626" font-size="56" font-weight="900">$2,440</tspan>.</text>
+  <text x="520" y="300" fill="#1f2937" font-size="36">Totally sure. Trust me.</text>
+  <text x="520" y="355" fill="#6b7280" font-size="28">(I counted your card payment as spending)</text>
+
+  <!-- footer -->
+  <rect x="0" y="530" width="1200" height="97" fill="#1f2937"/>
+  <text x="600" y="590" text-anchor="middle" fill="#fde68a" font-size="36" font-weight="800">Real answer: $1,800. Confidence: unearned. Time to write evals.</text>
+</svg>

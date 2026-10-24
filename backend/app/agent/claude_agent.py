@@ -25,6 +25,7 @@ directly, so swapping to a cheaper model for local prototyping doesn't
 touch this file.
 """
 
+import json
 from typing import Callable
 from uuid import UUID
 
@@ -208,6 +209,17 @@ _WINDOW_PROPS = {
     "start": {"type": "string", "description": "Explicit start date YYYY-MM-DD (overrides window)."},
     "end": {"type": "string", "description": "Explicit end date YYYY-MM-DD, inclusive. Defaults to today."},
 }
+# The query tools make the model name a window: left optional, it would drop
+# "last month" and silently get this month's numbers back.
+_QUERY_WINDOW_PROPS = {
+    **_WINDOW_PROPS,
+    "window": {
+        **_WINDOW_PROPS["window"],
+        "description": "Named date window, resolved in the user's timezone. Weeks run Monday-Sunday. "
+        "Always pass the period the user asked about (this_month if they didn't name one). "
+        "Explicit start/end override it.",
+    },
+}
 _CATEGORY_PROP = {
     "type": "string",
     "description": f"Spending category: one of {_SPEND_CATEGORIES}. Everyday words also work "
@@ -229,7 +241,7 @@ TOOL_DEFINITIONS = [
         "transfer_in_sources and transfer_out_destinations break those moves down by merchant. "
         "Credit-card payoffs and checking↔savings count as neither — they aren't spending and they "
         "don't leave the linked accounts.",
-        parameters={"type": "object", "properties": _WINDOW_PROPS},
+        parameters={"type": "object", "properties": _QUERY_WINDOW_PROPS, "required": ["window"]},
     ),
     ToolSpec(
         name="get_spending",
@@ -239,11 +251,12 @@ TOOL_DEFINITIONS = [
         parameters={
             "type": "object",
             "properties": {
-                **_WINDOW_PROPS,
+                **_QUERY_WINDOW_PROPS,
                 "category": _CATEGORY_PROP,
                 "group_by": {"type": "string", "enum": ["category", "subcategory", "merchant"]},
                 "top_n": {"type": "integer", "description": "With group_by: keep the N biggest groups, roll up the rest."},
             },
+            "required": ["window"],
         },
     ),
     ToolSpec(
@@ -278,7 +291,7 @@ TOOL_DEFINITIONS = [
         parameters={
             "type": "object",
             "properties": {
-                **_WINDOW_PROPS,
+                **_QUERY_WINDOW_PROPS,
                 "category": _CATEGORY_PROP,
                 "merchant": {"type": "string", "description": "Case-insensitive substring of the merchant name."},
                 "min_amount": {"type": "number", "description": "Minimum charge size in dollars."},
@@ -290,6 +303,7 @@ TOOL_DEFINITIONS = [
                     "description": "Default spending, except a merchant lookup with no kind searches all types.",
                 },
             },
+            "required": ["window"],
         },
     ),
     ToolSpec(
@@ -825,6 +839,27 @@ class TurnCancelled(Exception):
     """The user stopped the turn before it produced a reply."""
 
 
+# Tools that take a date window, so a call without one silently covers the
+# default (this_month) -- the model forgetting "last month" this way, then
+# re-sending the same call until the round cap, is how replies came back empty.
+_WINDOWED_TOOLS = {"get_spending", "find_transactions", "get_cash_flow"}
+
+# Sent instead of an empty reply, which the chat UI would show as nothing.
+EMPTY_REPLY_FALLBACK = (
+    "Sorry, I couldn't finish working that out. Try asking again, or ask one thing at a time."
+)
+
+
+def _repeat_call_result(name: str, tool_input: dict) -> dict:
+    message = (
+        "You already made this exact call this turn, so the result is the same as above. "
+        "Answer from the results you have, or call again with different arguments."
+    )
+    if name in _WINDOWED_TOOLS and not any(tool_input.get(k) for k in ("window", "start", "end")):
+        message += " No window, start or end was passed, so it covered this_month by default."
+    return {"repeated_call": True, "message": message}
+
+
 def run_agent_turn(
     db: Session,
     user_id: UUID,
@@ -853,6 +888,7 @@ def run_agent_turn(
     AgentClient.run_turn). is_cancelled is also checked on each piece, so a
     stop lands mid-answer instead of after it."""
     sources: list[dict] = []
+    seen_calls: set[str] = set()
 
     def check_cancelled() -> None:
         if is_cancelled and is_cancelled():
@@ -860,9 +896,25 @@ def run_agent_turn(
 
     def call_tool(name: str, tool_input: dict) -> dict:
         check_cancelled()
+        key = json.dumps([name, tool_input], sort_keys=True, default=str)
+        if key in seen_calls:
+            # Not run again and not a new source: it would only repeat one.
+            return _repeat_call_result(name, tool_input)
+        seen_calls.add(key)
         if on_status:
             on_status(_progress_label(name, tool_input))
         result = _TOOL_DISPATCH[name](db, user_id, **tool_input)
+        if (
+            name in _WINDOWED_TOOLS
+            and isinstance(result, dict)
+            and "error" not in result
+            and not any(tool_input.get(k) for k in ("window", "start", "end"))
+        ):
+            result["window_note"] = (
+                "No window, start or end was passed, so this covers this_month (the default). "
+                "If the user asked about any other period, call again with that window before answering "
+                "-- don't offer to, just do it."
+            )
         searched = _searched(db, user_id, name, tool_input, result)
         if searched:
             result["searched"] = searched
@@ -918,4 +970,6 @@ def run_agent_turn(
     streaming = {"on_text": stream_text} if on_text else {}
     reply = clip_reply(_client.run_turn(system, TOOL_DEFINITIONS, messages, call_tool, **streaming))
     check_cancelled()
+    if not reply.strip():
+        reply = EMPTY_REPLY_FALLBACK
     return reply, sources

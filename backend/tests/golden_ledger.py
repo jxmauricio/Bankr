@@ -132,6 +132,28 @@ EXPECTED = {
     "gas_last_month": 146.00,
     "transportation_last_month": 181.00,  # gas + Uber; flight excluded
     "travel_last_month": 300.00,  # 420 flight - 120 refund
+    # --- harder questions (tests/evals "hard" tag) -------------------------
+    # Aug spend = rent 1800 + PG&E 85 + groceries 275.75 + dining 60 +
+    # gas 146 + Uber 35 + travel 300 (net of refund).
+    "last_month_spending": 2701.75,
+    # Car gas: Sep 8 Shell only; same point last month (Aug 1–19) = 48.20 + 52.80.
+    "gas_this_month": 50.00,
+    "gas_last_month_to_date": 101.00,
+    "dining_this_month": 129.15,
+    "dining_last_month": 60.00,
+    # Week before last = Mon Aug 31 – Sun Sep 6: only Tacolicious.
+    "dining_week_before_last": 25.00,
+    # Aug 20–25: Nopa 60 + Uber 35 + United 420 + Trader Joe's 60.
+    # The $120 flight refund lands Aug 30, outside the range.
+    "spending_aug20_to_25": 575.00,
+    "biggest_purchase_last_month_ex_rent": 420.00,  # United flight
+    "refunds_last_month": 120.00,  # United, Aug 30
+    # Last weekend = Sat Sep 12 – Sun Sep 13: Chipotle 12.40 - 10 refund + Zeitgeist 36.
+    "last_weekend_spending": 38.40,
+    "last_weekend_spending_gross": 48.40,
+    "card_payment_this_month": 640.00,
+    # 235.80 over Sep 1–19, run out to 30 days: 235.80 / 19 * 30 = 372.3158.
+    "groceries_september_pace": 372.32,
 }
 
 
