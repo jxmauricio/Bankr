@@ -50,6 +50,56 @@
         "cd web && VITE_API_BASE_URL= API_PROXY_TARGET=http://localhost:8000 npm run dev -- --port 5183 --strictPort"
       ],
       "port": 5183
+    },
+    {
+      "name": "backend-logos",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/jxmauricio/development/Bankr/.claude/worktrees/bank-logos/backend && export SIGNUP_INVITE_CODES=friends-beta && .venv/bin/alembic upgrade head && .venv/bin/uvicorn app.main:app --port 8000"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "web-logos",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "/Users/jxmauricio/development/Bankr/.claude/worktrees/bank-logos/web"
+      ],
+      "port": 5173
+    },
+    {
+      "name": "mobile",
+      "runtimeExecutable": "sh",
+      "autoPort": false,
+      "runtimeArgs": [
+        "-c",
+        "cd mobile && npx expo start --port 8081"
+      ],
+      "port": 8081
+    },
+    {
+      "name": "backend-lan",
+      "runtimeExecutable": "sh",
+      "autoPort": false,
+      "runtimeArgs": [
+        "-c",
+        "cd backend && export SIGNUP_INVITE_CODES=friends-beta && .venv/bin/alembic upgrade head && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "mobile-lan",
+      "runtimeExecutable": "sh",
+      "autoPort": false,
+      "runtimeArgs": [
+        "-c",
+        "cd mobile && EXPO_PUBLIC_API_BASE_URL=http://$(ipconfig getifaddr en0):8000 npx expo start --port 8081 --clear"
+      ],
+      "port": 8081
     }
   ]
 }

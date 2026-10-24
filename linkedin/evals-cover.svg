@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="627" viewBox="0 0 1200 627" font-family="Helvetica, Arial, sans-serif">
+  <rect width="1200" height="627" fill="#0f172a"/>
+  <text x="70" y="95" fill="#f8fafc" font-size="46" font-weight="700">When your AI is confidently wrong</text>
+  <text x="70" y="140" fill="#94a3b8" font-size="26">about your money</text>
+
+  <!-- user bubble -->
+  <rect x="540" y="185" width="590" height="80" rx="24" fill="#2563eb"/>
+  <text x="575" y="236" fill="#ffffff" font-size="28">How much did I spend this month?</text>
+
+  <!-- AI bubble -->
+  <rect x="70" y="295" width="660" height="150" rx="24" fill="#1e293b" stroke="#ef4444" stroke-width="3"/>
+  <text x="105" y="345" fill="#94a3b8" font-size="22">Bankr AI</text>
+  <text x="105" y="405" fill="#f8fafc" font-size="34">You spent <tspan fill="#f87171" font-weight="700">$2,440</tspan> this month.</text>
+
+  <!-- wrong badge -->
+  <circle cx="770" cy="320" r="30" fill="#ef4444"/>
+  <path d="M757 307 L783 333 M783 307 L757 333" stroke="#fff" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- reality check -->
+  <rect x="70" y="475" width="1060" height="90" rx="18" fill="#052e16" stroke="#22c55e" stroke-width="2"/>
+  <text x="105" y="512" fill="#86efac" font-size="22" font-weight="700">THE TRUTH</text>
+  <text x="105" y="547" fill="#f8fafc" font-size="26">$1,800. The $640 card payment was counted as spending.</text>
+</svg>
