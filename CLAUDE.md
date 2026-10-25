@@ -1,5 +1,9 @@
 # Bankr
 
+## Log every PR push in Obsidian
+
+After every PR push (opening a PR or pushing more commits to one), add a bullet point to today's note in the local Obsidian vault explaining the work done: `/Users/jxmauricio/Documents/MyNotes/Bankr Log/<Mon DD YYYY>.md`, e.g. `Oct 25 2026.md`. Each day gets its own file: if today's date has no note yet, create a new one, and if it already exists, append to it rather than overwriting. Keep each bullet to one or two sentences on what changed and why, with the PR link.
+
 ## Restart dev servers after changes that need it
 
 Dev servers are defined in `.claude/launch.json`. Start or restart them with the preview tools (`preview_start` / `preview_stop`), never with Bash. Restart only servers that are already running, and only for changes that need it. Say in your reply which servers you restarted.
