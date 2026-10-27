@@ -63,8 +63,8 @@ def test_propose_goal_drafts_a_spending_tracker(db, user):
 
     assert result["status"] == "proposed"
     assert result["proposal"]["type"] == "track_spending"
-    assert result["proposal"]["name"] == "Food & Drink"
-    assert result["proposal"]["category"] == "Food & Drink"
+    assert result["proposal"]["name"] == "Eating Out"
+    assert result["proposal"]["category"] == "Eating Out"
     assert result["proposal"]["window"] == "this_month"
     assert result["proposal"]["target_amount"] == 0.0
     assert result["proposal"]["target_date"] is None

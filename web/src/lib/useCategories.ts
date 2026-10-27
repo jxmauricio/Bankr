@@ -21,11 +21,20 @@ export function useCategories(token: string | null): CategoryNode[] {
   return categories;
 }
 
-/** Native <select> options, subcategories indented under their parent. */
-export function categoryOptions(categories: CategoryNode[]): { id: string; label: string; group: string }[] {
+/** Native <select> options, subcategories indented under their parent. A
+ * parent with subcategories is only a heading: transactions always go on one
+ * of its subcategories, and the backend rejects the parent. */
+export function categoryOptions(
+  categories: CategoryNode[],
+): { id: string; label: string; group: string; disabled: boolean }[] {
   const groupName = { expense: "Spending", income: "Income", transfer: "Transfers" } as const;
   return categories.flatMap((c) => [
-    { id: c.id, label: c.name, group: groupName[c.type] },
-    ...c.children.map((child) => ({ id: child.id, label: `  ${child.name}`, group: groupName[c.type] })),
+    { id: c.id, label: c.name, group: groupName[c.type], disabled: c.children.length > 0 },
+    ...c.children.map((child) => ({
+      id: child.id,
+      label: `  ${child.name}`,
+      group: groupName[c.type],
+      disabled: false,
+    })),
   ]);
 }

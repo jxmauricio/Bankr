@@ -162,14 +162,14 @@ def test_create_spending_tracker_then_read_progress(client, monkeypatch):
     body = create_response.json()
     assert body["type"] == "track_spending"
     assert body["name"] == "Eating out"
-    assert body["category"] == "Food & Drink"
+    assert body["category"] == "Eating Out"
     assert body["window"] == "this_month"
     assert body["target_amount"] == 0.0
-    assert body["current_progress_amount"] == 165.5  # Ramen Spot 45 + Trader Joe's 120.50
+    assert body["current_progress_amount"] == 45.0  # Ramen Spot; Trader Joe's is groceries
 
     progress = client.get("/dashboard/goal-progress").json()
-    assert progress["goals"][0]["category"] == "Food & Drink"
-    assert progress["goals"][0]["current_progress_amount"] == 165.5
+    assert progress["goals"][0]["category"] == "Eating Out"
+    assert progress["goals"][0]["current_progress_amount"] == 45.0
     assert progress["goals"][0]["window_label"] == "This month"
 
 
@@ -216,8 +216,8 @@ def test_transactions_view_lists_every_kind_with_its_account(client, monkeypatch
     assert body["transaction_count"] == 3
     assert [t["merchant_name"] for t in body["transactions"]] == ["Ramen Spot", "Trader Joe's", "Employer Inc"]
     dining = body["transactions"][0]
-    assert dining["category"] == "Food & Drink"
-    assert dining["parent_category"] is None
+    assert dining["category"] == "Restaurants"
+    assert dining["parent_category"] == "Food & Drink"
     assert dining["category_type"] == "expense"
     assert dining["account"]["type"] == "credit"
     assert body["transactions"][2]["category_type"] == "income"

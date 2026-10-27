@@ -5,6 +5,7 @@ from datetime import date
 
 from app.agent import tools
 from app.db.models import Category, Transaction
+from app.db.seed_categories import seed_default_categories
 from app.integrations.bank_aggregator import AggregatorTransaction
 from app.services.sync_service import sync_user_accounts
 from tests.fake_aggregator import FakeAggregatorClient
@@ -64,7 +65,7 @@ def test_rule_applies_to_history_and_new_syncs(client, db, user):
 def test_rule_never_overrides_a_manual_category(client, db, user):
     fake = FakeAggregatorClient(transactions_by_account={"acc_credit": [_ramen("r1", date(2026, 8, 1))]})
     _sync(db, user, fake)
-    shopping, entertainment = _cat(db, "General Merchandise"), _cat(db, "Entertainment")
+    shopping, entertainment = _cat(db, "Other Shopping"), _cat(db, "Entertainment")
     client.patch(f"/transactions/{_txn(db, 'r1').id}", json={"category_id": str(shopping.id)})
 
     r = client.post(
@@ -111,3 +112,11 @@ def test_propose_rule_tool_drafts_without_creating(db, user):
     assert result["action"]["category"] == "Entertainment"
     assert result["action"]["would_change"] == 1
     assert tools.propose_rule(db, user.id, merchant="Ramen", category="nope").get("error")
+
+
+def test_a_rule_cannot_put_a_merchant_on_a_group(client, db, user):
+    seed_default_categories(db)
+    db.commit()
+    r = client.post("/rules", json={"merchant_contains": "ramen", "set_category_id": str(_cat(db, "Food & Drink").id)})
+    assert r.status_code == 422
+    assert "subcategories" in r.json()["detail"]

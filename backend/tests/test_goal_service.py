@@ -116,22 +116,22 @@ def test_track_spending_goal_progress_is_category_spend_this_month(db, user, mon
     goal = create_goal(
         db, user.id, "track_spending", target_amount=0, target_date=None, category="eating out", window="this_month"
     )
-    assert goal.category == "Food & Drink"
+    assert goal.category == "Eating Out"
     assert goal.window == "this_month"
-    assert goal.name == "Food & Drink"
-    assert float(goal.current_progress_amount) == 165.5  # Ramen Spot 45 + Trader Joe's 120.50
+    assert goal.name == "Eating Out"
+    assert float(goal.current_progress_amount) == 45.0  # Ramen Spot; Trader Joe's is groceries
 
     progress = get_goal_progress(db, user.id)
     tracker = progress["goals"][0]
     assert tracker["type"] == "track_spending"
-    assert tracker["name"] == "Food & Drink"
-    assert tracker["category"] == "Food & Drink"
+    assert tracker["name"] == "Eating Out"
+    assert tracker["category"] == "Eating Out"
     assert tracker["window"] == "this_month"
-    assert tracker["current_progress_amount"] == 165.5
+    assert tracker["current_progress_amount"] == 45.0
     assert tracker["target_amount"] == 0.0
     assert tracker["progress_fraction"] is None
     assert tracker["over_budget"] is False
-    assert tracker["transaction_count"] == 2
+    assert tracker["transaction_count"] == 1
 
     try:
         create_goal(db, user.id, "track_spending", 0, None, category=None, window="this_month")

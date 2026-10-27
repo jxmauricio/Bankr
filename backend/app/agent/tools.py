@@ -755,10 +755,8 @@ def _budget_line_key(db: Session, user_id: UUID, name: str) -> tuple[str, str]:
     """(key, display name) for a budget line named in chat: "Flexible" or a category."""
     if name.strip().lower() in {"flex", "flexible", "flexible spending"}:
         return budget_service.FLEX, "Flexible"
-    category = mq.resolve_category(db, name)
-    parent = mq.seed_default_categories(db)[category.name]
-    if parent.parent_category_id is not None:  # "Coffee" -> its parent's budget
-        parent = db.get(Category, parent.parent_category_id)
+    # "Coffee" -> its parent's budget
+    parent = mq.seed_default_categories(db)[mq.resolve_category(db, name).top_level]
     return str(parent.id), parent.name
 
 

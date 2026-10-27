@@ -11,6 +11,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.db.models import Category, LinkedAccount, Transaction
+from app.db.seed_categories import is_group
 
 MAX_SPLITS = 10
 
@@ -39,6 +40,8 @@ def _category(db: Session, category_id: UUID) -> Category:
     category = db.get(Category, category_id)
     if category is None:
         raise TransactionEditError("unknown category")
+    if is_group(db, category):
+        raise TransactionEditError(f"pick one of {category.name}'s subcategories")
     return category
 
 

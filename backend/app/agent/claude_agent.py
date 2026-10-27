@@ -108,9 +108,10 @@ state the resolved dates it returns in your answer ("Sep 7–13"), so the \
 user knows exactly what period the number covers.
 - Pick the most specific category that matches what they said. Gas for the \
 car is "Gas", not "Transportation" and never "Utilities". Groceries are \
-"Groceries"; eating out is "Food & Drink", which also includes groceries, \
-so say so when you answer. For "what am I spending on", use get_spending with \
-group_by="category".
+"Groceries"; eating out is "Eating Out" (all of Food & Drink except \
+groceries: restaurants, coffee, bars). "Restaurants" is only restaurants and \
+fast food, and "Food & Drink" includes the groceries, so say so if you use it. \
+For "what am I spending on", use get_spending with group_by="category".
 - For "this month vs last month", use compare_spending. When the result \
 includes previous_to_same_point, the current month isn't over yet: lead \
 with that like-for-like comparison and mention the full last month too.
@@ -224,7 +225,8 @@ _QUERY_WINDOW_PROPS = {
 _CATEGORY_PROP = {
     "type": "string",
     "description": f"Spending category: one of {_SPEND_CATEGORIES}. Everyday words also work "
-    "(\"eating out\", \"fuel\"). A parent category includes its subcategories (Food & Drink includes Groceries). "
+    "(\"eating out\", \"fuel\"). A parent category includes its subcategories (Food & Drink includes Groceries "
+    "and Restaurants); \"Eating Out\" is Food & Drink without Groceries. "
     "Omit for all spending.",
 }
 

@@ -60,10 +60,10 @@ def test_run_agent_turn_returns_sources_in_call_order(db, user, monkeypatch):
         {"tool": "get_net_worth", "label": "Net worth"},
         {
             "tool": "get_spending",
-            "label": "Food & Drink · Sep 7–13, 2026 · 0 transactions",
+            "label": "Eating Out · Sep 7–13, 2026 · 0 transactions",
             "figures": [0.0],
-            "searched": {"what": "Food & Drink", "range": "Sep 7–13, 2026", "accounts": []},
-            "query": {"start": "2026-09-07", "end": "2026-09-13", "category": "Food & Drink", "merchant": None},
+            "searched": {"what": "Eating Out", "range": "Sep 7–13, 2026", "accounts": []},
+            "query": {"start": "2026-09-07", "end": "2026-09-13", "category": "Eating Out", "merchant": None},
         },
     ]
 

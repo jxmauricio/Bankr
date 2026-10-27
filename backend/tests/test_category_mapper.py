@@ -4,31 +4,35 @@ from app.services.category_mapper import map_raw_category
 def test_maps_detailed_value_to_its_subcategory_or_primary():
     assert map_raw_category("food_and_drink_groceries", -50.0) == "Groceries"
     assert map_raw_category("FOOD_AND_DRINK_COFFEE", -5.0) == "Coffee"
-    assert map_raw_category("FOOD_AND_DRINK_RESTAURANT", -20.0) == "Food & Drink"
+    assert map_raw_category("FOOD_AND_DRINK_RESTAURANT", -20.0) == "Restaurants"
+    assert map_raw_category("FOOD_AND_DRINK_FAST_FOOD", -9.0) == "Restaurants"
     assert map_raw_category("rent_and_utilities_rent", -1800.0) == "Rent"
     assert map_raw_category("rent_and_utilities_internet_and_cable", -80.0) == "Utilities"
     assert map_raw_category("home_improvement_hardware", -40.0) == "Home Improvement"
     assert map_raw_category("personal_care_gyms_and_fitness_centers", -30.0) == "Personal Care"
-    assert map_raw_category("government_and_non_profit_donations", -25.0) == "Government & Non-Profit"
+    assert map_raw_category("government_and_non_profit_donations", -25.0) == "Donations"
+    assert map_raw_category("GENERAL_MERCHANDISE_ONLINE_MARKETPLACES", -30.0) == "Online Marketplaces"
+    assert map_raw_category("GENERAL_SERVICES_INSURANCE", -120.0) == "Insurance"
     assert map_raw_category("bank_fees_overdraft_fees", -35.0) == "Bank Fees"
 
 
 def test_falls_back_to_primary_for_unmapped_detailed_value():
     # PFCv2 could add a new FOOD_AND_DRINK subcategory Bankr doesn't know
-    # about yet -- it should still land on Food & Drink, not silently miss.
-    assert map_raw_category("food_and_drink_some_new_subcategory", -10.0) == "Food & Drink"
+    # about yet -- it should still land under Food & Drink, not silently miss.
+    assert map_raw_category("food_and_drink_some_new_subcategory", -10.0) == "Other Food & Drink"
+    assert map_raw_category("FOOD_AND_DRINK_VENDING_MACHINES", -2.0) == "Other Food & Drink"
     assert map_raw_category("entertainment_video_games", -60.0) == "Entertainment"
     assert map_raw_category("income_wages", 3000.0) == "Income"
 
 
 def test_unknown_category_falls_back_by_sign():
     assert map_raw_category("some_unrecognized_value", 100.0) == "Income"
-    assert map_raw_category("some_unrecognized_value", -100.0) == "General Merchandise"
+    assert map_raw_category("some_unrecognized_value", -100.0) == "Other Shopping"
 
 
 def test_missing_category_falls_back_by_sign():
     assert map_raw_category(None, 50.0) == "Income"
-    assert map_raw_category(None, -50.0) == "General Merchandise"
+    assert map_raw_category(None, -50.0) == "Other Shopping"
 
 
 def test_car_gas_and_the_gas_bill_never_collide():
@@ -42,14 +46,14 @@ def test_credit_card_payment_is_a_transfer_not_spending():
     # money between the user's own accounts.
     assert map_raw_category("LOAN_PAYMENTS_CREDIT_CARD_PAYMENT", -500.0) == "Transfer Out"
     assert map_raw_category("LOAN_PAYMENTS_CREDIT_CARD_PAYMENT", 500.0) == "Transfer In"
-    assert map_raw_category("LOAN_PAYMENTS_STUDENT_LOAN_PAYMENT", -300.0) == "Loan Payments"
+    assert map_raw_category("LOAN_PAYMENTS_STUDENT_LOAN_PAYMENT", -300.0) == "Student Loans"
     assert map_raw_category("TRANSFER_OUT_SAVINGS", -200.0) == "Transfer Out"
     assert map_raw_category("TRANSFER_IN_SAVINGS", 200.0) == "Transfer In"
 
 
 def test_flights_are_travel_not_transportation():
     assert map_raw_category("TRAVEL_FLIGHTS", -420.0) == "Travel"
-    assert map_raw_category("TRANSPORTATION_TAXIS_AND_RIDE_SHARES", -18.0) == "Transportation"
+    assert map_raw_category("TRANSPORTATION_TAXIS_AND_RIDE_SHARES", -18.0) == "Rideshare & Taxis"
 
 
 def test_every_mapped_name_is_a_seeded_category():
@@ -61,18 +65,32 @@ def test_every_mapped_name_is_a_seeded_category():
     assert set(PRIMARY_CATEGORY_MAP.values()) <= seeded
 
 
-def test_subcategories_sit_under_their_plaid_primary():
-    from app.db.seed_categories import DEFAULT_CATEGORIES
+def test_a_transaction_never_lands_on_a_group():
+    # Every group's total must be exactly the sum of its subcategories.
+    from app.db.seed_categories import GROUPS
+    from app.services.category_mapper import DETAILED_CATEGORY_MAP, PRIMARY_CATEGORY_MAP
 
-    parents = {name: parent for name, _, parent in DEFAULT_CATEGORIES if parent}
-    assert parents == {
-        "Groceries": "Food & Drink",
-        "Coffee": "Food & Drink",
-        "Gas": "Transportation",
-        "Rent": "Rent & Utilities",
-        "Utilities": "Rent & Utilities",
-        "Software": "General Services",
+    assert GROUPS == {
+        "Loan Payments",
+        "Food & Drink",
+        "General Merchandise",
+        "General Services",
+        "Government & Non-Profit",
+        "Transportation",
+        "Rent & Utilities",
     }
+    assert not (set(DETAILED_CATEGORY_MAP.values()) | set(PRIMARY_CATEGORY_MAP.values())) & GROUPS
+
+
+def test_new_subcategories_answer_the_questions_a_primary_cannot():
+    # The vet is the pet's, not the user's, medical bill.
+    assert map_raw_category("MEDICAL_VETERINARY_SERVICES", -180.0) == "Pets"
+    assert map_raw_category("GENERAL_MERCHANDISE_PET_SUPPLIES", -40.0) == "Pets"
+    # What the car costs sits together under Transportation.
+    assert map_raw_category("GENERAL_SERVICES_AUTOMOTIVE", -300.0) == "Car Maintenance"
+    assert map_raw_category("TRANSPORTATION_TOLLS", -6.0) == "Parking & Tolls"
+    assert map_raw_category("GOVERNMENT_AND_NON_PROFIT_TAX_PAYMENT", -800.0) == "Taxes"
+    assert map_raw_category("LOAN_PAYMENTS_PERSONAL_LOAN_PAYMENT", -150.0) == "Other Loan Payments"
 
 
 def test_software_is_known_by_merchant_whatever_plaid_tagged_it():
@@ -83,12 +101,12 @@ def test_software_is_known_by_merchant_whatever_plaid_tagged_it():
     # A refund nets against it.
     assert map_raw_category(other, 34.49, "credit", "Adobe") == "Software"
     # Whole words only, and never income or a transfer.
-    assert map_raw_category(other, -12.0, "credit", "Notionally Fine Bakery") == "General Services"
+    assert map_raw_category(other, -12.0, "credit", "Notionally Fine Bakery") == "Other Services"
     assert map_raw_category("INCOME_WAGES", 5000.0, "checking", "Anthropic") == "Income"
     assert map_raw_category("TRANSFER_OUT_ACCOUNT_TRANSFER", -20.0, "checking", "GitHub") == "Transfer Out"
-    assert map_raw_category(other, -10.0, "credit", "Apple iTunes") == "General Services"
+    assert map_raw_category(other, -10.0, "credit", "Apple iTunes") == "Other Services"
     # A payment to someone's iCloud address is a person, not iCloud.
-    assert map_raw_category(other, -43.55, "checking", "ISSOUFKINDA@ICLOUD.CO") == "General Services"
+    assert map_raw_category(other, -43.55, "checking", "ISSOUFKINDA@ICLOUD.CO") == "Other Services"
     assert map_raw_category(other, -2.99, "credit", "Apple iCloud Storage") == "Software"
 
 
@@ -104,7 +122,7 @@ def test_loan_payment_on_the_card_or_loan_itself_is_a_transfer():
     assert map_raw_category("LOAN_PAYMENTS_OTHER_PAYMENT", -2078.50, "credit") == "Transfer In"
     assert map_raw_category("LOAN_PAYMENTS_MORTGAGE_PAYMENT", 1500.0, "loan") == "Transfer In"
     # The paying side, from checking, is real money out.
-    assert map_raw_category("LOAN_PAYMENTS_MORTGAGE_PAYMENT", -1500.0, "checking") == "Loan Payments"
+    assert map_raw_category("LOAN_PAYMENTS_MORTGAGE_PAYMENT", -1500.0, "checking") == "Mortgage"
 
 
 def test_uncategorized_money_into_a_card_or_loan_is_a_transfer_not_income():
@@ -114,7 +132,7 @@ def test_uncategorized_money_into_a_card_or_loan_is_a_transfer_not_income():
     assert map_raw_category("LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT", 1883.17, "credit") == "Transfer In"
     assert map_raw_category(None, 500.0, "credit") == "Transfer In"
     assert map_raw_category("some_unrecognized_value", 500.0, "loan") == "Transfer In"
-    assert map_raw_category(None, -40.0, "credit") == "General Merchandise"
+    assert map_raw_category(None, -40.0, "credit") == "Other Shopping"
     assert map_raw_category(None, 500.0, "checking") == "Income"
 
 

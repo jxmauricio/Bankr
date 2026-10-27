@@ -62,7 +62,7 @@ def test_a_figure_no_tool_returned_stays_uncited(db, ledger, monkeypatch):
 def test_counts_never_back_a_dollar_figure(db, ledger, monkeypatch):
     # Food & Drink last week has 6 transactions; "$6" must not cite it.
     reply = "Food was $188.45 across 6 charges -- not $6."
-    sources = _turn(db, ledger, monkeypatch, reply, [("get_spending", {"window": "last_week", "category": "dining"})])
+    sources = _turn(db, ledger, monkeypatch, reply, [("get_spending", {"window": "last_week", "category": "Food & Drink"})])
     assert _citations(reply, sources) == [{"text": "$188.45", "source": 1}]
 
 
@@ -244,7 +244,7 @@ def test_the_model_sees_what_was_searched_too(db, ledger, monkeypatch):
 
     class Client(FakeAgentClient):
         def run_turn(self, system, tools, history, call_tool):
-            seen.append(call_tool("get_spending", {"window": "last_year", "category": "dining"}))
+            seen.append(call_tool("get_spending", {"window": "last_year", "category": "Food & Drink"}))
             return "$0"
 
     monkeypatch.setattr(claude_agent, "_client", Client())
@@ -277,7 +277,7 @@ def test_breakdown_has_a_headline_and_a_vs_last_month_column(db, ledger):
 
 
 def test_daily_bars_add_up_to_the_range(db, ledger):
-    chart = tools.show_chart(db, ledger.id, kind="daily", start="2026-09-07", end="2026-09-13", category="dining")["chart"]
+    chart = tools.show_chart(db, ledger.id, kind="daily", start="2026-09-07", end="2026-09-13", category="Food & Drink")["chart"]
     assert [p["label"] for p in chart["points"]][:2] == ["Sep 7", "Sep 8"]
     assert chart["points"][0]["weekday"] == "Mon"
     assert round(sum(p["value"] for p in chart["points"]), 2) == EXPECTED["food_last_week"]

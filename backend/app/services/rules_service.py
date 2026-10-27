@@ -11,6 +11,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.db.models import Category, LinkedAccount, Rule, Transaction
+from app.db.seed_categories import is_group
 
 MAX_RULES = 200
 
@@ -106,8 +107,12 @@ def _validate(db: Session, user_id: UUID, fields: dict) -> None:
         fields["merchant_contains"] = (fields["merchant_contains"] or "").strip()
         if len(fields["merchant_contains"]) < 2:
             raise RuleError("merchant_contains needs at least 2 characters")
-    if fields.get("set_category_id") is not None and db.get(Category, fields["set_category_id"]) is None:
-        raise RuleError("unknown category")
+    if fields.get("set_category_id") is not None:
+        category = db.get(Category, fields["set_category_id"])
+        if category is None:
+            raise RuleError("unknown category")
+        if is_group(db, category):
+            raise RuleError(f"pick one of {category.name}'s subcategories")
     if fields.get("linked_account_id") is not None:
         owned = (
             db.query(LinkedAccount)
