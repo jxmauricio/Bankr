@@ -30,12 +30,15 @@ class AgentClient(Protocol):
         history: list[dict],
         call_tool: Callable[[str, dict], dict],
         on_text: Callable[[str | None], None] | None = None,
+        on_usage: Callable[[dict], None] | None = None,
     ) -> str:
         """Resolve one user turn to completion, including any tool calls,
         and return the final assistant text. When on_text is given, reply
         text is passed to it piece by piece as the model writes it; on_text(None)
         means "discard what you were sent", because the model went on to call
-        a tool instead of answering. `history` is a plain
+        a tool instead of answering. When on_usage is given, it gets each model
+        round's usage as {"input", "output", "reasoning", "cached", "cost"}
+        (any may be missing or None -- not every provider reports them). `history` is a plain
         [{"role": "user"|"assistant", "content": str}, ...] list -- no
         vendor-specific tool_use/tool_result blocks leak across turns (see
         chat_service.py, which persists only final text per turn)."""

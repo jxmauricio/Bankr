@@ -66,10 +66,24 @@ class OpenRouterSearchClient:
     results are read from the response's url_citation annotations. max_tokens
     is tiny because the generated text is thrown away; what's billed is the
     search itself (Exa, about $0.007 per request) plus a trivial completion.
-    Reuses OPENROUTER_API_KEY, so no separate search account is needed."""
+    Reuses OPENROUTER_API_KEY, so no separate search account is needed.
 
-    def __init__(self, api_key: str, model: str, app_name: str = "Bankr", site_url: str = ""):
+    `engine`/`mode` pick OpenRouter's search backend: the agent uses Exa;
+    the category classifier uses Parallel ("fast" ~$0.001, "basic" ~$0.005)."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        app_name: str = "Bankr",
+        site_url: str = "",
+        engine: str = "exa",
+        mode: str | None = None,
+    ):
         self._model = model
+        self._plugin = {"id": "web", "engine": engine}
+        if mode:
+            self._plugin["mode"] = mode
         self._headers = {"Authorization": f"Bearer {api_key}", "X-Title": app_name}
         if site_url:
             self._headers["HTTP-Referer"] = site_url
@@ -81,7 +95,7 @@ class OpenRouterSearchClient:
             json={
                 "model": self._model,
                 "messages": [{"role": "user", "content": query}],
-                "plugins": [{"id": "web", "engine": "exa", "max_results": max_results}],
+                "plugins": [{**self._plugin, "max_results": max_results}],
                 "max_tokens": 16,
             },
             timeout=30.0,

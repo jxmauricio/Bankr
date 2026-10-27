@@ -83,6 +83,25 @@ def test_detects_monthly_weekly_yearly_and_income(db, user):
     assert all(s.status == "suggested" for s in found.values())
 
 
+def test_software_and_streaming_are_subscriptions_other_services_are_bills(db, user):
+    other = "GENERAL_SERVICES_OTHER_GENERAL_SERVICES"
+    _sync(
+        db,
+        user,
+        [
+            *_monthly("ob", "Obsidian", -5.0, other),
+            *_monthly("nf", "Netflix", -15.49, "ENTERTAINMENT_TV_AND_MOVIES"),
+            *_monthly("lawn", "Green Lawn Care", -60.0, other),
+        ],
+    )
+    detect_recurring(db, user.id)
+    found = _by_name(db, user)
+
+    assert found["obsidian"].kind == "subscription"
+    assert found["netflix"].kind == "subscription"
+    assert found["green lawn care"].kind == "bill"
+
+
 def test_user_choices_survive_redetection(client, db, user):
     _sync(db, user, _monthly("nf", "Netflix", -15.49, "ENTERTAINMENT_TV_AND_MOVIES")
           + _monthly("hulu", "Hulu", -7.99, "ENTERTAINMENT_TV_AND_MOVIES"))

@@ -30,15 +30,15 @@ LEDGER = [
     # July
     _t("jul-rent", date(2026, 7, 1), -1800.0, "Greystar", "RENT_AND_UTILITIES_RENT"),
     _t("jul-food", date(2026, 7, 10), -300.0, "Ramen", "FOOD_AND_DRINK_RESTAURANT"),
-    _t("jul-groc", date(2026, 7, 12), -400.0, "Safeway", "FOOD_AND_DRINK_GROCERIES"),
+    _t("jul-groc", date(2026, 7, 12), -400.0, "Target", "GENERAL_MERCHANDISE_SUPERSTORES"),
     # August
     _t("aug-rent", date(2026, 8, 1), -1800.0, "Greystar", "RENT_AND_UTILITIES_RENT"),
     _t("aug-food", date(2026, 8, 10), -250.0, "Ramen", "FOOD_AND_DRINK_RESTAURANT"),
-    _t("aug-groc", date(2026, 8, 12), -380.0, "Safeway", "FOOD_AND_DRINK_GROCERIES"),
+    _t("aug-groc", date(2026, 8, 12), -380.0, "Target", "GENERAL_MERCHANDISE_SUPERSTORES"),
     # September (to the 15th)
     _t("sep-rent", date(2026, 9, 1), -1800.0, "Greystar", "RENT_AND_UTILITIES_RENT"),
     _t("sep-food", date(2026, 9, 10), -260.0, "Ramen", "FOOD_AND_DRINK_RESTAURANT"),
-    _t("sep-groc", date(2026, 9, 12), -150.0, "Safeway", "FOOD_AND_DRINK_GROCERIES"),
+    _t("sep-groc", date(2026, 9, 12), -150.0, "Target", "GENERAL_MERCHANDISE_SUPERSTORES"),
     _t("sep-pay", date(2026, 9, 1), 4000.0, "Employer", "INCOME_WAGES"),
 ]
 
@@ -70,21 +70,21 @@ def test_suggestion_and_flex_setup(client, db, ledger):
     # History starts in July, so June doesn't count: median of Jul and Aug,
     # rounded up to $10.
     assert s["months"] == ["2026-08", "2026-07"]
-    assert lines["Rent & Housing"] == {**lines["Rent & Housing"], "amount": 1800.0, "group": "fixed"}
-    assert lines["Dining"]["amount"] == 280.0 and lines["Dining"]["group"] == "flex"
-    assert lines["Groceries"]["amount"] == 390.0
+    assert lines["Rent & Utilities"] == {**lines["Rent & Utilities"], "amount": 1800.0, "group": "fixed"}
+    assert lines["Food & Drink"]["amount"] == 280.0 and lines["Food & Drink"]["group"] == "flex"
+    assert lines["General Merchandise"]["amount"] == 390.0
     assert s["flex_amount"] == 670.0
 
     status = client.post("/budgets/setup", json={"mode": "flex", "flex_amount": 600, "lines": s["lines"]}).json()
-    rent = _line(status, "Rent & Housing")
+    rent = _line(status, "Rent & Utilities")
     assert rent["spent"] == 1800.0 and rent["available"] == 0.0 and rent["status"] == "ok"
     flex = status["flex"]
     assert flex["budgeted"] == 600.0
-    assert flex["spent"] == 410.0  # 260 dining + 150 groceries
+    assert flex["spent"] == 410.0  # 260 food + 150 at Target
     assert flex["available"] == 190.0
     # Halfway through the month at $410 projects to $820 > $600.
     assert flex["projected_spent"] == 820.0 and flex["status"] == "warning"
-    assert {c["name"] for c in flex["categories"]} == {"Dining", "Groceries"}
+    assert {c["name"] for c in flex["categories"]} == {"Food & Drink", "General Merchandise"}
     assert status["income"]["so_far"] == 4000.0
     assert status["totals"]["spent"] == 2210.0
 
@@ -93,71 +93,71 @@ def test_category_mode_rollover_and_moves(client, db, ledger):
     from app.db.models import Budget
 
     client.put("/budgets/settings", json={"mode": "category"})
-    client.put(f"/budgets/{_id(db, 'Dining')}", json={"amount": 200, "rollover": True})
-    client.put(f"/budgets/{_id(db, 'Groceries')}", json={"amount": 400})
-    # Pretend the Dining budget started in July so rollover has history.
-    db.query(Budget).filter(Budget.category_id == _id(db, "Dining")).update({"start_month": date(2026, 7, 1)})
+    client.put(f"/budgets/{_id(db, 'Food & Drink')}", json={"amount": 200, "rollover": True})
+    client.put(f"/budgets/{_id(db, 'General Merchandise')}", json={"amount": 400})
+    # Pretend the Food & Drink budget started in July so rollover has history.
+    db.query(Budget).filter(Budget.category_id == _id(db, "Food & Drink")).update({"start_month": date(2026, 7, 1)})
     db.commit()
 
     status = client.get("/budgets").json()
-    dining = _line(status, "Dining")
+    dining = _line(status, "Food & Drink")
     # Jul: 200-300 = -100; Aug: 200-100-250 = -150 carried; Sep: 200-150-260 = -210.
     assert dining["carryover"] == -150.0
     assert dining["available"] == -210.0 and dining["status"] == "over"
-    groceries = _line(status, "Groceries")
+    groceries = _line(status, "General Merchandise")
     assert groceries["carryover"] == 0.0 and groceries["available"] == 250.0
-    assert [u["name"] for u in status["unbudgeted"]] == ["Rent & Housing"]
+    assert [u["name"] for u in status["unbudgeted"]] == ["Rent & Utilities"]
 
     status = client.post(
         "/budgets/moves",
-        json={"from_key": _id(db, "Groceries"), "to_key": _id(db, "Dining"), "amount": 210},
+        json={"from_key": _id(db, "General Merchandise"), "to_key": _id(db, "Food & Drink"), "amount": 210},
     ).json()
-    assert _line(status, "Dining")["available"] == 0.0
-    assert _line(status, "Groceries")["available"] == 40.0
-    assert _line(status, "Dining")["moved"] == 210.0
+    assert _line(status, "Food & Drink")["available"] == 0.0
+    assert _line(status, "General Merchandise")["available"] == 40.0
+    assert _line(status, "Food & Drink")["moved"] == 210.0
 
     # A past month is fully elapsed: no projection.
     august = client.get("/budgets", params={"month": "2026-08"}).json()
-    assert _line(august, "Dining")["projected_spent"] is None
+    assert _line(august, "Food & Drink")["projected_spent"] is None
 
 
 def test_budget_validation(client, db, ledger):
-    assert client.put(f"/budgets/{_id(db, 'Coffee')}", json={"amount": 50}).status_code == 422
+    assert client.put(f"/budgets/{_id(db, 'Transfer Out')}", json={"amount": 50}).status_code == 422
     assert client.put(f"/budgets/{_id(db, 'Income')}", json={"amount": 50}).status_code == 422
     assert client.post("/budgets/moves", json={"from_key": "flex", "to_key": "flex", "amount": 5}).status_code == 422
     assert client.get("/budgets", params={"month": "nope"}).status_code == 422
-    assert client.delete(f"/budgets/{_id(db, 'Dining')}").status_code == 404
+    assert client.delete(f"/budgets/{_id(db, 'Food & Drink')}").status_code == 404
 
 
 def test_excluded_and_split_spending_follow_into_budgets(client, db, ledger):
     from app.db.models import Transaction
 
     client.put("/budgets/settings", json={"mode": "category"})
-    client.put(f"/budgets/{_id(db, 'Dining')}", json={"amount": 300})
+    client.put(f"/budgets/{_id(db, 'Food & Drink')}", json={"amount": 300})
     txn = db.query(Transaction).filter(Transaction.aggregator_transaction_id == "sep-food").one()
     client.patch(f"/transactions/{txn.id}", json={"excluded": True})
-    assert _line(client.get("/budgets").json(), "Dining")["spent"] == 0.0
+    assert _line(client.get("/budgets").json(), "Food & Drink")["spent"] == 0.0
 
 
 def test_agent_tools(client, db, ledger):
     client.put("/budgets/settings", json={"mode": "category"})
-    client.put(f"/budgets/{_id(db, 'Dining')}", json={"amount": 200})
-    client.put(f"/budgets/{_id(db, 'Groceries')}", json={"amount": 400})
+    client.put(f"/budgets/{_id(db, 'Food & Drink')}", json={"amount": 200})
+    client.put(f"/budgets/{_id(db, 'General Merchandise')}", json={"amount": 400})
 
     status = tools.get_budget_status(db, _user_id(db))
-    assert _line(status, "Dining")["status"] == "over"
+    assert _line(status, "Food & Drink")["status"] == "over"
 
-    proposal = tools.propose_budget_move(db, _user_id(db), from_line="groceries", to_line="coffee", amount=60)
+    proposal = tools.propose_budget_move(db, _user_id(db), from_line="shopping", to_line="restaurants", amount=60)
     assert proposal["action"] == {
         "kind": "budget_move",
         "month": "2026-09",
-        "from_key": _id(db, "Groceries"),
-        "from_name": "Groceries",
-        "to_key": _id(db, "Dining"),
-        "to_name": "Dining",
+        "from_key": _id(db, "General Merchandise"),
+        "from_name": "General Merchandise",
+        "to_key": _id(db, "Food & Drink"),
+        "to_name": "Food & Drink",
         "amount": 60.0,
     }
-    assert "error" in tools.propose_budget_move(db, _user_id(db), from_line="Travel", to_line="Dining", amount=5)
+    assert "error" in tools.propose_budget_move(db, _user_id(db), from_line="Travel", to_line="Food & Drink", amount=5)
 
 
 def _user_id(db):
@@ -167,9 +167,9 @@ def _user_id(db):
 
 
 def test_overspend_insight_once_per_line_month_and_state(client, db, ledger, monkeypatch):
-    monkeypatch.setattr(insights_job, "_client", FakeAgentClient(completions=["Dining is over budget."] * 5))
+    monkeypatch.setattr(insights_job, "_client", FakeAgentClient(completions=["Food & Drink is over budget."] * 5))
     client.put("/budgets/settings", json={"mode": "category"})
-    client.put(f"/budgets/{_id(db, 'Dining')}", json={"amount": 200})
+    client.put(f"/budgets/{_id(db, 'Food & Drink')}", json={"amount": 200})
     insights_job.run_insights_job(db, _user_id(db))
     insights_job.run_insights_job(db, _user_id(db))
     logs = db.query(InsightLog).filter(InsightLog.type == "budget_overspend").all()
@@ -186,7 +186,7 @@ def test_suggestion_with_only_this_months_history(client, db, user):
     s = client.get("/budgets/suggestion").json()
     assert s["months"] == ["2026-09"]
     # $150 by Sep 15 projects to $300 for the month.
-    assert [(line["name"], line["amount"]) for line in s["lines"]] == [("Dining", 300.0)]
+    assert [(line["name"], line["amount"]) for line in s["lines"]] == [("Food & Drink", 300.0)]
 
 
 def test_suggestion_with_no_spending(client, db, user):

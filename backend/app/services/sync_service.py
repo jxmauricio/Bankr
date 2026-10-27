@@ -13,9 +13,20 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.db.models import LinkedAccount, NetWorthSnapshot, Rule, Transaction
+from app.config import settings
+from app.db.models import LinkedAccount, MerchantCategoryGuess, NetWorthSnapshot, Rule, Transaction
 from app.db.seed_categories import seed_default_categories
 from app.integrations.bank_aggregator import AggregatorTransaction, BankAggregatorClient
+from app.services.category_classifier import (
+    LOW_CONFIDENCE,
+    build_profile,
+    cached_guesses,
+    classify_merchants,
+    get_classifier,
+    merchant_key,
+    needs_second_opinion,
+    trusted,
+)
 from app.services.category_mapper import map_raw_category
 from app.services.crypto import encrypt_token
 from app.services.goal_service import recompute_goal_progress
@@ -90,13 +101,35 @@ def sync_user_accounts(
     changes = aggregator.sync_transactions(access_token, cursor)
 
     rules = user_rules(db, user_id)
+    guesses = cached_guesses(
+        db,
+        {
+            key
+            for t in [*changes.added, *changes.modified]
+            if (t.category_confidence or "").upper() in LOW_CONFIDENCE and (key := merchant_key(t.merchant_name))
+        },
+    )
+    # Merchant key -> (what the bank sent, the rows it became) for merchants
+    # that want a second opinion nobody has cached yet.
+    unclassified: dict[str, tuple[list[AggregatorTransaction], list[Transaction]]] = {}
     transactions_synced = 0
     for txn in [*changes.added, *changes.modified]:
         linked = linked_by_aggregator_id.get(txn.aggregator_account_id)
         if linked is None:
             continue  # an account the user didn't grant access to
-        _upsert_transaction(db, txn, linked.id, linked.account_type, categories, rules)
+        row = _upsert_transaction(db, txn, linked.id, linked.account_type, categories, rules, guesses)
+        if row is not None:
+            sent, rows = unclassified.setdefault(merchant_key(row.original_merchant_name), ([], []))
+            sent.append(txn)
+            rows.append(row)
         transactions_synced += 1
+
+    # After the loop, not inside it: a slow or failing classifier must not
+    # break the sync, and one call covers all of a merchant's rows.
+    classifier = get_classifier()
+    if classifier is not None and unclassified:
+        pending = {key: (build_profile(key, sent), rows) for key, (sent, rows) in unclassified.items()}
+        classify_merchants(db, pending, categories, classifier, settings.jev_max_merchants_per_sync)
 
     # Deleting pending rows that were replaced by their posted version is
     # what prevents double-counting a charge. Plaid reports these in
@@ -177,7 +210,10 @@ def _upsert_transaction(
     account_type: str,
     categories: dict,
     rules: list[Rule] = (),
-) -> None:
+    guesses: dict[str, MerchantCategoryGuess] | None = None,
+) -> Transaction | None:
+    """Returns the row when it wants a classifier's second opinion that
+    isn't cached yet; see app/services/category_classifier.py."""
     existing = (
         db.query(Transaction)
         .filter(Transaction.aggregator_transaction_id == txn.aggregator_transaction_id)
@@ -193,6 +229,7 @@ def _upsert_transaction(
     existing.date = txn.date
     existing.original_merchant_name = txn.merchant_name
     existing.raw_aggregator_category = txn.raw_category
+    existing.aggregator_category_confidence = txn.category_confidence
     existing.is_pending = txn.is_pending
     existing.pending_transaction_id = txn.pending_transaction_id
     if is_new and txn.pending_transaction_id:
@@ -202,9 +239,17 @@ def _upsert_transaction(
     # rename or recategorization the user made.
     if not existing.merchant_overridden:
         existing.merchant_name = txn.merchant_name
-    if not existing.category_overridden:
-        existing.bankr_category_id = categories[map_raw_category(txn.raw_category, txn.amount, account_type)].id
-        apply_rules(existing, rules)  # the user's own rules beat the default mapping
+    if existing.category_overridden:
+        return None
+    mapped = categories[map_raw_category(txn.raw_category, txn.amount, account_type, txn.merchant_name)]
+    existing.bankr_category_id = mapped.id
+    second_opinion = needs_second_opinion(existing, mapped)
+    guess = (guesses or {}).get(merchant_key(existing.original_merchant_name)) if second_opinion else None
+    if guess is not None and trusted(guess):
+        existing.bankr_category_id = guess.category_id
+    if apply_rules(existing, rules) is not None:  # the user's own rules beat both
+        return None
+    return existing if second_opinion and guess is None else None
 
 
 def _carry_over_edits(db: Session, pending_aggregator_id: str, posted: Transaction) -> None:

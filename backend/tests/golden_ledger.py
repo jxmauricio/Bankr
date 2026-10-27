@@ -121,13 +121,20 @@ EXPECTED = {
     # Q5 (Sep 1–19), biggest first; sums to this_month_spending. Dining =
     # 25 + 42 + 5.75 + 12.40 - 10 + 36 + 18.
     "this_month_by_category": [
-        ("Rent & Housing", 1800.00),
-        ("Groceries", 235.80),
-        ("Dining", 129.15),
-        ("Utilities", 90.00),
-        ("Shopping", 64.99),
+        ("Rent & Utilities", 1890.00),
+        ("Food & Drink", 364.95),
+        ("General Merchandise", 64.99),
         ("Transportation", 50.00),
     ],
+    # Food & Drink is groceries + dining. Sep: 235.80 + 129.15.
+    # Aug: 275.75 + 60. Aug 1–19: groceries only (Nopa is Aug 20).
+    # Last week (Sep 7–13): dining 86.15 + Trader Joe's 102.30.
+    "food_this_month": 364.95,
+    "food_last_month": 335.75,
+    "food_last_month_to_date": 215.75,
+    "food_last_week": 188.45,
+    "food_last_week_gross": 198.45,
+    "food_last_week_count": 6,
     # Q6 (Aug): 48.20 + 52.80 + 45.00 -- not the $85 PG&E gas bill, not Uber.
     "gas_last_month": 146.00,
     "transportation_last_month": 181.00,  # gas + Uber; flight excluded

@@ -1,5 +1,6 @@
 import { Stack } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
 import {
   ApiError,
   fetchGoalProgress,
@@ -12,10 +13,17 @@ import { useSession } from "@/lib/session";
 import { MoneyProvider } from "@/features/money/MoneyContext";
 import { BankLogosProvider } from "@/features/bank/BankLogos";
 import { LinkBankScreen } from "@/features/bank/LinkBankScreen";
+import { NotificationsProvider } from "@/features/notifications/NotificationsContext";
 import { PeriodProvider } from "@/features/period/PeriodContext";
 import { TransactionFiltersProvider } from "@/features/transactions/FiltersContext";
 import { useColors } from "@/theme/theme";
 import { Button, ComingSoon, ErrorState, Loading, Screen } from "@/ui";
+
+// Plaid refreshes from the bank only a few times a day and webhooks push the
+// rest, so polling faster than this mostly finds nothing new.
+const BACKGROUND_SYNC_MS = 5 * 60 * 1000;
+// Coming back to the app syncs only if the last sync is older than this.
+const RESYNC_ON_RETURN_MS = 60 * 1000;
 
 type Gate =
   | { step: "loading" }
@@ -82,22 +90,61 @@ export default function SignedInLayout() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncVersion, setSyncVersion] = useState(0);
 
-  /** Same as the web app's refreshFromBank: resync every bank, then re-read. */
-  const syncFromBank = useCallback(async () => {
-    if (!token || isSyncing) return;
-    setIsSyncing(true);
-    setSyncError(null);
-    try {
-      await resyncAccounts(token);
-      await refresh();
-      setSyncVersion((n) => n + 1);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) return signOut();
-      setSyncError(err instanceof ApiError ? err.message : "Couldn't refresh from your bank. Try again.");
-    } finally {
-      setIsSyncing(false);
-    }
-  }, [token, isSyncing, refresh, signOut]);
+  // One sync at a time, whether it came from the button, launch, return to the app or the timer.
+  const syncInFlight = useRef(false);
+  const lastSyncAt = useRef(0);
+
+  /**
+   * Same as the web app's syncFromBank: resync every bank, then re-read.
+   * Silent syncs (automatic ones) show no spinner and no error.
+   */
+  const syncFromBank = useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      if (!token || syncInFlight.current) return;
+      syncInFlight.current = true;
+      if (!silent) {
+        setIsSyncing(true);
+        setSyncError(null);
+      }
+      try {
+        await resyncAccounts(token);
+        lastSyncAt.current = Date.now();
+        await refresh();
+        setSyncVersion((n) => n + 1);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) return signOut();
+        if (!silent) setSyncError(err instanceof ApiError ? err.message : "Couldn't refresh from your bank. Try again.");
+      } finally {
+        syncInFlight.current = false;
+        if (!silent) setIsSyncing(false);
+      }
+    },
+    [token, refresh, signOut]
+  );
+
+  // Once home is up: sync right away, again on coming back to the app if the
+  // last one is stale, and every 5 minutes while the app is in the foreground.
+  const isHome = gate.step === "home";
+  useEffect(() => {
+    if (!isHome) return;
+    const syncIfStale = () => {
+      if (Date.now() - lastSyncAt.current > RESYNC_ON_RETURN_MS) syncFromBank({ silent: true });
+    };
+    syncIfStale();
+    const timer = setInterval(() => {
+      if (AppState.currentState === "active") syncFromBank({ silent: true });
+    }, BACKGROUND_SYNC_MS);
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") syncIfStale();
+    });
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, [isHome, syncFromBank]);
+
+  /** The refresh button and pull-to-refresh: a visible sync. */
+  const syncNow = useCallback(() => syncFromBank(), [syncFromBank]);
 
   /** After a bank is linked from inside the app: re-read balances, then reload every screen's data. */
   const banksChanged = useCallback(async () => {
@@ -112,7 +159,14 @@ export default function SignedInLayout() {
       return <ErrorState message="Couldn't reach Bankr." onRetry={retry} />;
     case "link-bank":
       // Linking runs the backend's first sync, so re-reading the gate lands on goal setup or home.
-      return <LinkBankScreen onLinked={retry} />;
+      return (
+        <LinkBankScreen
+          onLinked={() => {
+            lastSyncAt.current = Date.now();
+            retry();
+          }}
+        />
+      );
     case "set-goal":
       // Goal setup isn't on mobile yet (chat can create goals once home is reachable); finish it on the web.
       return (
@@ -124,21 +178,25 @@ export default function SignedInLayout() {
       );
     case "home":
       return (
-        <MoneyProvider value={{ netWorth: gate.netWorth, goals: gate.goals, refresh, banksChanged, syncFromBank, isSyncing, syncError, syncVersion }}>
+        <MoneyProvider value={{ netWorth: gate.netWorth, goals: gate.goals, refresh, banksChanged, syncFromBank: syncNow, isSyncing, syncError, syncVersion }}>
           <PeriodProvider>
             <BankLogosProvider syncVersion={syncVersion}>
-              <TransactionFiltersProvider>
-                <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-                  <Stack.Screen name="(tabs)" />
-                  <Stack.Screen name="money" options={sheet([0.6, 1], colors.bg)} />
-                  <Stack.Screen name="history" options={sheet([0.6, 1], colors.bg)} />
-                  <Stack.Screen name="source" options={sheet([0.75, 1], colors.bg)} />
-                  <Stack.Screen name="filter-date" options={sheet([0.92], colors.bg)} />
-                  <Stack.Screen name="filter-category" options={sheet([0.75, 1], colors.bg)} />
-                  <Stack.Screen name="filter-account" options={sheet([0.6, 1], colors.bg)} />
-                  <Stack.Screen name="filter-direction" options={sheet([0.42], colors.bg)} />
-                </Stack>
-              </TransactionFiltersProvider>
+              <NotificationsProvider syncVersion={syncVersion}>
+                <TransactionFiltersProvider>
+                  <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+                    <Stack.Screen name="(tabs)" />
+                    <Stack.Screen name="notifications" />
+                    <Stack.Screen name="recap/[week]" />
+                    <Stack.Screen name="money" options={sheet([0.6, 1], colors.bg)} />
+                    <Stack.Screen name="history" options={sheet([0.6, 1], colors.bg)} />
+                    <Stack.Screen name="source" options={sheet([0.75, 1], colors.bg)} />
+                    <Stack.Screen name="filter-date" options={sheet([0.92], colors.bg)} />
+                    <Stack.Screen name="filter-category" options={sheet([0.75, 1], colors.bg)} />
+                    <Stack.Screen name="filter-account" options={sheet([0.6, 1], colors.bg)} />
+                    <Stack.Screen name="filter-direction" options={sheet([0.42], colors.bg)} />
+                  </Stack>
+                </TransactionFiltersProvider>
+              </NotificationsProvider>
             </BankLogosProvider>
           </PeriodProvider>
         </MoneyProvider>

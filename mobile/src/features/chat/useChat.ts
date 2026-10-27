@@ -1,11 +1,11 @@
 import { useCallback, useRef, useState } from "react";
-import { ApiError, fetchConversation, streamChatMessage, type AnswerParts, type GoalProposal } from "@/lib/api";
+import { ApiError, fetchConversation, streamChatMessage, type AnswerParts, type GoalProposal, type TurnUsage } from "@/lib/api";
 import { resolveGoalProposal } from "@/lib/goalProposal";
 import { useSession } from "@/lib/session";
 
 export type ChatItem =
   | { kind: "user"; id: string; text: string }
-  | { kind: "assistant"; id: string; text: string; parts: AnswerParts; goalProposal: GoalProposal | null };
+  | { kind: "assistant"; id: string; text: string; parts: AnswerParts; goalProposal: GoalProposal | null; usage?: TurnUsage | null };
 
 let nextId = 0;
 const makeId = () => `m${++nextId}`;
@@ -60,7 +60,7 @@ export function useChat() {
         const parts = partsOf(response);
         setItems((prev) => [
           ...prev,
-          { kind: "assistant", id: makeId(), text: response.reply, parts, goalProposal: goalCard(text, response.reply, parts) },
+          { kind: "assistant", id: makeId(), text: response.reply, parts, goalProposal: goalCard(text, response.reply, parts), usage: response.usage },
         ]);
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) return signOut();

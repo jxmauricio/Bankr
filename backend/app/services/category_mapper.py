@@ -4,41 +4,38 @@ Two-tier lookup against Plaid's PFCv2 taxonomy (verified against
 https://plaid.com/documents/transactions-personal-finance-category-taxonomy.csv,
 not assumed):
 
+Bankr's categories are the taxonomy's 16 primaries and a few subcategories.
+Spending at a known software merchant (SOFTWARE_MERCHANTS) is Software
+whatever the steps below say -- the taxonomy has no software tag.
+
 1. Try an exact match on the transaction's `detailed` value -- only needed
-   for detailed values that land somewhere other than their primary's
-   default: a different top-level category (FOOD_AND_DRINK_GROCERIES ->
-   Groceries, LOAN_PAYMENTS_CREDIT_CARD_PAYMENT -> Transfer) or a Bankr
-   subcategory (TRANSPORTATION_GAS -> Gas). Anything not listed falls
-   through to its primary's category.
-2. Fall back to a coarse match on the `primary` value (all 16 taxonomy
-   primaries) -- this also catches any `detailed` value PFCv2 adds later
-   under a primary we already know how to bucket.
-3. Fall back to sign-based Income/Other if nothing matched -- except that
-   money into a credit card or loan is never income, so it falls back to
-   Transfer. Plaid tags many card payments' receiving side
-   LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT, which no map entry covers.
+   for detailed values that land somewhere other than their own primary:
+   a Bankr subcategory (TRANSPORTATION_GAS -> Gas) or a different category
+   (LOAN_PAYMENTS_CREDIT_CARD_PAYMENT -> Transfer Out). Anything not listed
+   falls through to its primary.
+2. Fall back to a match on the `primary` value -- this also catches any
+   `detailed` value PFCv2 adds later under a primary we already know.
+3. Fall back to sign-based Income / General Merchandise if nothing
+   matched -- except that money into a credit card or loan is never
+   income, so it falls back to Transfer In. Plaid tags many card payments'
+   receiving side LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT, which no map
+   entry covers.
 
 This table is aggregator-specific -- if Plaid is ever replaced, this map
 (and plaid_client.py's `raw_category` extraction) is the only thing that
 needs to change, per the adapter boundary in app/integrations/bank_aggregator.py.
 """
 
+import re
+
 DETAILED_CATEGORY_MAP: dict[str, str] = {
     "food_and_drink_groceries": "Groceries",
-    "food_and_drink_restaurant": "Restaurants",
-    "food_and_drink_fast_food": "Fast Food",
     "food_and_drink_coffee": "Coffee",
-    "food_and_drink_beer_wine_and_liquor": "Alcohol & Bars",
     # Gas *for the car*. The utility gas bill is
     # rent_and_utilities_gas_and_electricity -> Utilities, and must never
     # land here, or "how much did I spend on gas" includes the heating bill.
     "transportation_gas": "Gas",
-    "transportation_taxis_and_ride_shares": "Rideshare & Taxi",
-    "transportation_public_transit": "Public Transit",
-    "transportation_parking": "Parking & Tolls",
-    "transportation_tolls": "Parking & Tolls",
-    "general_services_automotive": "Auto Maintenance",
-    "rent_and_utilities_rent": "Rent & Housing",
+    "rent_and_utilities_rent": "Rent",
     "rent_and_utilities_gas_and_electricity": "Utilities",
     "rent_and_utilities_internet_and_cable": "Utilities",
     "rent_and_utilities_sewage_and_waste_management": "Utilities",
@@ -48,34 +45,82 @@ DETAILED_CATEGORY_MAP: dict[str, str] = {
     # Paying a credit card moves money between the user's own accounts; the
     # spending already happened as the card purchases. Other loan payments
     # (mortgage, car, student) are real outflows and stay under LOAN_PAYMENTS.
-    "loan_payments_credit_card_payment": "Transfer",
+    "loan_payments_credit_card_payment": "Transfer Out",
 }
 
 PRIMARY_CATEGORY_MAP: dict[str, str] = {
     "income": "Income",
-    "transfer_in": "Transfer",
-    "transfer_out": "Transfer",
+    "transfer_in": "Transfer In",
+    "transfer_out": "Transfer Out",
     "loan_payments": "Loan Payments",
-    "bank_fees": "Fees",
+    "bank_fees": "Bank Fees",
     "entertainment": "Entertainment",
-    "food_and_drink": "Dining",
-    "general_merchandise": "Shopping",
-    "home_improvement": "Other",
-    "medical": "Health",
-    "personal_care": "Health",
-    "general_services": "Other",
-    "government_and_non_profit": "Other",
+    "food_and_drink": "Food & Drink",
+    "general_merchandise": "General Merchandise",
+    "home_improvement": "Home Improvement",
+    "medical": "Medical",
+    "personal_care": "Personal Care",
+    "general_services": "General Services",
+    "government_and_non_profit": "Government & Non-Profit",
     "transportation": "Transportation",
     "travel": "Travel",
-    "rent_and_utilities": "Rent & Housing",
+    "rent_and_utilities": "Rent & Utilities",
 }
+
+
+# Software subscriptions Plaid has no tag for: it files most of them under
+# GENERAL_SERVICES_OTHER or GENERAL_MERCHANDISE_OTHER. Matched on whole
+# words of the bank's merchant name, so only names that mean software and
+# nothing else belong here ("Apple" or "Google" alone could be anything).
+# Not inside an email or web address: a Zelle to name@icloud.com is a person.
+SOFTWARE_MERCHANTS = (
+    "1password",
+    "adobe",
+    "anthropic",
+    "canva",
+    "chatgpt",
+    "claude.ai",
+    "digitalocean",
+    "dropbox",
+    "evernote",
+    "figma",
+    "github",
+    "google one",
+    "google workspace",
+    "grammarly",
+    "heroku",
+    "icloud",
+    "jetbrains",
+    "lastpass",
+    "leetcode",
+    "linear.app",
+    "linkedin",
+    "microsoft 365",
+    "notion",
+    "obsidian",
+    "openai",
+    "slack",
+    "todoist",
+    "vercel",
+    "zoom.us",
+)
+_SOFTWARE = re.compile(r"(?<![@.])\b(" + "|".join(re.escape(m) for m in SOFTWARE_MERCHANTS) + r")\b")
+
+
+def merchant_category(merchant_name: str | None) -> str | None:
+    """A category known from the merchant alone, whatever Plaid tagged it."""
+    if merchant_name and _SOFTWARE.search(merchant_name.lower()):
+        return "Software"
+    return None
 
 
 # Account types whose balance is money owed. See sync_service.LIABILITY_ACCOUNT_TYPES.
 _LIABILITY_ACCOUNT_TYPES = {"credit", "loan"}
 
 
-def map_raw_category(raw_category: str | None, amount: float, account_type: str | None = None) -> str:
+def map_raw_category(
+    raw_category: str | None, amount: float, account_type: str | None = None, merchant_name: str | None = None
+) -> str:
     """`amount` follows Bankr's internal convention: positive = money in.
     `raw_category` is expected to be a Plaid `detailed` PFC value (e.g.
     "FOOD_AND_DRINK_GROCERIES"), but a bare `primary` value works too --
@@ -91,20 +136,37 @@ def map_raw_category(raw_category: str | None, amount: float, account_type: str 
 
     The same goes for INCOME_*: nobody earns a paycheck on a credit card or
     loan, so Plaid tagging a card payment's receiving side INCOME_SALARY /
-    INCOME_CONTRACTOR (also seen in sandbox) is a payment, not income."""
+    INCOME_CONTRACTOR (also seen in sandbox) is a payment, not income.
+
+    `merchant_name` is the bank's name for the merchant: spending at a
+    known software merchant is Software whatever Plaid tagged it."""
+    category = _map_plaid_category(raw_category, amount, account_type)
+    # Only where Plaid's answer was spending (a refund nets against it too):
+    # a paycheck or card payment from a software company stays what it is.
+    if category not in _NOT_SPENDING and (known := merchant_category(merchant_name)):
+        return known
+    return category
+
+
+_NOT_SPENDING = {"Income", "Transfer In", "Transfer Out", "Loan Payments"}
+
+
+def _map_plaid_category(raw_category: str | None, amount: float, account_type: str | None) -> str:
     if raw_category:
         normalized = raw_category.strip().lower()
 
         if account_type in _LIABILITY_ACCOUNT_TYPES and normalized.startswith(("loan_payments", "income")):
-            return "Transfer"
+            return "Transfer In"
 
         if normalized in DETAILED_CATEGORY_MAP:
-            return DETAILED_CATEGORY_MAP[normalized]
+            category = DETAILED_CATEGORY_MAP[normalized]
+            # A card payment seen from the side the money lands on.
+            return "Transfer In" if category == "Transfer Out" and amount > 0 else category
 
         for primary, category in PRIMARY_CATEGORY_MAP.items():
             if normalized == primary or normalized.startswith(primary + "_"):
                 return category
 
     if amount > 0:
-        return "Transfer" if account_type in _LIABILITY_ACCOUNT_TYPES else "Income"
-    return "Other"
+        return "Transfer In" if account_type in _LIABILITY_ACCOUNT_TYPES else "Income"
+    return "General Merchandise"

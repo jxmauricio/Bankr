@@ -15,6 +15,8 @@ import {
 } from "@/features/chat/ReplyExtras";
 import { useChat, type ChatItem } from "@/features/chat/useChat";
 import { NetWorthCard } from "@/features/money/NetWorthCard";
+import { RecapCard } from "@/features/recap/RecapCard";
+import { formatTurnUsage } from "@/lib/api";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
 import { radius, space, type } from "@/theme/tokens";
 import { makeStyles, useColors } from "@/theme/theme";
@@ -28,18 +30,25 @@ export default function ChatScreen() {
   const chat = useChat();
   const [draft, setDraft] = useState("");
   const list = useRef<FlatList<ChatItem>>(null);
+  const listHeight = useRef(0);
   const body = useRef<View>(null);
   const keyboardInset = useKeyboardInset(body);
 
-  // The history sheet hands back a conversation (or "new") through the route.
-  const { conversation } = useLocalSearchParams<{ conversation?: string }>();
-  const { open, startNew } = chat;
+  // The history sheet hands back a conversation (or "new") through the route,
+  // and the weekly recap a question to ask.
+  const { conversation, ask } = useLocalSearchParams<{ conversation?: string; ask?: string }>();
+  const { open, startNew, send } = chat;
   useEffect(() => {
     if (!conversation) return;
     if (conversation === "new") startNew();
     else open(conversation);
     router.setParams({ conversation: undefined });
   }, [conversation, open, startNew]);
+  useEffect(() => {
+    if (!ask) return;
+    send(ask);
+    router.setParams({ ask: undefined });
+  }, [ask, send]);
 
   function submit(text = draft) {
     if (!text.trim()) return;
@@ -57,11 +66,20 @@ export default function ChatScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messages}
           keyboardDismissMode="interactive"
-          onContentSizeChange={() => list.current?.scrollToEnd({ animated: true })}
+          onLayout={(e) => (listHeight.current = e.nativeEvent.layout.height)}
+          // Scroll by the real content height: FlatList's scrollToEnd estimates it from
+          // rows it has measured, so it stops short of a reply (or chart) that just grew.
+          // Not before the first message: then the growth is the dashboard (a recap card
+          // arriving), which should stay in view from the top.
+          onContentSizeChange={(_, height) => {
+            if (chat.items.length === 0) return;
+            list.current?.scrollToOffset({ offset: Math.max(0, height - listHeight.current), animated: true });
+          }}
           renderItem={({ item, index }) => (
             <Message item={item} isLast={index === chat.items.length - 1} onChoose={submit} disabled={chat.isSending} />
           )}
-          ListEmptyComponent={<EmptyChat onPick={submit} />}
+          // The dashboard heads the conversation and scrolls away as it grows.
+          ListHeaderComponent={<ChatDashboard onPick={submit} showSuggestions={chat.items.length === 0} />}
           ListFooterComponent={
             <>
               {chat.isSending && (
@@ -161,6 +179,11 @@ function Message({
         <ChatChart key={i} chart={chart} />
       ))}
       {sources.length > 0 && <SourceTrail sources={sources} />}
+      {item.usage && (
+        <Text variant="caption" tone="soft">
+          {formatTurnUsage(item.usage)}
+        </Text>
+      )}
       {parts.links && parts.links.length > 0 && <ViewLinks links={parts.links} />}
       {isLast && breakdownQuery && !linksToCashFlow && <OpenInCashFlow />}
       {item.goalProposal && <GoalProposalCard proposal={item.goalProposal} />}
@@ -169,27 +192,30 @@ function Message({
   );
 }
 
-/** Net worth at a glance, then the starter questions as one grouped list. */
-function EmptyChat({ onPick }: { onPick: (text: string) => void }) {
+/** Net worth at a glance, then (before the first message) the starter questions as one grouped list. */
+function ChatDashboard({ onPick, showSuggestions }: { onPick: (text: string) => void; showSuggestions: boolean }) {
   const styles = useStyles();
   const colors = useColors();
   return (
     <View style={styles.empty}>
-      <View style={styles.inset}>
+      <View style={[styles.inset, styles.cards]}>
+        <RecapCard />
         <NetWorthCard />
       </View>
-      <View>
-        <SectionHeader title="Ask Bankr" />
-        {SUGGESTIONS.map((s, i) => (
-          <ListRow
-            key={s}
-            title={s}
-            group={groupPosition(i, SUGGESTIONS.length)}
-            onPress={() => onPick(s)}
-            trailing={<Icon name="chevronRight" color={colors.inkFaint} size={16} />}
-          />
-        ))}
-      </View>
+      {showSuggestions && (
+        <View>
+          <SectionHeader title="Ask Bankr" />
+          {SUGGESTIONS.map((s, i) => (
+            <ListRow
+              key={s}
+              title={s}
+              group={groupPosition(i, SUGGESTIONS.length)}
+              onPress={() => onPick(s)}
+              trailing={<Icon name="chevronRight" color={colors.inkFaint} size={16} />}
+            />
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -211,9 +237,10 @@ const useStyles = makeStyles((colors) =>
     },
     assistant: { alignSelf: "stretch", gap: space.md },
     failed: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap" },
-    // The empty state runs edge to edge: grouped rows bring their own side margins.
-    empty: { flex: 1, gap: space.xs, marginHorizontal: -space.lg, marginTop: -space.md },
+    // The dashboard runs edge to edge: grouped rows bring their own side margins.
+    empty: { gap: space.xs, marginHorizontal: -space.lg, marginTop: -space.md },
     inset: { paddingHorizontal: space.lg },
+    cards: { gap: space.md },
     chips: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
     composer: {
       flexDirection: "row",

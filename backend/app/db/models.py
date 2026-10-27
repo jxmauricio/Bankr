@@ -5,6 +5,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Numeric,
     String,
@@ -98,6 +99,10 @@ class Transaction(Base):
     date: Mapped[date] = mapped_column(Date, index=True)
     merchant_name: Mapped[str | None] = mapped_column(String, nullable=True)
     raw_aggregator_category: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Plaid's confidence in raw_aggregator_category (VERY_HIGH ... LOW,
+    # UNKNOWN). LOW/UNKNOWN expense rows get a second opinion from
+    # app/services/category_classifier.py.
+    aggregator_category_confidence: Mapped[str | None] = mapped_column(String, nullable=True)
     bankr_category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
     is_pending: Mapped[bool] = mapped_column(Boolean, default=False)
     pending_transaction_id: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -173,6 +178,26 @@ class InsightLog(Base):
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class WeeklyRecap(Base):
+    """One Monday-Sunday summary: the numbers (computed in Python) and the
+    short take Claude wrote from them. The latest one also gets an
+    InsightLog row ("weekly_recap:<week_start>"), which carries its read
+    state and puts it in the notifications list."""
+
+    __tablename__ = "weekly_recaps"
+    __table_args__ = (UniqueConstraint("user_id", "week_start", name="uq_weekly_recap_user_week"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    week_start: Mapped[date] = mapped_column(Date)
+    week_end: Mapped[date] = mapped_column(Date)
+    headline: Mapped[str] = mapped_column(String)
+    facts: Mapped[dict] = mapped_column(JSONB)
+    # Null when the model couldn't be reached; the numbers still show.
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
@@ -186,6 +211,26 @@ class ChatMessage(Base):
     # trust/verification trail (see claude_agent.run_agent_turn). Always
     # null on user-role messages.
     tool_calls: Mapped[list[dict] | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class MerchantCategoryGuess(Base):
+    """A classifier's answer for one merchant, shared by every user: a
+    merchant's name says the same thing whoever shops there. Cached so each
+    merchant costs one call, and so a re-sync never flips its category."""
+
+    __tablename__ = "merchant_category_guesses"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    # Lowercased, whitespace-collapsed bank merchant name; see category_classifier.merchant_key.
+    merchant_key: Mapped[str] = mapped_column(String, unique=True, index=True)
+    category_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("categories.id"))
+    source: Mapped[str] = mapped_column(String)  # e.g. "jev"
+    model: Mapped[str] = mapped_column(String)  # which classifier version answered
+    # The classifier's own certainty, 0-1. Kept even when it's below
+    # settings.jev_min_confidence: the merchant isn't asked again, and the
+    # transaction keeps Plaid's category.
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 

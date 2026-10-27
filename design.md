@@ -83,15 +83,18 @@ with `useColors()`.
 
 | Token | Light | Dark |
 |---|---|---|
-| `bg` / `surface` / `raised` | `#F3F5F9` / `#FFFFFF` / `#E9EDF3` | `#0B0D10` / `#12151A` / `#191D24` |
-| `line` / `lineStrong` | `#E2E7EF` / `#D3DAE5` | `#222731` / `#323946` |
-| `ink` / `inkSoft` / `inkFaint` | `#0E1A2B` / `#5A6678` / `#667085` | `#E6EAF0` / `#A3ABBA` / `#7B8296` |
-| `accent` / `onAccent` | `#2F6FE0` / `#FFFFFF` | `#3ED1BF` / `#0B0D10` |
-| `userBubble` | `#DCE7FB` | `#0F6E6A` |
-| `positive` / `negative` | `#15803D` / `#C93A2B` | `#4FD18B` / `#FF7A6B` |
+| `bg` / `surface` / `raised` | `#F3F5F9` / `#FFFFFF` / `#E9EDF3` | `#0B1426` / `#111C33` / `#18243F` |
+| `line` / `lineStrong` | `#E2E7EF` / `#D3DAE5` | `#1D2A47` / `#26365A` |
+| `ink` / `inkSoft` / `inkFaint` | `#0E1A2B` / `#5A6678` / `#667085` | `#F2F5FA` / `#9AA8C4` / `#8391AF` |
+| `accent` / `onAccent` | `#2F6FE0` / `#FFFFFF` | `#2DD48A` / `#0B1426` |
+| `userBubble` | `#DCE7FB` | `#0D7A54` |
+| `positive` / `negative` | `#15803D` / `#C93A2B` | `#2DD48A` / `#FF4D4F` |
 | `spend` | `#7C5CE0` | `#B79CFF` |
 | `warn` | `#B45309` | `#F5A54A` |
-| `chartLabel` | `rgba(255, 255, 255, 0.88)` | `rgba(5, 6, 8, 0.72)` |
+| `chartLabel` | `rgba(255, 255, 255, 0.88)` | `rgba(4, 9, 20, 0.72)` |
+
+Mobile dark is the web's night mode: the same navy surfaces, ink, green and
+red. Only `spend` differs (see *Open differences*).
 
 Bank logos always sit on white (`logoBacking`), because they're drawn for a
 light background. Category colors in charts come from `lib/chartColors.ts` in
@@ -201,8 +204,7 @@ together, then update this file:
 
 | | Web | Mobile |
 |---|---|---|
-| Accent | Money green (`#00a36c` light, `#2dd48a` dark) | Blue (`#2F6FE0`) in light, teal (`#3ED1BF`) in dark |
-| Dark palette | Navy | The original graphite (`#0B0D10`) |
+| Accent in light mode | Money green (`#00a36c`) | Blue (`#2F6FE0`) |
 | Font | Plus Jakarta Sans | System font (San Francisco) |
 | Spending color | Red (`spend` = `negative`) | Neutral in lists, purple in charts |
 | How dark mode is chosen | Manual toggle; defaults to light | Follows the system, with a System/Light/Dark setting |

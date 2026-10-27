@@ -8,6 +8,7 @@ import {
   fetchNetWorth,
   fetchRollup,
   fetchSpending,
+  formatTurnUsage,
   resyncAccounts,
   streamChatMessage,
   type ChartSpec,
@@ -22,6 +23,7 @@ import {
   type PeriodRollup,
   type SourceQuery,
   type TransactionRecord,
+  type TurnUsage,
   type ViewLink,
 } from "../lib/api";
 import { resolveGoalProposal } from "../lib/goalProposal";
@@ -59,6 +61,8 @@ import { CashFlowView } from "./CashFlowView";
 import type { Citation } from "../components/TransactionDetails";
 
 const BACKGROUND_SYNC_MS = 5 * 60 * 1000;
+// Coming back to the tab syncs only if the last sync is older than this.
+const RESYNC_ON_RETURN_MS = 60 * 1000;
 
 const GREETING = "Ask me anything about your money — what you've spent, what's coming in, or whether you're on pace for your goal.";
 // Not scoped to a user/token: a different account landing on a stale id
@@ -82,6 +86,7 @@ type StreamItem =
       links?: ViewLink[];
       clarify?: Clarify | null;
       records?: TransactionRecord[];
+      usage?: TurnUsage | null;
     }
   | { kind: "user-text"; id: string; text: string }
   | { kind: "topic-card"; id: string; topic: Topic; period: Period };
@@ -172,6 +177,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
 
   // One sync at a time, whether it came from the button, login/reload or the timer.
   const syncInFlight = useRef(false);
+  const lastSyncAt = useRef(0);
 
   async function syncFromBank({ silent = false }: { silent?: boolean } = {}) {
     if (!token || syncInFlight.current) return;
@@ -182,6 +188,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
     }
     try {
       await resyncAccounts(token);
+      lastSyncAt.current = Date.now();
       await loadStandingState();
       setPlanVersion((v) => v + 1);
     } catch (err) {
@@ -194,15 +201,23 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
 
   const refreshFromBank = () => syncFromBank();
 
-  // A fresh sync whenever this mounts (login or full page reload), then every
-  // 5 minutes in the background while the tab is visible.
+  // A fresh sync whenever this mounts (login or full page reload), again on
+  // coming back to the tab if the last one is stale, and every 5 minutes in
+  // the background while the tab is visible.
   useEffect(() => {
     if (!token) return;
     syncFromBank();
     const timer = setInterval(() => {
       if (!document.hidden) syncFromBank({ silent: true });
     }, BACKGROUND_SYNC_MS);
-    return () => clearInterval(timer);
+    const onVisible = () => {
+      if (!document.hidden && Date.now() - lastSyncAt.current > RESYNC_ON_RETURN_MS) syncFromBank({ silent: true });
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -260,6 +275,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
         links: response.links,
         clarify: response.clarify,
         records: response.records,
+        usage: response.usage,
         actionProposal: response.action_proposal,
         // A reply with its own confirm card is about that, not a goal -- skip the goal-card fallback.
         goalProposal: response.action_proposal ? null : resolveGoalProposal({
@@ -761,6 +777,7 @@ function StreamEntry({
             <ChatChart key={i} chart={chart} token={token} onOpenSource={onOpenSource} onOpenCashFlow={onOpenCashFlow} />
           ))}
           {sources.length > 0 && <SourceTrail sources={sources} onOpenSource={onOpenSource} />}
+          {item.usage && <p className="font-mono text-[11px] text-ink-faint">{formatTurnUsage(item.usage)}</p>}
           {item.links && item.links.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {item.links.map((link, i) => (

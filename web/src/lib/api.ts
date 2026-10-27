@@ -275,6 +275,19 @@ export interface HealthLine {
   higher_is_better: boolean;
 }
 
+/** One of the four tiles behind the score. value is a percent of income, or months of spending for the emergency fund. */
+export interface HealthMetric {
+  id: string;
+  name: string;
+  value: number | null;
+  unit: "pct" | "months";
+  tone: HealthTone;
+  recommended: number;
+  higher_is_better: boolean;
+  /** 0–100; null when there's nothing to score it against. */
+  points: number | null;
+}
+
 export interface SpendingHealth {
   income: number;
   spending: number;
@@ -287,6 +300,9 @@ export interface SpendingHealth {
   label: string;
   as_of: string | null;
   note: string;
+  /** Average of the metrics' points; null without income to score against. */
+  score: number | null;
+  metrics: HealthMetric[];
   snapshots: HealthLine[];
   buckets: HealthLine[];
   categories: HealthLine[];
@@ -821,9 +837,36 @@ export interface BudgetMoveProposal {
 /** A confirm card the assistant drafted; nothing is changed until the user confirms. */
 export type ActionProposal = RuleProposal | BudgetMoveProposal;
 
+/** Token usage and cost of one chat turn. Only sent when the backend runs with AGENT_DEBUG on. */
+export interface TurnUsage {
+  model: string;
+  rounds: number;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  reasoning_tokens: number | null;
+  cached_tokens: number | null;
+  /** Billed dollars; null when the provider doesn't report a cost (only OpenRouter does). */
+  cost_usd: number | null;
+}
+
+/** One-line summary for the debug readout under a reply. */
+export function formatTurnUsage(u: TurnUsage): string {
+  const n = (v: number | null) => (v == null ? "?" : v.toLocaleString("en-US"));
+  const model = u.model.split("/").pop() ?? u.model;
+  const parts = [
+    "debug",
+    model,
+    `${u.rounds} ${u.rounds === 1 ? "round" : "rounds"}`,
+    `${n(u.input_tokens)} in / ${n(u.output_tokens)} out` + (u.cached_tokens ? ` (${n(u.cached_tokens)} cached)` : ""),
+  ];
+  if (u.cost_usd != null) parts.push(`$${u.cost_usd.toFixed(u.cost_usd < 0.01 ? 4 : 3)}`);
+  return parts.join(" · ");
+}
+
 export interface ChatResponse extends AnswerParts {
   conversation_id: string;
   reply: string;
+  usage?: TurnUsage | null;
 }
 
 /**

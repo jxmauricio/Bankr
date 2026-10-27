@@ -280,6 +280,19 @@ export interface HealthLine {
   higher_is_better: boolean;
 }
 
+/** One of the four tiles behind the score. value is a percent of income, or months of spending for the emergency fund. */
+export interface HealthMetric {
+  id: string;
+  name: string;
+  value: number | null;
+  unit: "pct" | "months";
+  tone: HealthTone;
+  recommended: number;
+  higher_is_better: boolean;
+  /** 0–100; null when there's nothing to score it against. */
+  points: number | null;
+}
+
 export interface SpendingHealth {
   income: number;
   spending: number;
@@ -292,6 +305,9 @@ export interface SpendingHealth {
   label: string;
   as_of: string | null;
   note: string;
+  /** Average of the metrics' points; null without income to score against. */
+  score: number | null;
+  metrics: HealthMetric[];
   snapshots: HealthLine[];
   buckets: HealthLine[];
   categories: HealthLine[];
@@ -629,10 +645,10 @@ export const moveBudgetMoney = (token: string, move: { month?: string; from_key:
 
 export interface Insight {
   id: string;
-  type: "budget_overspend" | "goal_drift" | "unusual_transaction" | "price_change" | string;
+  type: "budget_overspend" | "goal_drift" | "unusual_transaction" | "price_change" | "weekly_recap" | string;
   message: string;
   transaction_ids: string[];
-  /** What it's about: a budget line key, recurring series id, goal id or transaction id. */
+  /** What it's about: a budget line key, recurring series id, goal id, transaction id or a recap's week start. */
   subject_id: string | null;
   created_at: string;
   read: boolean;
@@ -645,6 +661,91 @@ export const markInsightRead = (token: string, id: string) =>
   request<Insight>(`/insights/${id}/read`, { method: "POST", token });
 
 export const markAllInsightsRead = (token: string) => request<void>("/insights/read-all", { method: "POST", token });
+
+// --- Weekly recap ---
+
+export interface RecapLine {
+  merchant: string;
+  amount: number;
+  /** Null for a transfer in, which is summed by sender. */
+  date: string | null;
+  category: string | null;
+}
+
+export interface RecapCategory {
+  name: string;
+  amount: number;
+  /** Average for the four weeks before; null without that much history. */
+  usual: number | null;
+}
+
+export type RecapGoal =
+  | {
+      id: string;
+      type: "save";
+      name: string;
+      target_amount: number;
+      saved: number;
+      /** What the week added (or took away); null without balances on both sides of it. */
+      change: number | null;
+      target_date: string | null;
+      on_pace?: boolean | null;
+    }
+  | {
+      id: string;
+      type: "track_spending";
+      name: string;
+      category: string | null;
+      window_label: string | null;
+      /** Null for a tracker with no limit. */
+      target_amount: number | null;
+      spent: number;
+      remaining: number | null;
+      over_budget: boolean;
+      on_pace?: boolean | null;
+      week_spent: number | null;
+    };
+
+export interface RecapFacts {
+  money_in: number;
+  money_out: number;
+  kept: number;
+  spending: number;
+  pending_spending: number;
+  typical_week_spending: number | null;
+  transaction_count: number;
+  categories: RecapCategory[];
+  biggest_purchases: RecapLine[];
+  money_in_items: RecapLine[];
+  goals: RecapGoal[];
+}
+
+export interface WeeklyRecap {
+  week_start: string;
+  week_end: string;
+  /** "Sep 7–13, 2026". */
+  label: string;
+  /** "You kept $1,713.52". */
+  headline: string;
+  /** One line under the headline: spending vs usual and the first savings goal. */
+  teaser: string;
+  /** Bankr's take, written by the model; null when it couldn't be reached. */
+  summary: string | null;
+  facts: RecapFacts;
+  created_at: string;
+  read: boolean;
+  previous_week_start: string | null;
+  next_week_start: string | null;
+}
+
+export const fetchLatestRecap = (token: string) => request<{ recap: WeeklyRecap | null }>("/recaps/latest", { token });
+
+export const fetchRecap = (token: string, weekStart: string) =>
+  request<{ recap: WeeklyRecap }>(`/recaps/${weekStart}`, { token });
+
+/** Opening the recap, or dismissing its card on the home screen. */
+export const markRecapRead = (token: string, weekStart: string) =>
+  request<void>(`/recaps/${weekStart}/read`, { method: "POST", token });
 
 export interface CashFlowBreakdown {
   window: string;
@@ -830,9 +931,36 @@ export interface BudgetMoveProposal {
 /** A confirm card the assistant drafted; nothing is changed until the user confirms. */
 export type ActionProposal = RuleProposal | BudgetMoveProposal;
 
+/** Token usage and cost of one chat turn. Only sent when the backend runs with AGENT_DEBUG on. */
+export interface TurnUsage {
+  model: string;
+  rounds: number;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  reasoning_tokens: number | null;
+  cached_tokens: number | null;
+  /** Billed dollars; null when the provider doesn't report a cost (only OpenRouter does). */
+  cost_usd: number | null;
+}
+
+/** One-line summary for the debug readout under a reply. */
+export function formatTurnUsage(u: TurnUsage): string {
+  const n = (v: number | null) => (v == null ? "?" : v.toLocaleString("en-US"));
+  const model = u.model.split("/").pop() ?? u.model;
+  const parts = [
+    "debug",
+    model,
+    `${u.rounds} ${u.rounds === 1 ? "round" : "rounds"}`,
+    `${n(u.input_tokens)} in / ${n(u.output_tokens)} out` + (u.cached_tokens ? ` (${n(u.cached_tokens)} cached)` : ""),
+  ];
+  if (u.cost_usd != null) parts.push(`$${u.cost_usd.toFixed(u.cost_usd < 0.01 ? 4 : 3)}`);
+  return parts.join(" · ");
+}
+
 export interface ChatResponse extends AnswerParts {
   conversation_id: string;
   reply: string;
+  usage?: TurnUsage | null;
 }
 
 /**

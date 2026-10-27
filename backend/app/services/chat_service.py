@@ -67,6 +67,7 @@ def send_message(
     on_status: Callable[[str], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
     on_text: Callable[[str | None], None] | None = None,
+    on_usage: Callable[[dict], None] | None = None,
 ) -> tuple[str, list[dict]]:
     """Returns (reply text, sources) -- see run_agent_turn for what sources
     is and what on_status and on_text receive. If is_cancelled turns True mid-turn the
@@ -80,7 +81,7 @@ def send_message(
     db.commit()
 
     try:
-        assistant_text, sources = run_agent_turn(db, user_id, history, on_status, is_cancelled, on_text)
+        assistant_text, sources = run_agent_turn(db, user_id, history, on_status, is_cancelled, on_text, on_usage)
     except TurnCancelled:
         db.delete(user_row)
         db.commit()

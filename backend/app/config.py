@@ -96,6 +96,21 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5"
 
+    # Second opinion on Plaid's LOW/UNKNOWN-confidence categories from Jev
+    # (TypeSafe AI's typed decision model), called through OpenRouter's
+    # Decisions API with OPENROUTER_API_KEY; see
+    # app/services/category_classifier.py. Off by default: merchant names
+    # and amounts go to a third party when it's on.
+    jev_categorization_enabled: bool = False
+    jev_model: str = "typesafe/jev-1.13"
+    # Upper bound on Jev calls (one per unseen merchant) during one sync, so
+    # a first sync of years of history can't stall on them.
+    jev_max_merchants_per_sync: int = 25
+    # Jev's answer only replaces Plaid's category at or above this
+    # confidence. In the eval on 41 real merchants, its wrong answers mostly
+    # came in under it and its fixes at or above it.
+    jev_min_confidence: float = 0.85
+
     agent_api_key: str = ""
     agent_model: str = "deepseek-chat"
     agent_base_url: str = "https://api.deepseek.com"
@@ -118,6 +133,10 @@ class Settings(BaseSettings):
     # finish the answer and then loop on the same closing offer.
     agent_max_output_tokens: int = 1024
     agent_thinking_budget_tokens: int = 2048
+    # Debug mode: attach each chat turn's token usage and cost to the API
+    # response (ChatResponse.usage) so the clients can show what a question
+    # cost. Off by default -- it exposes the model name and spend.
+    agent_debug: bool = False
 
     # Web search tool the agent can call for anything time-sensitive (current
     # rates, inflation, ...) it wasn't trained on -- see

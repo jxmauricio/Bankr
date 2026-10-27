@@ -28,7 +28,7 @@ MODES = ("flex", "category")
 GROUPS = ("fixed", "flex")
 MAX_ROLLOVER_MONTHS = 12
 # Usually fixed: suggest these as their own lines in flex mode.
-FIXED_BY_DEFAULT = {"Rent & Housing", "Utilities", "Loan Payments", "Subscriptions"}
+FIXED_BY_DEFAULT = {"Rent & Utilities", "Loan Payments"}
 # Don't call a line "on pace to go over" from the first few days of spending.
 MIN_ELAPSED_FOR_PACE = 0.2
 
@@ -74,7 +74,7 @@ def _top_level_expense(db: Session, category_id: UUID) -> Category:
     if category is None or category.type != "expense":
         raise BudgetError("budgets are for spending categories")
     if category.parent_category_id is not None:
-        raise BudgetError("budget the parent category (e.g. Dining, not Coffee)")
+        raise BudgetError("budget the parent category, not a subcategory")
     return category
 
 

@@ -104,8 +104,8 @@ function SavingsGoalProposalCard({ proposal }: { proposal: GoalProposal }) {
 function SpendingTrackerProposalCard({ proposal }: { proposal: GoalProposal }) {
   const token = useToken();
   const { refresh } = useMoney();
-  const [category, setCategory] = useState(proposal.category ?? "Dining");
-  const [name, setName] = useState(proposal.name?.trim() || proposal.category || "Dining");
+  const [category, setCategory] = useState(proposal.category ?? "Food & Drink");
+  const [name, setName] = useState(proposal.name?.trim() || proposal.category || "Food & Drink");
   const [windowName, setWindowName] = useState(proposal.window ?? "this_month");
   const [budget, setBudget] = useState(proposal.target_amount > 0 ? String(proposal.target_amount) : "");
   const [status, setStatus] = useState<CardStatus>("pending");

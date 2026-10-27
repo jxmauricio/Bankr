@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.agent.claude_agent import TurnCancelled
 from app.auth import get_current_user
+from app.config import settings
 from app.db.base import get_db, get_session_factory
 from app.db.models import User
 from app.rate_limit import limit_chat_by_user
@@ -207,9 +208,59 @@ class AnswerParts(BaseModel):
     records: list[TransactionRecord] = []
 
 
+class TurnUsage(BaseModel):
+    """What one chat turn cost across all its model rounds. Only sent when
+    AGENT_DEBUG is on. A field is None when the provider didn't report it
+    (cost_usd is only reported by OpenRouter)."""
+
+    model: str
+    rounds: int
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    reasoning_tokens: int | None = None
+    cached_tokens: int | None = None
+    cost_usd: float | None = None
+
+
 class ChatResponse(AnswerParts):
     conversation_id: UUID
     reply: str
+    usage: TurnUsage | None = None
+
+
+def _active_model() -> str:
+    if settings.agent_provider == "openrouter":
+        return settings.openrouter_model
+    if settings.agent_provider == "openai_compatible":
+        return settings.agent_model
+    return settings.anthropic_model
+
+
+class _UsageTotals:
+    """Sums the per-round usage dicts from the agent. A figure no round
+    reported stays None instead of reading as 0."""
+
+    _FIELDS = {
+        "input": "input_tokens",
+        "output": "output_tokens",
+        "reasoning": "reasoning_tokens",
+        "cached": "cached_tokens",
+        "cost": "cost_usd",
+    }
+
+    def __init__(self) -> None:
+        self.rounds = 0
+        self._totals: dict[str, float | int | None] = {name: None for name in self._FIELDS.values()}
+
+    def add(self, usage: dict) -> None:
+        self.rounds += 1
+        for key, name in self._FIELDS.items():
+            value = usage.get(key)
+            if isinstance(value, (int, float)):
+                self._totals[name] = (self._totals[name] or 0) + value
+
+    def result(self) -> TurnUsage:
+        return TurnUsage(model=_active_model(), rounds=self.rounds, **self._totals)
 
 
 class ConversationSummary(BaseModel):
@@ -353,8 +404,16 @@ def chat(
     db: Session = Depends(get_db),
 ) -> ChatResponse:
     conversation_id = body.conversation_id or uuid4()
-    reply, sources = chat_service.send_message(db, user.id, conversation_id, body.message)
-    return ChatResponse(conversation_id=conversation_id, reply=reply, **_answer_parts(reply, sources))
+    totals = _UsageTotals() if settings.agent_debug else None
+    reply, sources = chat_service.send_message(
+        db, user.id, conversation_id, body.message, on_usage=totals.add if totals else None
+    )
+    return ChatResponse(
+        conversation_id=conversation_id,
+        reply=reply,
+        usage=totals.result() if totals else None,
+        **_answer_parts(reply, sources),
+    )
 
 
 @router.post("/stream", dependencies=[Depends(limit_chat_by_user)])
@@ -389,6 +448,7 @@ def chat_stream(
     user_id = user.id
     events: queue.Queue[tuple[str, dict] | None] = queue.Queue()
     cancelled = threading.Event()
+    totals = _UsageTotals() if settings.agent_debug else None
 
     def run_turn() -> None:
         try:
@@ -401,8 +461,14 @@ def chat_stream(
                     on_status=lambda label: events.put(("status", {"label": label})),
                     is_cancelled=cancelled.is_set,
                     on_text=lambda text: events.put(("delta", {"text": text}) if text is not None else ("reset", {})),
+                    on_usage=totals.add if totals else None,
                 )
-            response = ChatResponse(conversation_id=conversation_id, reply=reply, **_answer_parts(reply, sources))
+            response = ChatResponse(
+                conversation_id=conversation_id,
+                reply=reply,
+                usage=totals.result() if totals else None,
+                **_answer_parts(reply, sources),
+            )
             events.put(("done", response.model_dump(mode="json")))
         except TurnCancelled:
             logger.info("Streaming chat turn cancelled by the client")

@@ -16,6 +16,8 @@ class ScriptedTurn:
 
     final_text: str
     tool_calls: list[tuple[str, dict]] = field(default_factory=list)
+    # One usage dict per simulated model round, sent to on_usage.
+    usage: list[dict] = field(default_factory=list)
 
 
 class FakeAgentClient:
@@ -30,8 +32,12 @@ class FakeAgentClient:
         history: list[dict],
         call_tool: Callable[[str, dict], dict],
         on_text: Callable[[str | None], None] | None = None,
+        on_usage: Callable[[dict], None] | None = None,
     ) -> str:
         turn = self._turns.pop(0)
+        if on_usage:
+            for round_usage in turn.usage:
+                on_usage(round_usage)
         for name, tool_input in turn.tool_calls:
             call_tool(name, tool_input)
         if on_text:

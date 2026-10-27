@@ -116,22 +116,22 @@ def test_track_spending_goal_progress_is_category_spend_this_month(db, user, mon
     goal = create_goal(
         db, user.id, "track_spending", target_amount=0, target_date=None, category="eating out", window="this_month"
     )
-    assert goal.category == "Dining"
+    assert goal.category == "Food & Drink"
     assert goal.window == "this_month"
-    assert goal.name == "Dining"
-    assert float(goal.current_progress_amount) == 45.0
+    assert goal.name == "Food & Drink"
+    assert float(goal.current_progress_amount) == 165.5  # Ramen Spot 45 + Trader Joe's 120.50
 
     progress = get_goal_progress(db, user.id)
     tracker = progress["goals"][0]
     assert tracker["type"] == "track_spending"
-    assert tracker["name"] == "Dining"
-    assert tracker["category"] == "Dining"
+    assert tracker["name"] == "Food & Drink"
+    assert tracker["category"] == "Food & Drink"
     assert tracker["window"] == "this_month"
-    assert tracker["current_progress_amount"] == 45.0
+    assert tracker["current_progress_amount"] == 165.5
     assert tracker["target_amount"] == 0.0
     assert tracker["progress_fraction"] is None
     assert tracker["over_budget"] is False
-    assert tracker["transaction_count"] == 1
+    assert tracker["transaction_count"] == 2
 
     try:
         create_goal(db, user.id, "track_spending", 0, None, category=None, window="this_month")
@@ -154,7 +154,7 @@ def test_track_spending_keeps_a_custom_name(db, user, monkeypatch):
         "track_spending",
         target_amount=0,
         target_date=None,
-        category="Dining",
+        category="Food & Drink",
         window="this_month",
         name="Eating out",
     )
@@ -172,13 +172,13 @@ def test_track_spending_budget_marks_over_without_completing(db, user, monkeypat
     sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
 
     create_goal(
-        db, user.id, "track_spending", target_amount=20.0, target_date=None, category="Dining", window="this_month"
+        db, user.id, "track_spending", target_amount=100.0, target_date=None, category="Food & Drink", window="this_month"
     )
     progress = get_goal_progress(db, user.id)["goals"][0]
-    assert progress["current_progress_amount"] == 45.0
+    assert progress["current_progress_amount"] == 165.5
     assert progress["over_budget"] is True
-    assert progress["progress_fraction"] == 2.25
-    assert progress["remaining_amount"] == -25.0
+    assert progress["progress_fraction"] == 1.655
+    assert progress["remaining_amount"] == -65.5
     assert progress["on_pace"] is False
     assert progress["expected_progress_fraction"] == round(20 / 31, 4)
 
@@ -195,11 +195,11 @@ def test_track_spending_budget_shows_remaining_and_pace_through_the_month(db, us
     sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
 
     create_goal(
-        db, user.id, "track_spending", target_amount=500.0, target_date=None, category="Dining", window="this_month"
+        db, user.id, "track_spending", target_amount=500.0, target_date=None, category="Food & Drink", window="this_month"
     )
     progress = get_goal_progress(db, user.id)["goals"][0]
-    assert progress["remaining_amount"] == 455.0
-    assert progress["progress_fraction"] == 0.09
+    assert progress["remaining_amount"] == 334.5
+    assert progress["progress_fraction"] == 0.331
     assert progress["expected_progress_fraction"] == round(20 / 31, 4)
     assert progress["on_pace"] is True
     assert progress["over_budget"] is False
@@ -213,11 +213,11 @@ def test_track_spending_ahead_of_pace_before_the_cap(db, user, monkeypatch):
     monkeypatch.setattr(money_query, "_now", lambda: datetime(2026, 8, 20, 16, tzinfo=timezone.utc))
     sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
 
-    # $45 spent of a $50 cap by Aug 20 is most of the budget with 11 days left.
+    # $165.50 spent of a $180 cap by Aug 20 is most of the budget with 11 days left.
     create_goal(
-        db, user.id, "track_spending", target_amount=50.0, target_date=None, category="Dining", window="this_month"
+        db, user.id, "track_spending", target_amount=180.0, target_date=None, category="Food & Drink", window="this_month"
     )
     progress = get_goal_progress(db, user.id)["goals"][0]
-    assert progress["remaining_amount"] == 5.0
+    assert progress["remaining_amount"] == 14.5
     assert progress["over_budget"] is False
     assert progress["on_pace"] is False
