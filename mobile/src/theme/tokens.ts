@@ -3,48 +3,47 @@
  * font: they go through these tokens (usually via the primitives in src/ui),
  * so the coming redesign is a change to this file and src/ui, not to screens.
  *
- * Values follow the "Bankr Mobile" design in Claude Design
- * (https://claude.ai/artifact/PLuTHqLnEE4qZ9W8Mhodxt), which shares its
- * dark palette with the web app's @theme (web/src/index.css). The light
- * palette is the "Light mode" row of the Bankr iOS Redesign canvas
- * (https://claude.ai/artifact/LMSyVZe6cymbvqQN6D2HZD).
+ * The dark palette is the web app's night mode ([data-theme="dark"] in
+ * web/src/index.css). The light palette is the "Light mode" row of the
+ * Bankr iOS Redesign canvas (https://claude.ai/artifact/LMSyVZe6cymbvqQN6D2HZD).
  *
  * Colors follow the system appearance: read them with useColors() or
  * makeStyles() from ./theme, never from a palette directly.
  */
 import type { TextStyle } from "react-native";
 
+/** Night: the web app's navy surfaces and money green ([data-theme="dark"] in web/src/index.css). */
 export const darkColors = {
-  bg: "#0B0D10",
-  surface: "#12151A",
-  raised: "#191D24",
-  line: "#222731",
-  lineStrong: "#323946",
+  bg: "#0B1426",
+  surface: "#111C33",
+  raised: "#18243F",
+  line: "#1D2A47",
+  lineStrong: "#26365A",
 
-  ink: "#E6EAF0",
-  inkSoft: "#A3ABBA",
-  inkFaint: "#7B8296",
+  ink: "#F2F5FA",
+  inkSoft: "#9AA8C4",
+  inkFaint: "#8391AF",
 
-  accent: "#3ED1BF",
-  accentStrong: "#7FE6D9",
-  accentWash: "rgba(62, 209, 191, 0.08)",
-  accentBorder: "rgba(62, 209, 191, 0.35)",
+  accent: "#2DD48A",
+  accentStrong: "#5EE4A8",
+  accentWash: "rgba(45, 212, 138, 0.12)",
+  accentBorder: "rgba(45, 212, 138, 0.35)",
   /** Text on an accent fill. */
-  onAccent: "#0B0D10",
+  onAccent: "#0B1426",
   /** The user's own chat bubbles. */
-  userBubble: "#0F6E6A",
+  userBubble: "#0D7A54",
 
   /** Money going out, in charts. */
   spend: "#B79CFF",
-  positive: "#4FD18B",
-  positiveWash: "rgba(79, 209, 139, 0.12)",
-  negative: "#FF7A6B",
-  negativeWash: "rgba(255, 122, 107, 0.1)",
+  positive: "#2DD48A",
+  positiveWash: "rgba(45, 212, 138, 0.12)",
+  negative: "#FF4D4F",
+  negativeWash: "rgba(255, 77, 79, 0.12)",
   warn: "#F5A54A",
   warnWash: "rgba(245, 165, 74, 0.1)",
-  scrim: "rgba(5, 6, 8, 0.72)",
+  scrim: "rgba(4, 9, 20, 0.72)",
   /** Behind a label drawn over a chart, so it reads against any fill. */
-  chartLabel: "rgba(5, 6, 8, 0.72)",
+  chartLabel: "rgba(4, 9, 20, 0.72)",
   /** Behind bank logos, which are drawn for a light background. */
   logoBacking: "#FFFFFF",
 };
@@ -132,6 +131,8 @@ export const type = {
   /** Figures in summaries and day headers. */
   moneySmall: { ...figures, fontSize: 13, fontWeight: "500" },
   moneyLarge: { ...figures, fontSize: 34, fontWeight: "700", letterSpacing: -1 },
+  /** A figure that isn't money, in a tile ("37%", "4.2 mo"). */
+  figure: { ...figures, fontSize: 26, fontWeight: "700", letterSpacing: -0.6 },
 } satisfies Record<string, TextStyle>;
 
 export type TypeVariant = keyof typeof type;

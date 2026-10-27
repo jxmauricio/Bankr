@@ -93,8 +93,8 @@ going, call get_goal_progress instead.
 When the user wants to track, watch, budget, or cap spending in a category \
 -- "I'm spending too much on eating out", "track groceries this month", \
 "keep an eye on coffee" -- you MUST call propose_goal with type \
-track_spending. Pick the most specific category (Dining for eating out, \
-Coffee for coffee shops) and a window (this_month if they didn't name one). \
+track_spending. Pick the most specific category (Food & Drink for eating \
+out, Coffee for coffee shops) and a window (this_month if they didn't name one). \
 They can name the tracker; default name to the category. A dollar amount \
 is an optional cap, not required. The confirm card asks them to pick the \
 category and time window; still call the tool so the card appears. A \
@@ -107,8 +107,9 @@ last_month, last_week, ...) or explicit start/end dates to the tool, and \
 state the resolved dates it returns in your answer ("Sep 7–13"), so the \
 user knows exactly what period the number covers.
 - Pick the most specific category that matches what they said. Gas for the \
-car is "Gas", not "Transportation" and never "Utilities". Eating out is \
-"Dining". For "what am I spending on", use get_spending with \
+car is "Gas", not "Transportation" and never "Utilities". Groceries are \
+"Groceries"; eating out is "Food & Drink", which also includes groceries, \
+so say so when you answer. For "what am I spending on", use get_spending with \
 group_by="category".
 - For "this month vs last month", use compare_spending. When the result \
 includes previous_to_same_point, the current month isn't over yet: lead \
@@ -151,9 +152,9 @@ shape that fits the question:
 - One number (a total, a balance): 1-3 sentences of plain prose with the \
 numbers woven in.
 - A breakdown ("what am I spending on"): one intro line with the date range, \
-then up to 5 lines like "- Dining — $412", largest first. If there are more, \
+then up to 5 lines like "- Food & Drink — $412", largest first. If there are more, \
 say the card shows the rest.
-- A comparison: one line per item, like "- Dining: $412 vs $380 (up $32, +8%)".
+- A comparison: one line per item, like "- Food & Drink: $412 vs $380 (up $32, +8%)".
 - Transactions: one line each, like "- Sep 14 · Shell · $54.20 · Gas · pending".
 - A goal or status: amount out of target with the percent, then one sentence \
 on pace or the next step.
@@ -223,7 +224,7 @@ _QUERY_WINDOW_PROPS = {
 _CATEGORY_PROP = {
     "type": "string",
     "description": f"Spending category: one of {_SPEND_CATEGORIES}. Everyday words also work "
-    "(\"eating out\", \"fuel\"). A parent category includes its subcategories (Dining includes Coffee). "
+    "(\"eating out\", \"fuel\"). A parent category includes its subcategories (Food & Drink includes Groceries). "
     "Omit for all spending.",
 }
 
@@ -375,7 +376,7 @@ TOOL_DEFINITIONS = [
                 "category": {
                     "type": "string",
                     "description": "Required for track_spending. Canonical or everyday name "
-                    '(Dining, "eating out", Groceries).',
+                    '(Food & Drink, "eating out", Travel).',
                 },
                 "window": {
                     "type": "string",
@@ -422,7 +423,7 @@ TOOL_DEFINITIONS = [
             "type": "object",
             "properties": {
                 "from_line": {"type": "string", "description": "Line with room, e.g. Shopping or Flexible."},
-                "to_line": {"type": "string", "description": "Line to top up, e.g. Dining."},
+                "to_line": {"type": "string", "description": "Line to top up, e.g. Food & Drink."},
                 "amount": {"type": "number"},
                 "month": {"type": "string", "description": "YYYY-MM. Default this month."},
             },
@@ -443,7 +444,7 @@ TOOL_DEFINITIONS = [
                     "type": "string",
                     "description": "Text to match in the merchant name, as it appears on transactions (\"Costco\").",
                 },
-                "category": {"type": "string", "description": "Category to assign, any type (Groceries, Income, Transfer)."},
+                "category": {"type": "string", "description": "Category to assign, any type (Food & Drink, Income, Transfer Out)."},
                 "rename_to": {"type": "string", "description": "Optional cleaner merchant name to show."},
             },
             "required": ["merchant", "category"],
@@ -867,6 +868,7 @@ def run_agent_turn(
     on_status: Callable[[str], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
     on_text: Callable[[str | None], None] | None = None,
+    on_usage: Callable[[dict], None] | None = None,
 ) -> tuple[str, list[dict]]:
     """Run one user turn to completion, resolving any tool calls, and return
     (final assistant reply text, sources) -- sources is every tool call that
@@ -886,7 +888,10 @@ def run_agent_turn(
 
     on_text, when given, gets the reply text as the model writes it (see
     AgentClient.run_turn). is_cancelled is also checked on each piece, so a
-    stop lands mid-answer instead of after it."""
+    stop lands mid-answer instead of after it.
+
+    on_usage, when given, gets each model round's token usage and cost (see
+    AgentClient.run_turn)."""
     sources: list[dict] = []
     seen_calls: set[str] = set()
 
@@ -968,6 +973,8 @@ def run_agent_turn(
     system = SYSTEM_PROMPT + _date_context(db, user_id)
     # Only passed when wanted, so AgentClient stand-ins without it still work.
     streaming = {"on_text": stream_text} if on_text else {}
+    if on_usage:
+        streaming["on_usage"] = on_usage
     reply = clip_reply(_client.run_turn(system, TOOL_DEFINITIONS, messages, call_tool, **streaming))
     check_cancelled()
     if not reply.strip():

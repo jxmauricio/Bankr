@@ -15,14 +15,33 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.db.models import LinkedAccount
 from app.db.seed_categories import DEFAULT_CATEGORIES
 from app.services import money_query as mq
 
 # Needs vs wants for the 50/30/20 snapshot (Elizabeth Warren, All Your Worth).
+# Food & Drink is split across the two: its Groceries are a need, the rest
+# (eating out, coffee, bars) a want; spending_health() moves it.
 NEEDS = frozenset(
-    {"Rent & Housing", "Groceries", "Utilities", "Transportation", "Health", "Loan Payments", "Fees"}
+    {
+        "Rent & Utilities",
+        "Transportation",
+        "Medical",
+        "Loan Payments",
+        "Bank Fees",
+        "General Services",
+    }
 )
-WANTS = frozenset({"Dining", "Entertainment", "Shopping", "Travel", "Subscriptions", "Other"})
+WANTS = frozenset(
+    {
+        "Entertainment",
+        "General Merchandise",
+        "Travel",
+        "Personal Care",
+        "Home Improvement",
+        "Government & Non-Profit",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -50,42 +69,37 @@ WANTS_GUIDELINE = Guideline(
 )
 
 CATEGORY_GUIDELINES: dict[str, Guideline] = {
-    "Rent & Housing": Guideline(
+    "Rent & Utilities": Guideline(
         30,
         "HUD / CFPB",
-        "Households spending over 30% of income on housing are considered rent-burdened.",
+        "Households spending over 30% of income on rent and utilities are considered rent-burdened.",
     ),
-    "Groceries": Guideline(
-        10,
+    "Food & Drink": Guideline(
+        15,
         "Common budget share",
-        "Many budget templates cap groceries around 10% of take-home; BLS food-at-home is often closer to 5–8%.",
-    ),
-    "Dining": Guideline(
-        5,
-        "50/30/20 wants",
-        "Eating out sits in the 30% wants bucket; about 5% of take-home is a common dining cap.",
+        "Budget templates often put groceries around 10% of take-home and eating out around 5%.",
     ),
     "Transportation": Guideline(
         15,
         "Common budget share",
         "Budget templates often keep gas, transit, and car costs around 10–15% of take-home.",
     ),
-    "Utilities": Guideline(
-        8,
-        "Common budget share",
-        "Power, water, and internet are commonly budgeted around 5–10% of take-home, beside rent.",
-    ),
-    "Health": Guideline(
+    "Medical": Guideline(
         10,
         "Common budget share",
-        "Out-of-pocket medical and personal-care costs are often budgeted around 5–10% of take-home.",
+        "Out-of-pocket medical costs are often budgeted around 5–10% of take-home.",
     ),
-    "Entertainment": Guideline(
+    "Personal Care": Guideline(
         5,
         "50/30/20 wants",
-        "Entertainment is a want; a common cap is about 5% of take-home.",
+        "Gym, hair, and beauty are mostly wants; a common cap is about 5% of take-home.",
     ),
-    "Shopping": Guideline(
+    "Entertainment": Guideline(
+        10,
+        "50/30/20 wants",
+        "Entertainment and streaming are wants; about 5% each is a common cap.",
+    ),
+    "General Merchandise": Guideline(
         5,
         "50/30/20 wants",
         "Non-essential shopping is a want; a common cap is about 5% of take-home.",
@@ -95,17 +109,21 @@ CATEGORY_GUIDELINES: dict[str, Guideline] = {
         "50/30/20 wants",
         "Travel is lumpy, but averaged monthly it still sits in wants — about 5% is a common ceiling.",
     ),
-    "Subscriptions": Guideline(
-        5,
-        "50/30/20 wants",
-        "Streaming and similar subscriptions are wants; a common cap is about 5% of take-home.",
-    ),
     "Loan Payments": Guideline(
         15,
         "Common budget share",
         "Non-mortgage debt payments are often kept under 10–15% of take-home (mortgage lives in housing).",
     ),
 }
+
+
+# Months of average spending that checking and savings would cover. A minimum, like savings.
+EMERGENCY_FUND_GUIDELINE = Guideline(
+    3,
+    "Common rule of thumb",
+    "Three to six months of expenses in cash is the usual emergency-fund advice.",
+)
+CASH_ACCOUNT_TYPES = frozenset({"checking", "savings"})
 
 
 _EXPENSE_PARENTS = tuple(name for name, type_, parent in DEFAULT_CATEGORIES if type_ == "expense" and parent is None)
@@ -207,6 +225,58 @@ def _line(
     }
 
 
+def _points(value: float | None, rec: float, higher_is_better: bool) -> float | None:
+    """0–100 for one metric: full marks at the guideline, falling off past it.
+    A minimum (savings, emergency fund) scores its share of the target; a
+    maximum loses 2 points per 1% of the guideline it's over, so 15% over
+    is 70 and 50% over is 0."""
+    if value is None:
+        return None
+    if higher_is_better:
+        return max(0.0, min(100.0, value / rec * 100))
+    ratio = value / rec if rec else 0
+    return max(0.0, min(100.0, 100 - (ratio - 1) * 200)) if ratio > 1 else 100.0
+
+
+def _metric(*, id: str, name: str, value: float | None, unit: str, tone: str, rec: float, higher_is_better: bool) -> dict:
+    points = _points(value, rec, higher_is_better)
+    return {
+        "id": id,
+        "name": name,
+        "value": value,
+        "unit": unit,
+        "tone": tone,
+        "recommended": rec,
+        "higher_is_better": higher_is_better,
+        "points": round(points) if points is not None else None,
+    }
+
+
+def _emergency_tone(months: float | None, rec: float) -> str:
+    if months is None:
+        return "neutral"
+    if months >= rec:
+        return "good"
+    if months >= 1:
+        return "ok"
+    return "high"
+
+
+def _cash_on_hand(db: Session, user_id: UUID) -> float | None:
+    """Checking and savings balances on active accounts; None before any balance has synced."""
+    balances = [
+        float(a.current_balance)
+        for a in db.query(LinkedAccount).filter(LinkedAccount.user_id == user_id, LinkedAccount.status == "active")
+        if a.account_type in CASH_ACCOUNT_TYPES and a.current_balance is not None
+    ]
+    return sum(balances) if balances else None
+
+
+def _score(metrics: list[dict]) -> int | None:
+    scored = [m["points"] for m in metrics if m["points"] is not None]
+    return round(sum(scored) / len(scored)) if scored else None
+
+
 def spending_health(db: Session, user_id: UUID) -> dict:
     """Average monthly spending by category vs recommended shares of income."""
     months, partial, n = mq.average_month_windows(db, user_id)
@@ -243,13 +313,19 @@ def spending_health(db: Session, user_id: UUID) -> dict:
             this_month_income=this_income,
         )
         for name, amount in sorted(by_cat.items(), key=lambda kv: kv[1], reverse=True)
-        if amount > 0 or name in ("Rent & Housing", "Groceries")
+        if amount > 0 or name in ("Rent & Utilities", "Food & Drink")
     ]
 
-    needs_amount = sum(by_cat.get(name, 0.0) for name in NEEDS)
-    wants_amount = sum(by_cat.get(name, 0.0) for name in WANTS)
-    this_needs = sum(this_by_cat.get(name, 0.0) for name in NEEDS)
-    this_wants = sum(this_by_cat.get(name, 0.0) for name in WANTS)
+    groceries = mq.resolve_category(db, "Groceries")
+    avg_groceries = sum(mq.spend_query(db, user_id, w, groceries)["total_spent"] for w in months) / n
+    this_groceries = mq.spend_query(db, user_id, this_month, groceries)["total_spent"]
+    eating_out = by_cat.get("Food & Drink", 0.0) - avg_groceries
+    this_eating_out = this_by_cat.get("Food & Drink", 0.0) - this_groceries
+
+    needs_amount = sum(by_cat.get(name, 0.0) for name in NEEDS) + avg_groceries
+    wants_amount = sum(by_cat.get(name, 0.0) for name in WANTS) + eating_out
+    this_needs = sum(this_by_cat.get(name, 0.0) for name in NEEDS) + this_groceries
+    this_wants = sum(this_by_cat.get(name, 0.0) for name in WANTS) + this_eating_out
 
     buckets = [
         _line(
@@ -285,25 +361,68 @@ def spending_health(db: Session, user_id: UUID) -> dict:
     by_id = {c["id"]: c for c in categories}
     snapshots = [
         buckets[2],  # saved
-        by_id.get("Rent & Housing")
+        by_id.get("Rent & Utilities")
         or _line(
-            id="Rent & Housing",
-            name="Rent & Housing",
+            id="Rent & Utilities",
+            name="Rent & Utilities",
             amount=0,
             income=income,
-            guideline=CATEGORY_GUIDELINES["Rent & Housing"],
+            guideline=CATEGORY_GUIDELINES["Rent & Utilities"],
             this_month_amount=0,
             this_month_income=this_income,
         ),
-        by_id.get("Groceries")
+        by_id.get("Food & Drink")
         or _line(
-            id="Groceries",
-            name="Groceries",
+            id="Food & Drink",
+            name="Food & Drink",
             amount=0,
             income=income,
-            guideline=CATEGORY_GUIDELINES["Groceries"],
+            guideline=CATEGORY_GUIDELINES["Food & Drink"],
             this_month_amount=0,
             this_month_income=this_income,
+        ),
+    ]
+
+    cash = _cash_on_hand(db, user_id)
+    months_covered = round(cash / spending, 1) if cash is not None and spending > 0 else None
+    housing, loans = by_id.get("Rent & Utilities") or snapshots[1], by_id.get("Loan Payments")
+    loans_guideline = CATEGORY_GUIDELINES["Loan Payments"]
+    metrics = [
+        _metric(
+            id="saved",
+            name="Savings rate",
+            value=buckets[2]["pct"],
+            unit="pct",
+            tone=buckets[2]["tone"],
+            rec=SAVINGS_GUIDELINE.pct,
+            higher_is_better=True,
+        ),
+        _metric(
+            id="emergency_fund",
+            name="Emergency fund",
+            value=months_covered,
+            unit="months",
+            tone=_emergency_tone(months_covered, EMERGENCY_FUND_GUIDELINE.pct),
+            rec=EMERGENCY_FUND_GUIDELINE.pct,
+            higher_is_better=True,
+        ),
+        _metric(
+            id="Loan Payments",
+            name="Debt to income",
+            value=loans["pct"] if loans else _pct(0, income),
+            unit="pct",
+            tone=loans["tone"] if loans else _spend_tone(_pct(0, income), loans_guideline.pct),
+            rec=loans_guideline.pct,
+            higher_is_better=False,
+        ),
+        _metric(
+            id="Rent & Utilities",
+            name="Housing",
+            value=housing["pct"],
+            unit="pct",
+            tone=housing["tone"],
+            rec=CATEGORY_GUIDELINES["Rent & Utilities"].pct,
+            higher_is_better=False,
         ),
     ]
 
@@ -321,8 +440,11 @@ def spending_health(db: Session, user_id: UUID) -> dict:
         "note": (
             "Income is pay that hit linked accounts (take-home, not gross). "
             "Saved is income minus spending, so a transfer to Fidelity counts as saved. "
-            "Guidelines are widely cited rules of thumb, not personalized advice."
+            "Guidelines are widely cited rules of thumb, not personalized advice. "
+            "The score averages the four metrics: full marks at a guideline, less the further past it."
         ),
+        "score": _score(metrics),
+        "metrics": metrics,
         "snapshots": snapshots,
         "buckets": buckets,
         "categories": categories,

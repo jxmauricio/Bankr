@@ -162,14 +162,14 @@ def test_create_spending_tracker_then_read_progress(client, monkeypatch):
     body = create_response.json()
     assert body["type"] == "track_spending"
     assert body["name"] == "Eating out"
-    assert body["category"] == "Dining"
+    assert body["category"] == "Food & Drink"
     assert body["window"] == "this_month"
     assert body["target_amount"] == 0.0
-    assert body["current_progress_amount"] == 45.0
+    assert body["current_progress_amount"] == 165.5  # Ramen Spot 45 + Trader Joe's 120.50
 
     progress = client.get("/dashboard/goal-progress").json()
-    assert progress["goals"][0]["category"] == "Dining"
-    assert progress["goals"][0]["current_progress_amount"] == 45.0
+    assert progress["goals"][0]["category"] == "Food & Drink"
+    assert progress["goals"][0]["current_progress_amount"] == 165.5
     assert progress["goals"][0]["window_label"] == "This month"
 
 
@@ -187,15 +187,15 @@ def test_spending_drilldown_matches_a_chat_source_query(client, monkeypatch):
     _with_fake_aggregator(client)
     client.post("/linked-accounts", json={"public_token": "public-fake-token"})
 
-    r = client.get("/dashboard/spending", params={"start": "2026-08-01", "end": "2026-08-31", "category": "Dining"})
+    r = client.get("/dashboard/spending", params={"start": "2026-08-01", "end": "2026-08-31", "category": "Food & Drink"})
     body = r.json()
-    assert body["total"] == 45.0
-    assert [i["merchant_name"] for i in body["items"]] == ["Ramen Spot"]
+    assert body["total"] == 165.5
+    assert sorted(i["merchant_name"] for i in body["items"]) == ["Ramen Spot", "Trader Joe's"]
     assert body["end"] == "2026-08-20"  # capped at today
 
-    bad = client.get("/dashboard/spending", params={"category": "grocries"})
+    bad = client.get("/dashboard/spending", params={"category": "trasportation"})
     assert bad.status_code == 422
-    assert "Groceries" in bad.json()["detail"]["did_you_mean"]
+    assert "Transportation" in bad.json()["detail"]["did_you_mean"]
 
 
 def _synced_in_august(client, monkeypatch):
@@ -216,8 +216,8 @@ def test_transactions_view_lists_every_kind_with_its_account(client, monkeypatch
     assert body["transaction_count"] == 3
     assert [t["merchant_name"] for t in body["transactions"]] == ["Ramen Spot", "Trader Joe's", "Employer Inc"]
     dining = body["transactions"][0]
-    assert dining["category"] == "Restaurants"
-    assert dining["parent_category"] == "Dining"
+    assert dining["category"] == "Food & Drink"
+    assert dining["parent_category"] is None
     assert dining["category_type"] == "expense"
     assert dining["account"]["type"] == "credit"
     assert body["transactions"][2]["category_type"] == "income"
@@ -233,7 +233,7 @@ def test_cash_flow_sides_add_up_to_the_rollup(client, monkeypatch):
 
     assert body["income"] == rollup["income"] == 3000.0
     assert body["sources"] == [{"name": "Employer Inc", "amount": 3000.0}]
-    assert {c["name"]: c["amount"] for c in body["categories"]} == {"Groceries": 120.5, "Dining": 45.0}
+    assert {c["name"]: c["amount"] for c in body["categories"]} == {"Food & Drink": 165.5}
     assert sum(c["amount"] for c in body["categories"]) == rollup["spending"]
     assert body["transfer_in"] == rollup["transfer_in"] == 0
     assert body["transfer_out"] == rollup["transfer_out"] == 0

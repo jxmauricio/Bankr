@@ -1,6 +1,9 @@
 import json
 
+import pytest
+
 from app.agent import claude_agent
+from app.config import settings
 from app.db.models import ChatMessage
 from app.services.sync_service import sync_user_accounts
 from tests.fake_agent_client import FakeAgentClient, ScriptedTurn
@@ -172,7 +175,7 @@ def test_chat_propose_spending_tracker_returns_category_and_window(client, db, u
     body = response.json()
     assert body["sources"] == [{"tool": "propose_goal", "label": "Proposed a spending tracker", "query": None, "searched": None}]
     assert body["goal_proposal"]["type"] == "track_spending"
-    assert body["goal_proposal"]["category"] == "Dining"
+    assert body["goal_proposal"]["category"] == "Food & Drink"
     assert body["goal_proposal"]["window"] == "this_month"
     assert body["goal_proposal"]["target_amount"] == 0.0
     assert db.query(Goal).filter(Goal.user_id == user.id).count() == 0
@@ -277,3 +280,52 @@ def test_cancelled_turn_saves_nothing(db, user, monkeypatch):
         chat_service.send_message(db, user.id, uuid4(), "what's my net worth?", is_cancelled=lambda: True)
 
     assert db.query(ChatMessage).filter(ChatMessage.user_id == user.id).count() == 0
+
+
+_ROUNDS = [
+    {"input": 1000, "output": 50, "reasoning": None, "cached": 200, "cost": 0.001},
+    {"input": 1200, "output": 80, "reasoning": None, "cached": None, "cost": 0.0015},
+]
+
+
+def test_chat_has_no_usage_unless_debug_is_on(client, user, monkeypatch):
+    monkeypatch.setattr(claude_agent, "_client", FakeAgentClient(turns=[ScriptedTurn(final_text="Hi!", usage=_ROUNDS)]))
+
+    assert client.post("/chat", json={"message": "hi"}).json()["usage"] is None
+
+
+def test_chat_debug_sums_usage_across_rounds(client, user, monkeypatch):
+    monkeypatch.setattr(settings, "agent_debug", True)
+    monkeypatch.setattr(claude_agent, "_client", FakeAgentClient(turns=[ScriptedTurn(final_text="Hi!", usage=_ROUNDS)]))
+
+    usage = client.post("/chat", json={"message": "hi"}).json()["usage"]
+
+    assert usage["rounds"] == 2
+    assert usage["input_tokens"] == 2200
+    assert usage["output_tokens"] == 130
+    assert usage["cached_tokens"] == 200
+    assert usage["reasoning_tokens"] is None  # never reported, so unknown rather than 0
+    assert usage["cost_usd"] == pytest.approx(0.0025)
+    assert usage["model"]
+
+
+def test_chat_debug_leaves_cost_unknown_when_the_provider_reports_none(client, user, monkeypatch):
+    monkeypatch.setattr(settings, "agent_debug", True)
+    rounds = [{"input": 10, "output": 5}]
+    monkeypatch.setattr(claude_agent, "_client", FakeAgentClient(turns=[ScriptedTurn(final_text="Hi!", usage=rounds)]))
+
+    usage = client.post("/chat", json={"message": "hi"}).json()["usage"]
+
+    assert usage["input_tokens"] == 10
+    assert usage["cost_usd"] is None
+
+
+def test_chat_stream_done_event_carries_usage_in_debug(client, user, monkeypatch):
+    monkeypatch.setattr(settings, "agent_debug", True)
+    monkeypatch.setattr(claude_agent, "_client", FakeAgentClient(turns=[ScriptedTurn(final_text="Hi!", usage=_ROUNDS)]))
+
+    events = _sse_events(client.post("/chat/stream", json={"message": "hi"}))
+
+    done = next(data for event, data in events if event == "done")
+    assert done["usage"]["rounds"] == 2
+    assert done["usage"]["cost_usd"] == pytest.approx(0.0025)

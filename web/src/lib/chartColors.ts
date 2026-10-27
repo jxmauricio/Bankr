@@ -1,35 +1,34 @@
 /**
- * Fixed category -> color slot order, matching seed_categories.py's
- * DEFAULT_CATEGORIES. Fixed (not cycled per-render) so a category's color
+ * Fixed category -> color slot order over seed_categories.py's
+ * DEFAULT_CATEGORIES, most-seen spending first so those get distinct hues.
+ * Fixed (not cycled per-render) so a category's color
  * is stable across opens, per the dataviz rule "color follows the entity."
  * Palette is the validated dark-mode categorical set (8 hues, ΔE-checked
  * against this app's #10131C surface).
  */
 const CATEGORY_ORDER = [
-  "Income",
-  "Groceries",
-  "Dining",
+  "Food & Drink",
   "Transportation",
-  "Rent & Housing",
-  "Utilities",
-  "Subscriptions",
+  "Rent & Utilities",
+  "General Merchandise",
   "Entertainment",
-  "Shopping",
-  "Health",
-  "Transfer",
-  "Other",
-  "Restaurants",
-  "Fast Food",
-  "Coffee",
-  "Alcohol & Bars",
-  "Gas",
-  "Rideshare & Taxi",
-  "Public Transit",
-  "Parking & Tolls",
-  "Auto Maintenance",
   "Travel",
+  "Medical",
+  "Personal Care",
+  "Income",
+  "Transfer In",
+  "Transfer Out",
   "Loan Payments",
-  "Fees",
+  "Bank Fees",
+  "Home Improvement",
+  "General Services",
+  "Government & Non-Profit",
+  "Groceries",
+  "Coffee",
+  "Gas",
+  "Rent",
+  "Utilities",
+  "Software",
 ];
 export const CATEGORY_PALETTE = [
   "#3987e5",

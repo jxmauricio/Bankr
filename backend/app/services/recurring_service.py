@@ -39,8 +39,8 @@ MAX_VARIATION = 0.25
 MAX_VARIATION_UTILITIES = 0.6
 PRICE_CHANGE_THRESHOLD = 0.05
 
-SUBSCRIPTION_CATEGORIES = {"Subscriptions", "Entertainment"}
-UTILITY_CATEGORIES = {"Utilities"}
+SUBSCRIPTION_CATEGORIES = {"Entertainment", "Software"}
+UTILITY_CATEGORIES = {"Rent & Utilities"}
 
 _NOISE = re.compile(r"[^a-z ]+")
 
@@ -87,7 +87,7 @@ class _Charge:
     amount: float  # positive size
     name: str
     category_id: UUID | None
-    category: str | None
+    categories: frozenset[str]  # its category and that category's parent
 
 
 def _match_cadence(gaps: list[int]) -> str | None:
@@ -109,7 +109,7 @@ def _detect_group(charges: list[_Charge], direction: str) -> dict | None:
         if c.date in by_day:
             by_day[c.date].amount += c.amount
         else:
-            by_day[c.date] = _Charge(c.date, c.amount, c.name, c.category_id, c.category)
+            by_day[c.date] = _Charge(c.date, c.amount, c.name, c.category_id, c.categories)
     series = list(by_day.values())
     if len(series) < 2:
         return None
@@ -120,7 +120,7 @@ def _detect_group(charges: list[_Charge], direction: str) -> dict | None:
 
     amounts = [c.amount for c in series]
     latest = series[-1]
-    limit = MAX_VARIATION_UTILITIES if latest.category in UTILITY_CATEGORIES else MAX_VARIATION
+    limit = MAX_VARIATION_UTILITIES if latest.categories & UTILITY_CATEGORIES else MAX_VARIATION
     # Judge steadiness on the history before the latest charge, so a single
     # price increase is reported as a change rather than hiding the series.
     history = amounts[:-1] if len(amounts) > 2 else amounts
@@ -129,7 +129,7 @@ def _detect_group(charges: list[_Charge], direction: str) -> dict | None:
 
     if direction == "in":
         kind = "income"
-    elif latest.category in SUBSCRIPTION_CATEGORIES:
+    elif latest.categories & SUBSCRIPTION_CATEGORIES:
         kind = "subscription"
     else:
         kind = "bill"
@@ -172,7 +172,7 @@ def _charges(db: Session, user_id: UUID, since: date) -> dict[tuple[str, str], l
         if not key:
             continue
         groups.setdefault((key, direction), []).append(
-            _Charge(txn.date, abs(amount), txn.merchant_name or key, txn.bankr_category_id, parent_name or name)
+            _Charge(txn.date, abs(amount), txn.merchant_name or key, txn.bankr_category_id, frozenset({name, parent_name} - {None}))
         )
     return groups
 

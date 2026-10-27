@@ -22,31 +22,32 @@ from sqlalchemy.orm import Session
 from app.db.models import Category
 
 # (name, type, parent name or None). Parents must appear before children.
+# The 16 primaries of Plaid's Personal Finance Category taxonomy, plus a few
+# subcategories for the questions a primary is too coarse to answer
+# (groceries vs eating out, car gas, rent vs the bills, software).
 DEFAULT_CATEGORIES: list[tuple[str, str, str | None]] = [
     ("Income", "income", None),
-    ("Transfer", "transfer", None),
-    ("Groceries", "expense", None),
-    ("Dining", "expense", None),
-    ("Restaurants", "expense", "Dining"),
-    ("Fast Food", "expense", "Dining"),
-    ("Coffee", "expense", "Dining"),
-    ("Alcohol & Bars", "expense", "Dining"),
+    ("Transfer In", "transfer", None),
+    ("Transfer Out", "transfer", None),
+    ("Loan Payments", "expense", None),
+    ("Bank Fees", "expense", None),
+    ("Entertainment", "expense", None),
+    ("Food & Drink", "expense", None),
+    ("Groceries", "expense", "Food & Drink"),
+    ("Coffee", "expense", "Food & Drink"),
+    ("General Merchandise", "expense", None),
+    ("Home Improvement", "expense", None),
+    ("Medical", "expense", None),
+    ("Personal Care", "expense", None),
+    ("General Services", "expense", None),
+    ("Software", "expense", "General Services"),
+    ("Government & Non-Profit", "expense", None),
     ("Transportation", "expense", None),
     ("Gas", "expense", "Transportation"),
-    ("Rideshare & Taxi", "expense", "Transportation"),
-    ("Public Transit", "expense", "Transportation"),
-    ("Parking & Tolls", "expense", "Transportation"),
-    ("Auto Maintenance", "expense", "Transportation"),
     ("Travel", "expense", None),
-    ("Rent & Housing", "expense", None),
-    ("Utilities", "expense", None),
-    ("Subscriptions", "expense", None),
-    ("Entertainment", "expense", None),
-    ("Shopping", "expense", None),
-    ("Health", "expense", None),
-    ("Loan Payments", "expense", None),
-    ("Fees", "expense", None),
-    ("Other", "expense", None),
+    ("Rent & Utilities", "expense", None),
+    ("Rent", "expense", "Rent & Utilities"),
+    ("Utilities", "expense", "Rent & Utilities"),
 ]
 
 

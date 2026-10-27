@@ -83,13 +83,13 @@ def test_q3_groceries_this_month_vs_last(db, ledger, monkeypatch):
 
 def test_q4_eating_out_last_week_and_the_drilldown_adds_up(db, ledger, monkeypatch):
     _, result, source = ask(db, ledger, monkeypatch, "get_spending", {"window": "last_week", "category": "eating out"})
-    assert result["total_spent"] == EXPECTED["dining_last_week"]
-    assert source["label"] == "Dining · Sep 7–13, 2026 · 5 transactions"
+    assert result["total_spent"] == EXPECTED["food_last_week"]
+    assert source["label"] == "Food & Drink · Sep 7–13, 2026 · 6 transactions"
 
     # Tapping the chip lists exactly the rows behind the number.
     rows = get_itemized_transactions(db, ledger.id, "expense", **{k: v for k, v in source["query"].items() if v})
-    assert rows["total"] == EXPECTED["dining_last_week"]
-    assert round(-sum(i["amount"] for i in rows["items"]), 2) == EXPECTED["dining_last_week"]
+    assert rows["total"] == EXPECTED["food_last_week"]
+    assert round(-sum(i["amount"] for i in rows["items"]), 2) == EXPECTED["food_last_week"]
 
 
 def test_q5_what_am_i_spending_a_lot_on(db, ledger, monkeypatch):
@@ -104,6 +104,6 @@ def test_q6_gas_last_month(db, ledger, monkeypatch):
 
 
 def test_a_bad_category_comes_back_as_a_recoverable_error(db, ledger, monkeypatch):
-    _, result, source = ask(db, ledger, monkeypatch, "get_spending", {"category": "grocries"})
-    assert "Groceries" in result["did_you_mean"]
+    _, result, source = ask(db, ledger, monkeypatch, "get_spending", {"category": "trasportation"})
+    assert "Transportation" in result["did_you_mean"]
     assert "query" not in source  # no drill-down for a figure that doesn't exist

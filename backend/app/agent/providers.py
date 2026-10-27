@@ -47,13 +47,14 @@ def _log_round(round_number: int, model_seconds: float, tool_seconds: float, usa
     tokens are counted separately because a model that reasons by default
     spends most of a round's time on output the user never sees."""
     logger.info(
-        "agent round %d: model %.2fs, tools %.2fs, tokens in=%s out=%s reasoning=%s, served_by=%s",
+        "agent round %d: model %.2fs, tools %.2fs, tokens in=%s out=%s reasoning=%s, cost=%s, served_by=%s",
         round_number,
         model_seconds,
         tool_seconds,
         usage.get("input"),
         usage.get("output"),
         usage.get("reasoning"),
+        usage.get("cost"),
         served_by,
     )
 
@@ -110,6 +111,7 @@ class AnthropicAgentClient:
         history: list[dict],
         call_tool: Callable[[str, dict], dict],
         on_text: Callable[[str | None], None] | None = None,
+        on_usage: Callable[[dict], None] | None = None,
     ) -> str:
         anthropic_tools = self._to_anthropic_tools(tools)
         messages = list(history)
@@ -132,6 +134,8 @@ class AnthropicAgentClient:
                 "input": getattr(getattr(response, "usage", None), "input_tokens", None),
                 "output": getattr(getattr(response, "usage", None), "output_tokens", None),
             }
+            if on_usage:
+                on_usage(usage)
             # Preserve the response's own content blocks unmodified (thinking
             # included) -- Claude requires the thinking blocks that led to a
             # tool call to come back exactly as issued on the next turn.
@@ -202,10 +206,14 @@ class OpenAICompatibleAgentClient:
         if usage is None:
             return {}
         details = getattr(usage, "completion_tokens_details", None)
+        prompt_details = getattr(usage, "prompt_tokens_details", None)
         return {
             "input": getattr(usage, "prompt_tokens", None),
             "output": getattr(usage, "completion_tokens", None),
             "reasoning": getattr(details, "reasoning_tokens", None),
+            "cached": getattr(prompt_details, "cached_tokens", None),
+            # Billed dollars for the call -- only OpenRouter reports this.
+            "cost": getattr(usage, "cost", None),
         }
 
     def _create_round(self, request: dict, on_text: Callable[[str | None], None] | None) -> tuple[dict, dict, str | None]:
@@ -269,6 +277,7 @@ class OpenAICompatibleAgentClient:
         history: list[dict],
         call_tool: Callable[[str, dict], dict],
         on_text: Callable[[str | None], None] | None = None,
+        on_usage: Callable[[dict], None] | None = None,
     ) -> str:
         openai_tools = self._to_openai_tools(tools)
         messages = [{"role": "system", "content": system}] + list(history)
@@ -290,6 +299,8 @@ class OpenAICompatibleAgentClient:
                 on_text,
             )
             model_seconds = time.monotonic() - started
+            if on_usage:
+                on_usage(usage)
             messages.append(message)
             tool_calls = message.get("tool_calls")
 
@@ -347,7 +358,8 @@ class OpenRouterAgentClient(OpenAICompatibleAgentClient):
         headers = {"X-Title": app_name}
         if site_url:
             headers["HTTP-Referer"] = site_url
-        extra_body = {}
+        # Usage accounting: adds the billed `cost` to each response's usage.
+        extra_body: dict = {"usage": {"include": True}}
         if extended_thinking:
             extra_body["reasoning"] = {"max_tokens": thinking_budget_tokens}
         if provider_sort:
@@ -359,6 +371,6 @@ class OpenRouterAgentClient(OpenAICompatibleAgentClient):
             base_url="https://openrouter.ai/api/v1",
             model=model,
             default_headers=headers,
-            extra_body=extra_body or None,
+            extra_body=extra_body,
             max_output_tokens=max_output_tokens,
         )

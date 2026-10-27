@@ -236,6 +236,7 @@ class PlaidClient:
           prerequisite for calling this at all."""
         client = _client()
         options = TransactionsSyncRequestOptions(
+            include_original_description=True,
             include_personal_finance_category=True,
             personal_finance_category_version=PersonalFinanceCategoryVersion("v2"),
         )
@@ -372,11 +373,13 @@ def _plaid_error_code(error: plaid.ApiException) -> str | None:
 
 def _to_aggregator_transaction(txn) -> AggregatorTransaction:
     category = None
+    confidence = None
     if txn.personal_finance_category:
         # `detailed` (e.g. "FOOD_AND_DRINK_GROCERIES") is more specific than
         # `primary` -- category_mapper.py falls back to primary-level
         # matching for anything it doesn't recognize at the detailed level.
         category = txn.personal_finance_category.detailed
+        confidence = getattr(txn.personal_finance_category, "confidence_level", None)
     elif txn.category:
         category = txn.category[0]
 
@@ -392,4 +395,20 @@ def _to_aggregator_transaction(txn) -> AggregatorTransaction:
         raw_category=category,
         is_pending=txn.pending,
         pending_transaction_id=txn.get("pending_transaction_id"),
+        category_confidence=str(confidence) if confidence is not None else None,
+        payment_channel=str(txn.get("payment_channel")) if txn.get("payment_channel") is not None else None,
+        original_description=txn.get("original_description"),
+        location_city=getattr(txn.get("location"), "city", None),
+        location_region=getattr(txn.get("location"), "region", None),
+        payment_processor=_payment_processor(txn),
     )
+
+
+def _payment_processor(txn) -> str | None:
+    processor = getattr(txn.get("payment_meta"), "payment_processor", None)
+    if processor:
+        return processor
+    for counterparty in txn.get("counterparties") or []:
+        if str(getattr(counterparty, "type", "")) == "payment_terminal":
+            return getattr(counterparty, "name", None)
+    return None

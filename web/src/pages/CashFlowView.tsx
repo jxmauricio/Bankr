@@ -43,7 +43,7 @@ function sides(flow: CashFlowBreakdown): { left: FlowNode[]; right: FlowNode[]; 
       name: t.name,
       amount: t.amount,
       kind: "transfer",
-      target: { category: "Transfer", query: /^\d+ other /.test(t.name) ? "" : t.name },
+      target: { category: "Transfer In", query: /^\d+ other /.test(t.name) ? "" : t.name },
     });
   }
   if (moneyOut > moneyIn) {
@@ -63,7 +63,7 @@ function sides(flow: CashFlowBreakdown): { left: FlowNode[]; right: FlowNode[]; 
       name: t.name,
       amount: t.amount,
       kind: "transfer",
-      target: { category: "Transfer", query: /^\d+ other /.test(t.name) ? "" : t.name },
+      target: { category: "Transfer Out", query: /^\d+ other /.test(t.name) ? "" : t.name },
     });
   }
   if (flow.net > 0) right.push({ name: "Left over", amount: flow.net, kind: "kept" });

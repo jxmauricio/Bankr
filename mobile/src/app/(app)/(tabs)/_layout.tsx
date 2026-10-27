@@ -7,6 +7,7 @@ import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, wi
 import { scheduleOnRN } from "react-native-worklets";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useMoney } from "@/features/money/MoneyContext";
+import { useNotifications } from "@/features/notifications/NotificationsContext";
 import { radius, space } from "@/theme/tokens";
 import { makeStyles } from "@/theme/theme";
 import { IconButton, Text } from "@/ui";
@@ -168,22 +169,41 @@ function Page({ index, loaded, render }: { index: number; loaded: boolean; rende
   );
 }
 
-/** Settings on the left; chat history on the Chat tab, otherwise sync from the bank. */
+/**
+ * Settings on the left; notifications, then chat history on the Chat tab or
+ * sync from the bank elsewhere, on the right. The left side holds an empty
+ * slot so the name stays centered.
+ */
 function TopBar({ onChat }: { onChat: boolean }) {
   const styles = useStyles();
   const { syncFromBank, isSyncing } = useMoney();
+  const { unreadCount } = useNotifications();
   return (
     <View style={styles.bar}>
-      <IconButton icon="settings" label="Accounts and goals" variant="plain" onPress={() => router.push("/money")} />
+      <View style={styles.side}>
+        <IconButton icon="settings" label="Accounts and goals" variant="plain" onPress={() => router.push("/money")} />
+        <View style={styles.slot} />
+      </View>
       <Text variant="brand" accessibilityRole="header">
         Bankr
       </Text>
-      {onChat ? (
-        // A new chat starts from the history sheet's "New chat" row.
-        <IconButton icon="chat" label="Chat history" variant="plain" onPress={() => router.push("/history")} />
-      ) : (
-        <IconButton icon="refresh" label="Sync from bank" variant="plain" onPress={syncFromBank} disabled={isSyncing} />
-      )}
+      <View style={styles.side}>
+        <View>
+          <IconButton
+            icon="bell"
+            label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
+            variant="plain"
+            onPress={() => router.push("/notifications")}
+          />
+          {unreadCount > 0 && <View style={styles.dot} pointerEvents="none" />}
+        </View>
+        {onChat ? (
+          // A new chat starts from the history sheet's "New chat" row.
+          <IconButton icon="chat" label="Chat history" variant="plain" onPress={() => router.push("/history")} />
+        ) : (
+          <IconButton icon="refresh" label="Sync from bank" variant="plain" onPress={syncFromBank} disabled={isSyncing} />
+        )}
+      </View>
     </View>
   );
 }
@@ -223,6 +243,19 @@ const useStyles = makeStyles((colors) =>
     root: { flex: 1, backgroundColor: colors.bg },
     header: { backgroundColor: colors.bg },
     bar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.sm + 2 },
+    side: { flexDirection: "row", width: 88 },
+    slot: { width: 44 },
+    dot: {
+      position: "absolute",
+      top: 9,
+      right: 9,
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: colors.accent,
+      borderWidth: 2,
+      borderColor: colors.bg,
+    },
     tabs: { flexGrow: 0, flexShrink: 0 },
     pager: { flex: 1, overflow: "hidden" },
     hidden: { display: "none" },

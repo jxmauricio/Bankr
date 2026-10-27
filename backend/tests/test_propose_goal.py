@@ -63,8 +63,8 @@ def test_propose_goal_drafts_a_spending_tracker(db, user):
 
     assert result["status"] == "proposed"
     assert result["proposal"]["type"] == "track_spending"
-    assert result["proposal"]["name"] == "Dining"
-    assert result["proposal"]["category"] == "Dining"
+    assert result["proposal"]["name"] == "Food & Drink"
+    assert result["proposal"]["category"] == "Food & Drink"
     assert result["proposal"]["window"] == "this_month"
     assert result["proposal"]["target_amount"] == 0.0
     assert result["proposal"]["target_date"] is None
@@ -77,7 +77,7 @@ def test_propose_goal_spending_tracker_keeps_optional_name_and_cap(db, user):
         user.id,
         type="track_spending",
         name="Coffee budget",
-        category="Groceries",
+        category="Food & Drink",
         window="this_week",
         target_amount=200,
     )
@@ -87,9 +87,9 @@ def test_propose_goal_spending_tracker_keeps_optional_name_and_cap(db, user):
 
 
 def test_propose_goal_spending_tracker_defaults_window(db, user):
-    result = propose_goal(db, user.id, type="track_spending", category="Coffee")
+    result = propose_goal(db, user.id, type="track_spending", category="Travel")
     assert result["proposal"]["window"] == "this_month"
-    assert result["proposal"]["name"] == "Coffee"
+    assert result["proposal"]["name"] == "Travel"
 
 
 def test_propose_goal_rejects_unknown_tracker_category(db, user):

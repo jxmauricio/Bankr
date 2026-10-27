@@ -16,22 +16,22 @@ const MONTHS: Record<string, string> = {
 };
 
 const CATEGORY_HINTS: [RegExp, string][] = [
-  [/\b(eating out|eat out|dine|dining|restaurants?|takeout|take-out|food delivery)\b/i, "Dining"],
-  [/\b(fast food|drive[- ]?thru)\b/i, "Fast Food"],
+  [/\b(eating out|eat out|dine|dining|restaurants?|takeout|take-out|food delivery|food)\b/i, "Food & Drink"],
+  [/\b(fast food|drive[- ]?thru|bars?|drinks|alcohol|nightlife)\b/i, "Food & Drink"],
   [/\b(coffee|cafe|cafes|starbucks)\b/i, "Coffee"],
-  [/\b(bars?|drinks|alcohol|nightlife)\b/i, "Alcohol & Bars"],
   [/\b(grocer(?:y|ies)|supermarket|trader joe)\b/i, "Groceries"],
   [/\b(gas|fuel|petrol)\b/i, "Gas"],
-  [/\b(uber|lyft|rideshare|taxi)\b/i, "Rideshare & Taxi"],
-  [/\b(transit|subway|bus|train)\b/i, "Public Transit"],
-  [/\b(parking|tolls?)\b/i, "Parking & Tolls"],
+  [/\b(uber|lyft|rideshare|taxi|transit|subway|bus|train|parking|tolls?)\b/i, "Transportation"],
   [/\b(travel|flights?|hotels?|vacation|trips?)\b/i, "Travel"],
-  [/\b(rent|housing)\b/i, "Rent & Housing"],
   [/\b(utilities|electric|internet|phone bill)\b/i, "Utilities"],
-  [/\b(subscriptions?|streaming|netflix)\b/i, "Subscriptions"],
-  [/\b(entertainment|movies?|fun)\b/i, "Entertainment"],
-  [/\b(shopping|amazon|clothes)\b/i, "Shopping"],
-  [/\b(health|doctor|pharmacy|gym)\b/i, "Health"],
+  [/\b(rent)\b/i, "Rent"],
+  [/\b(housing)\b/i, "Rent & Utilities"],
+  [/\b(subscriptions?|streaming|netflix|entertainment|movies?|fun)\b/i, "Entertainment"],
+  [/\b(shopping|amazon|clothes)\b/i, "General Merchandise"],
+  [/\b(health|medical|doctor|pharmacy|dentist)\b/i, "Medical"],
+  [/\b(gym|haircuts?|beauty)\b/i, "Personal Care"],
+  [/\b(furniture|home repairs?|hardware)\b/i, "Home Improvement"],
+  [/\b(software|apps|saas)\b/i, "Software"],
   [/\b(transport|commute|driving)\b/i, "Transportation"],
 ];
 

@@ -37,6 +37,18 @@ class AggregatorTransaction:
     # issues a new id when a charge posts) -- lets sync drop the stale
     # pending row even if the aggregator's own "removed" signal is missed.
     pending_transaction_id: str | None = None
+    # How sure the aggregator is of raw_category: Plaid's PFC
+    # confidence_level (VERY_HIGH | HIGH | MEDIUM | LOW | UNKNOWN). LOW and
+    # UNKNOWN rows are usually a guess from the merchant's name alone.
+    category_confidence: str | None = None
+    payment_channel: str | None = None  # "in store" | "online" | "other"
+    # What the bank statement itself says ("SQ *MOONGOAT GREENHOUS"), where
+    # the purchase happened, and the card terminal's company (Square, Toast):
+    # the clues app/services/category_classifier.py searches the web with.
+    original_description: str | None = None
+    location_city: str | None = None
+    location_region: str | None = None
+    payment_processor: str | None = None
 
 
 @dataclass

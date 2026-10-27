@@ -51,3 +51,25 @@ def test_build_agent_client_still_supports_generic_openai_compatible(monkeypatch
 
     assert isinstance(client, OpenAICompatibleAgentClient)
     assert not isinstance(client, OpenRouterAgentClient)
+
+
+def test_openai_compatible_usage_reads_cost_and_cached_tokens():
+    from types import SimpleNamespace
+
+    response = SimpleNamespace(
+        usage=SimpleNamespace(
+            prompt_tokens=900,
+            completion_tokens=40,
+            completion_tokens_details=SimpleNamespace(reasoning_tokens=12),
+            prompt_tokens_details=SimpleNamespace(cached_tokens=300),
+            cost=0.0042,
+        )
+    )
+
+    assert OpenAICompatibleAgentClient._usage(response) == {
+        "input": 900,
+        "output": 40,
+        "reasoning": 12,
+        "cached": 300,
+        "cost": 0.0042,
+    }
