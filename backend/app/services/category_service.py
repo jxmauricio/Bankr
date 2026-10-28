@@ -13,7 +13,13 @@ through the mapping, as if never picked.
 
 A built-in group or category can't be changed for everyone, so renaming one
 stores the user's name for it in a CategoryPref; clearing that name brings
-the built-in one back.
+the built-in one back. Hiding a built-in category is stored there too: what
+would land in it lands in Uncategorized instead.
+
+A category of the user's own can also be *excluded* ("Work Expenses",
+"Reimbursable"), in a group of excluded ones: what's in it stays in the
+Transactions list but never counts as spending, income or a transfer, since
+every total sums one of those types.
 """
 
 from uuid import UUID
@@ -21,7 +27,18 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.db.models import Budget, BudgetMove, Category, CategoryGroup, CategoryPref, Goal, RecurringSeries, Rule, Transaction
+from app.db.models import (
+    Budget,
+    BudgetMove,
+    Category,
+    CategoryGroup,
+    CategoryPref,
+    Goal,
+    LinkedAccount,
+    RecurringSeries,
+    Rule,
+    Transaction,
+)
 from app.db.seed_categories import display_names, user_categories, user_groups, visible_to
 from app.services.category_backfill import remap_transactions
 from app.services.money_query import SLICE_NAMES
@@ -92,22 +109,30 @@ def create_group(db: Session, user_id: UUID, name: str) -> CategoryGroup:
     return group
 
 
-def create_category(db: Session, user_id: UUID, name: str, group_id: UUID | None = None) -> Category:
-    """In group_id, a spending group they can see; without one, alone in a
-    new group of the same name."""
+KINDS = ("expense", "excluded")
+
+
+def create_category(db: Session, user_id: UUID, name: str, group_id: UUID | None = None, kind: str = "expense") -> Category:
+    """In group_id, a group of that kind they can see (spending, or one of
+    their excluded groups); without one, alone in a new group of the same
+    name."""
+    if kind not in KINDS:
+        raise CategoryError(f"kind must be one of {KINDS}")
     count = db.query(func.count(Category.id)).filter(Category.user_id == user_id).scalar()
     if count >= MAX_CUSTOM_CATEGORIES:
         raise CategoryError(f"you can have up to {MAX_CUSTOM_CATEGORIES} categories of your own")
     cleaned = _clean_name(db, user_id, name)
     if group_id is not None:
         group = db.get(CategoryGroup, group_id)
-        if group is None or not visible_to(group, user_id) or group.type != "expense":
-            raise CategoryError("a new category goes in one of the spending groups")
+        if group is None or not visible_to(group, user_id) or group.type != kind:
+            raise CategoryError(
+                "a new category goes in one of the spending groups" if kind == "expense" else "pick one of your excluded groups"
+            )
     else:
-        group = CategoryGroup(name=cleaned, type="expense", user_id=user_id)
+        group = CategoryGroup(name=cleaned, type=kind, user_id=user_id)
         db.add(group)
         db.flush()
-    category = Category(name=cleaned, type="expense", group_id=group.id, is_system_default=False, user_id=user_id)
+    category = Category(name=cleaned, type=kind, group_id=group.id, is_system_default=False, user_id=user_id)
     db.add(category)
     db.flush()
     return category
@@ -142,6 +167,34 @@ def _pref(db: Session, user_id: UUID, item: Category | CategoryGroup) -> Categor
         pref = CategoryPref(user_id=user_id, group_id=item.id if is_group else None, category_id=None if is_group else item.id)
         db.add(pref)
     return pref
+
+
+def set_hidden(db: Session, user_id: UUID, category_id: UUID, hidden: bool) -> int:
+    """Hide a built-in category for this user, or show it again. Rows the
+    pipeline put there move (to Uncategorized, or back); their own picks
+    stay. Returns how many moved."""
+    from app.db.seed_categories import seed_default_categories
+    from app.services import categorization_service as categorization
+
+    category = _visible(db, user_id, category_id)
+    if not isinstance(category, Category) or category.user_id is not None:
+        raise CategoryError("only a built-in category can be hidden; delete one of your own instead")
+    if category.system_key == categorization.UNCATEGORIZED:
+        raise CategoryError("Uncategorized is where everything nothing else places goes; it can't be hidden")
+    _pref(db, user_id, category).hidden = hidden
+    db.flush()
+    moving = (
+        db.query(Transaction)
+        .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
+        .filter(LinkedAccount.user_id == user_id, Transaction.category_source != categorization.MANUAL)
+        .filter(
+            Transaction.bankr_category_id == category.id
+            if hidden
+            else Transaction.category_source == categorization.FALLBACK
+        )
+        .all()
+    )
+    return categorization.recategorize(db, user_id, moving, seed_default_categories(db))
 
 
 def group_pref(db: Session, user_id: UUID, group_id: UUID) -> CategoryPref:
@@ -191,7 +244,7 @@ def _delete_category(db: Session, user_id: UUID, category: Category) -> int:
     txn_ids = [row.id for row in db.query(Transaction.id).filter(Transaction.bankr_category_id == category.id)]
     # A split's parts stay hand-picked (the split is); a whole row isn't any more.
     db.query(Transaction).filter(Transaction.id.in_(txn_ids), Transaction.split_parent_id.is_(None)).update(
-        {Transaction.category_overridden: False}, synchronize_session=False
+        {Transaction.category_source: "aggregator"}, synchronize_session=False
     )
     db.flush()
     remap_transactions(db, txn_ids)

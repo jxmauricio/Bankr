@@ -21,7 +21,7 @@ def test_a_re_map_puts_rows_back_where_plaid_says_except_the_users_picks(db, use
     sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
     categories = seed_default_categories(db)
     picked, drifted = _txn(db, "txn_dining"), _txn(db, "txn_groceries")
-    picked.bankr_category_id, picked.category_overridden = categories["travel_and_vacation"].id, True
+    picked.bankr_category_id, picked.category_source = categories["travel_and_vacation"].id, "manual"
     drifted.bankr_category_id = categories["pets"].id
     db.commit()
 
@@ -73,7 +73,7 @@ def test_the_move_to_monarch_carries_picks_rules_budgets_and_trackers(db, user):
         db.add(old[key])
     db.flush()
     picked = _txn(db, "txn_dining")
-    picked.bankr_category_id, picked.category_overridden = old["coffee"].id, True
+    picked.bankr_category_id, picked.category_source = old["coffee"].id, "manual"
     db.add(Rule(user_id=user.id, merchant_contains="github", set_category_id=old["software"].id))
     db.add_all(
         [

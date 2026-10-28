@@ -415,7 +415,9 @@ export interface TransactionSplit {
   category_id: string | null;
   category: string | null;
   parent_category: string | null;
-  category_type: "income" | "expense" | "transfer" | null;
+  category_type: "income" | "expense" | "transfer" | "excluded" | null;
+  /** How it got its category; "fallback" means nothing placed it: the review queue. */
+  category_source: "manual" | "rule" | "learned" | "classifier" | "aggregator" | "fallback";
   is_pending: boolean;
   notes: string | null;
   is_excluded: boolean;
@@ -441,7 +443,9 @@ export interface CategoryOption {
   /** A built-in category's stable id ("restaurants"); null on the user's own. */
   key: string | null;
   name: string;
-  type: "income" | "expense" | "transfer";
+  type: "income" | "expense" | "transfer" | "excluded";
+  /** A built-in category the user hid: pickers leave it out. */
+  hidden: boolean;
   /** Its chart color, from the backend so it follows the category, not its name. */
   color: string;
   /** A built-in category's emoji (Monarch's); null on groups and the user's own. */

@@ -20,9 +20,8 @@ and only those, get a second opinion, once per merchant:
 
 Answers are cached per merchant in MerchantCategoryGuess, with Jev's
 confidence; only answers at or above settings.jev_min_confidence replace
-Plaid's category. Precedence on a transaction, highest first: the user's own
-pick (category_overridden), the user's rules, a trusted cached guess here,
-Plaid's mapping. Income and transfers are never a choice: those stay with
+Plaid's category. Where this sits among the user's picks, rules and what
+they've taught it: see categorization_service. Income and transfers are never a choice: those stay with
 the sign and account-type logic in category_mapper.py, and a merchant
 category_mapper already knows (a software merchant) is never asked about.
 
@@ -260,7 +259,7 @@ def needs_second_opinion(txn: Transaction, mapped: Category) -> bool:
         and mapped.system_key not in _NEVER_ASKED
         and not (txn.raw_aggregator_category or "").lower().startswith(("transfer_", "loan_"))
         and float(txn.amount) < 0
-        and not txn.category_overridden
+        and txn.category_source != "manual"
         and not txn.is_split
         and txn.split_parent_id is None
         and merchant_key(txn.original_merchant_name) is not None
@@ -403,7 +402,7 @@ def classify_merchants(
         if answer.confidence is not None and answer.confidence < settings.jev_min_confidence:
             continue
         for txn in txns:
-            txn.bankr_category_id = category.id
+            txn.bankr_category_id, txn.category_source = category.id, "classifier"
             changed += 1
     if len(pending) > limit:
         logger.info("category classifier: %d merchants left for a later sync", len(pending) - limit)

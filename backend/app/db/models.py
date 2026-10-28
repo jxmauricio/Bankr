@@ -91,7 +91,7 @@ class CategoryGroup(Base):
     # Stable id of a built-in group ("food_and_drink"); None on a user's own.
     system_key: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
     name: Mapped[str] = mapped_column(String)
-    type: Mapped[str] = mapped_column(String)  # income | expense | transfer
+    type: Mapped[str] = mapped_column(String)  # income | expense | transfer | excluded
     # Set on a group a user made for themselves; None on the built-in ones.
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
@@ -103,7 +103,7 @@ class Category(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     name: Mapped[str] = mapped_column(String)
-    type: Mapped[str] = mapped_column(String)  # income | expense | transfer
+    type: Mapped[str] = mapped_column(String)  # income | expense | transfer | excluded
     group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("category_groups.id"), index=True)
     is_system_default: Mapped[bool] = mapped_column(Boolean, default=True)
     # Stable id of a built-in category ("restaurants"), what code looks it up
@@ -140,6 +140,9 @@ class CategoryPref(Base):
     )
     name: Mapped[str | None] = mapped_column(String, nullable=True)
     budget_mode: Mapped[str | None] = mapped_column(String, nullable=True)  # by_group (default) | by_category
+    # A built-in category this user doesn't want: gone from pickers, and
+    # what would land in it lands in Uncategorized instead.
+    hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class Transaction(Base):
@@ -162,11 +165,14 @@ class Transaction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     # User edits. merchant_name is what every surface shows; the aggregator's
     # own name is kept in original_merchant_name so rules can still match it
-    # after a rename. The *_overridden flags stop a re-sync (which re-maps
-    # every modified row) from undoing the user's choice.
+    # after a rename. merchant_overridden stops a re-sync (which re-maps
+    # every modified row) from undoing the user's rename.
     original_merchant_name: Mapped[str | None] = mapped_column(String, nullable=True)
     merchant_overridden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
-    category_overridden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Where bankr_category_id came from: manual | rule | learned | classifier
+    # | aggregator | fallback (see categorization_service). A re-sync never
+    # touches a manual one.
+    category_source: Mapped[str] = mapped_column(String, default="aggregator", server_default="aggregator")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Excluded rows still show in the Transactions list but never count as
     # spending or income (a reimbursed work trip, a one-off gift).
@@ -295,6 +301,24 @@ class MerchantCategoryGuess(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
+class LearnedCategory(Base):
+    """What a user keeps picking for one merchant. Each time they move a
+    merchant's transaction to the same category by hand, hits goes up; a
+    different pick starts over. From LEARN_AFTER hits on, that merchant's
+    new rows land there (categorization_service), below the user's rules."""
+
+    __tablename__ = "learned_categories"
+    __table_args__ = (UniqueConstraint("user_id", "merchant_key"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # See category_classifier.merchant_key.
+    merchant_key: Mapped[str] = mapped_column(String)
+    category_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("categories.id", ondelete="CASCADE"))
+    hits: Mapped[int] = mapped_column(default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
 class Rule(Base):
     """"Always categorize <merchant> as <category>" -- applied to every
     synced transaction the user hasn't categorized by hand."""
@@ -303,8 +327,10 @@ class Rule(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    # Case-insensitive substring of the bank's merchant name (or the user's rename).
+    # Case-insensitive text of the bank's merchant name (or the user's rename):
+    # anywhere in it, or the whole name when match_exact.
     merchant_contains: Mapped[str] = mapped_column(String)
+    match_exact: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # Optional bounds on the charge's size (absolute value).
     amount_min: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     amount_max: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)

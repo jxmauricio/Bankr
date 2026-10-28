@@ -410,7 +410,9 @@ export interface TransactionSplit {
   category_id: string | null;
   category: string | null;
   parent_category: string | null;
-  category_type: "income" | "expense" | "transfer" | null;
+  category_type: "income" | "expense" | "transfer" | "excluded" | null;
+  /** How it got its category; "fallback" means nothing placed it: the review queue. */
+  category_source: "manual" | "rule" | "learned" | "classifier" | "aggregator" | "fallback";
   is_pending: boolean;
   notes: string | null;
   is_excluded: boolean;
@@ -436,7 +438,9 @@ export interface CategoryOption {
   /** A built-in category's stable id ("restaurants"); null on the user's own. */
   key: string | null;
   name: string;
-  type: "income" | "expense" | "transfer";
+  type: "income" | "expense" | "transfer" | "excluded";
+  /** A built-in category the user hid: pickers leave it out. */
+  hidden: boolean;
   /** Its chart color, from the backend so it follows the category, not its name. */
   color: string;
   /** A built-in category's emoji (Monarch's); null on groups and the user's own. */
@@ -452,9 +456,14 @@ export interface CategoryNode extends CategoryOption {
 export const fetchCategories = (token: string) =>
   request<{ categories: CategoryNode[] }>("/categories", { token }).then((r) => r.categories);
 
-/** groupId: a spending group to put it in, or null for one on its own (in a new group of its name). */
-export const createCategory = (token: string, name: string, groupId: string | null) =>
-  request<{ id: string; categories: CategoryNode[] }>("/categories", { method: "POST", token, body: { name, group_id: groupId } });
+/** groupId: a group of its kind to put it in, or null for one on its own (in a new group of its name).
+ * kind "excluded": its transactions never count as spending, income or transfers. */
+export const createCategory = (token: string, name: string, groupId: string | null, kind: "expense" | "excluded" = "expense") =>
+  request<{ id: string; categories: CategoryNode[] }>("/categories", { method: "POST", token, body: { name, group_id: groupId, kind } });
+
+/** Hide a built-in category (what would land there goes to review instead), or show it again. */
+export const setCategoryHidden = (token: string, id: string, hidden: boolean) =>
+  request<{ recategorized: number; categories: CategoryNode[] }>(`/categories/${id}/hidden`, { method: "PUT", token, body: { hidden } });
 
 /** Any group or category: a built-in one is renamed for this user only, and "" puts its name back. */
 export const renameCategory = (token: string, id: string, name: string) =>
@@ -501,6 +510,8 @@ export const fetchTransactions = (token: string, window: string) =>
 export interface Rule {
   id: string;
   merchant_contains: string;
+  /** The whole merchant name, not text anywhere in it. */
+  match_exact: boolean;
   amount_min: number | null;
   amount_max: number | null;
   linked_account_id: string | null;
@@ -515,6 +526,7 @@ export interface Rule {
 
 export interface NewRule {
   merchant_contains: string;
+  match_exact?: boolean;
   set_category_id: string;
   set_merchant_name?: string;
   amount_min?: number;

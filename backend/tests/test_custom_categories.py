@@ -150,7 +150,7 @@ def test_deleting_one_sends_its_rows_back_to_plaids_category(client, db, user):
     db.expire_all()
 
     dining, groceries = _txn(db, "txn_dining"), _txn(db, "txn_groceries")
-    assert dining.category.name == "Restaurants & Bars" and not dining.category_overridden
+    assert dining.category.name == "Restaurants & Bars" and dining.category_source != "manual"
     assert groceries.category.name == "Groceries"
     assert db.query(Rule).count() == 0
     assert db.query(Category).filter(Category.user_id == user.id).count() == 0

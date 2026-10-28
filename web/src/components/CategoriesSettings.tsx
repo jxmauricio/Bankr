@@ -1,5 +1,14 @@
 import { useState, type FormEvent } from "react";
-import { ApiError, createCategory, deleteCategory, renameCategory, setBudgetMode, type CategoryNode, type CategoryOption } from "../lib/api";
+import {
+  ApiError,
+  createCategory,
+  deleteCategory,
+  renameCategory,
+  setBudgetMode,
+  setCategoryHidden,
+  type CategoryNode,
+  type CategoryOption,
+} from "../lib/api";
 import { reloadCategories, useCategories } from "../lib/useCategories";
 
 const ON_ITS_OWN = "";
@@ -7,21 +16,25 @@ const fieldClass =
   "min-h-10 min-w-0 rounded-xl border border-line bg-raised px-2.5 text-[13px] text-ink outline-none focus:border-signal";
 const linkClass = "cursor-pointer text-sm text-ink-soft hover:text-ink disabled:opacity-60";
 
-/** Settings section: every spending group and its categories. Any of them can
- * be renamed (a built-in one for this user only, with a way back); the
- * user's own can be deleted; a group with several categories can be budgeted
- * as one line or a line per category. A new category goes in a group (and
- * counts in its total and budget) or stands on its own. */
+/** Settings section: every spending (and excluded) group and its categories.
+ * Any of them can be renamed (a built-in one for this user only, with a way
+ * back); a built-in category can be hidden, sending what would land there to
+ * review; the user's own can be deleted; a group with several categories can
+ * be budgeted as one line or a line per category. A new category goes in a
+ * group (and counts in its total and budget) or stands on its own, and can be
+ * excluded from every total instead ("Work Expenses"). */
 export function CategoriesSettings({ token }: { token: string }) {
   const categories = useCategories(token);
   const [name, setName] = useState("");
   const [groupId, setGroupId] = useState(ON_ITS_OWN);
+  const [kind, setKind] = useState<"expense" | "excluded">("expense");
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const spending = categories.filter((c) => c.type === "expense");
+  const spending = categories.filter((c) => c.type === "expense" || c.type === "excluded");
+  const groupsOfKind = spending.filter((g) => g.type === kind);
 
   async function run(id: string, action: () => Promise<string | void>) {
     setBusyId(id);
@@ -41,7 +54,7 @@ export function CategoriesSettings({ token }: { token: string }) {
   function add(e: FormEvent) {
     e.preventDefault();
     run("new", async () => {
-      await createCategory(token, name, groupId || null);
+      await createCategory(token, name, groupId || null, kind);
       setName("");
     });
   }
@@ -79,15 +92,33 @@ export function CategoriesSettings({ token }: { token: string }) {
     }
     return (
       <>
-        <p className={`m-0 min-w-0 text-sm ${nested ? "text-ink-soft" : "font-medium text-ink"}`}>
+        <p className={`m-0 min-w-0 text-sm ${item.hidden ? "text-ink-faint" : nested ? "text-ink-soft" : "font-medium text-ink"}`}>
           {item.emoji && <span aria-hidden="true">{item.emoji} </span>}
           {item.name}
           {item.custom && <span className="font-normal text-ink-faint"> · yours</span>}
+          {item.type === "excluded" && <span className="font-normal text-ink-faint"> · counts in no total</span>}
+          {item.hidden && <span className="font-normal"> · hidden</span>}
         </p>
         <div className="flex shrink-0 gap-3">
           <button type="button" disabled={busy} onClick={() => setRenaming({ id: item.id, name: item.name })} className={linkClass}>
             Rename
           </button>
+          {!item.custom && item.kind === "category" && item.key !== "uncategorized" && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                run(item.id, async () => {
+                  const { recategorized } = await setCategoryHidden(token, item.id, !item.hidden);
+                  if (recategorized)
+                    return `${recategorized} transaction${recategorized === 1 ? "" : "s"} ${item.hidden ? "moved back" : "moved to review"}.`;
+                })
+              }
+              className={linkClass}
+            >
+              {item.hidden ? "Show" : "Hide"}
+            </button>
+          )}
           {item.renamed && (
             <button type="button" disabled={busy} onClick={() => run(item.id, () => renameCategory(token, item.id, "").then(() => {}))} className={linkClass}>
               Reset name
@@ -169,13 +200,25 @@ export function CategoriesSettings({ token }: { token: string }) {
           className={`${fieldClass} flex-1 basis-40`}
         />
         <select
+          aria-label="How it counts"
+          value={kind}
+          onChange={(e) => {
+            setKind(e.target.value as "expense" | "excluded");
+            setGroupId(ON_ITS_OWN);
+          }}
+          className={`${fieldClass} cursor-pointer basis-40`}
+        >
+          <option value="expense">Counts as spending</option>
+          <option value="excluded">Excluded from totals</option>
+        </select>
+        <select
           aria-label="Where it goes"
           value={groupId}
           onChange={(e) => setGroupId(e.target.value)}
           className={`${fieldClass} cursor-pointer basis-40`}
         >
           <option value={ON_ITS_OWN}>On its own</option>
-          {spending.map((g) => (
+          {groupsOfKind.map((g) => (
             <option key={g.group_id} value={g.group_id}>
               In {g.name}
             </option>

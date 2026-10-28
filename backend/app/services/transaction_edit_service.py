@@ -11,7 +11,19 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.db.models import Category, CategoryGroup, LinkedAccount, Transaction
-from app.db.seed_categories import BY_GROUP, budget_modes, category_color, category_emoji, display_names, user_categories, user_groups, visible_to
+from app.db.seed_categories import (
+    BY_GROUP,
+    budget_modes,
+    category_color,
+    category_emoji,
+    display_names,
+    seed_default_categories,
+    user_categories,
+    user_groups,
+    visible_to,
+)
+from app.services import categorization_service as categorization
+from app.services.category_classifier import merchant_key
 
 MAX_SPLITS = 10
 
@@ -61,7 +73,12 @@ def update_transaction(
         if txn.is_split:
             raise TransactionEditError("a split transaction is categorized by its splits")
         txn.bankr_category_id = _category(db, txn, category_id).id
-        txn.category_overridden = True
+        txn.category_source = categorization.MANUAL
+        # Twice the same pick for a merchant and its other rows follow.
+        if categorization.learn(db, txn.linked_account.user_id, txn):
+            key = merchant_key(txn.original_merchant_name)
+            rows = categorization.merchant_rows(db, txn.linked_account.user_id, key)
+            categorization.recategorize(db, txn.linked_account.user_id, rows, seed_default_categories(db))
     if merchant_name is not None:
         cleaned = merchant_name.strip()
         txn.merchant_name = cleaned or txn.original_merchant_name
@@ -106,7 +123,7 @@ def set_splits(db: Session, txn: Transaction, parts: list[dict]) -> list[Transac
             original_merchant_name=txn.original_merchant_name,
             raw_aggregator_category=txn.raw_aggregator_category,
             bankr_category_id=_category(db, txn, part["category_id"]).id,
-            category_overridden=True,
+            category_source=categorization.MANUAL,
             is_pending=txn.is_pending,
             notes=(part.get("note") or "").strip() or None,
             split_parent_id=txn.id,
@@ -124,12 +141,14 @@ def category_tree(db: Session, user_id: UUID) -> list[dict]:
     that category, with no children: there's nothing to pick between.
 
     `kind` says which a node is (only a category can be picked for a
-    transaction). Every node carries `group_id` and the group's
+    transaction); `hidden` marks a built-in one the user hid, which pickers
+    leave out. Every node carries `group_id` and the group's
     `budget_mode`; `custom`
     marks the user's own, which they can delete; `key` is a built-in's
     stable id and `color` its chart color, so clients never match on names."""
     names = display_names(db, user_id)
     modes = budget_modes(db, user_id)
+    hidden = categorization.hidden_categories(db, user_id)
     by_group: dict[UUID, list[Category]] = {}
     for c in user_categories(db, user_id).values():
         by_group.setdefault(c.group_id, []).append(c)
@@ -145,6 +164,7 @@ def category_tree(db: Session, user_id: UUID) -> list[dict]:
             "emoji": category_emoji(item),
             "custom": item.user_id is not None,
             "renamed": item.id in names,
+            "hidden": item.id in hidden,
             "group_id": str(group.id),
             "budget_mode": modes.get(group.id, BY_GROUP),
         }
@@ -156,5 +176,5 @@ def category_tree(db: Session, user_id: UUID) -> list[dict]:
             tree.append({**node(members[0], group), "children": []})
         else:
             tree.append({**node(group, group), "children": [node(c, group) for c in members]})
-    type_order = {"expense": 0, "income": 1, "transfer": 2}
+    type_order = {"expense": 0, "income": 1, "transfer": 2, "excluded": 3}
     return sorted(tree, key=lambda c: (type_order.get(c["type"], 3), c["name"]))

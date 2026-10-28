@@ -1,8 +1,9 @@
 """Categorization rules: "always put <merchant> under <category>".
 
-Rules run on every synced transaction after category_mapper's default,
-and can be applied to existing history. Neither ever touches a row the user
-categorized by hand (category_overridden) or a split parent.
+Rules run on every synced transaction ahead of everything but the user's
+own picks (categorization_service), and can be applied to existing
+history. Neither ever touches a row the user categorized by hand
+(category_source "manual") or a split parent.
 """
 
 from uuid import UUID
@@ -36,8 +37,8 @@ def user_rules(db: Session, user_id: UUID) -> list[Rule]:
 
 def _matches(rule: Rule, txn: Transaction) -> bool:
     needle = rule.merchant_contains.lower()
-    names = (txn.original_merchant_name, txn.merchant_name)
-    if not any(n and needle in n.lower() for n in names):
+    names = [n.lower() for n in (txn.original_merchant_name, txn.merchant_name) if n]
+    if not any(needle == n if rule.match_exact else needle in n for n in names):
         return False
     size = abs(float(txn.amount))
     if rule.amount_min is not None and size < float(rule.amount_min):
@@ -51,11 +52,11 @@ def _matches(rule: Rule, txn: Transaction) -> bool:
 
 def apply_rules(txn: Transaction, rules: list[Rule]) -> Rule | None:
     """Apply the first matching rule to txn in place; returns it, or None."""
-    if txn.category_overridden or txn.is_split or txn.split_parent_id is not None:
+    if txn.category_source == "manual" or txn.is_split or txn.split_parent_id is not None:
         return None
     for rule in rules:
         if _matches(rule, txn):
-            txn.bankr_category_id = rule.set_category_id
+            txn.bankr_category_id, txn.category_source = rule.set_category_id, "rule"
             if rule.set_merchant_name and not txn.merchant_overridden:
                 txn.merchant_name = rule.set_merchant_name
             return rule
@@ -63,13 +64,13 @@ def apply_rules(txn: Transaction, rules: list[Rule]) -> Rule | None:
 
 
 def _candidates(db: Session, user_id: UUID, rule: Rule):
-    needle = f"%{rule.merchant_contains}%"
+    needle = rule.merchant_contains if rule.match_exact else f"%{rule.merchant_contains}%"
     return (
         db.query(Transaction)
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
         .filter(
             LinkedAccount.user_id == user_id,
-            Transaction.category_overridden.is_(False),
+            Transaction.category_source != "manual",
             Transaction.is_split.is_(False),
             Transaction.split_parent_id.is_(None),
             or_(Transaction.original_merchant_name.ilike(needle), Transaction.merchant_name.ilike(needle)),
@@ -77,9 +78,9 @@ def _candidates(db: Session, user_id: UUID, rule: Rule):
     )
 
 
-def preview_rule(db: Session, user_id: UUID, merchant_contains: str, category_id: UUID) -> int:
+def preview_rule(db: Session, user_id: UUID, merchant_contains: str, category_id: UUID, match_exact: bool = False) -> int:
     """How many past transactions a new rule would recategorize."""
-    rule = Rule(merchant_contains=merchant_contains, set_category_id=category_id)
+    rule = Rule(merchant_contains=merchant_contains, set_category_id=category_id, match_exact=match_exact)
     return (
         _candidates(db, user_id, rule)
         .filter(or_(Transaction.bankr_category_id.is_(None), Transaction.bankr_category_id != category_id))

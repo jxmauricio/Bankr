@@ -24,6 +24,7 @@ router = APIRouter(prefix="/rules", tags=["rules"])
 
 class RuleFields(BaseModel):
     merchant_contains: str | None = Field(default=None, max_length=120)
+    match_exact: bool | None = None  # the whole merchant name, not text anywhere in it
     amount_min: float | None = Field(default=None, ge=0)
     amount_max: float | None = Field(default=None, ge=0)
     linked_account_id: UUID | None = None
@@ -43,6 +44,7 @@ def _rule_dict(db: Session, rule: Rule, applied: int | None = None) -> dict:
     out = {
         "id": str(rule.id),
         "merchant_contains": rule.merchant_contains,
+        "match_exact": rule.match_exact,
         "amount_min": float(rule.amount_min) if rule.amount_min is not None else None,
         "amount_max": float(rule.amount_max) if rule.amount_max is not None else None,
         "linked_account_id": str(rule.linked_account_id) if rule.linked_account_id else None,
@@ -66,10 +68,11 @@ def list_rules(user: User = Depends(get_current_user), db: Session = Depends(get
 def preview(
     merchant_contains: str = Query(min_length=2, max_length=120),
     category_id: UUID = Query(),
+    match_exact: bool = False,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    return {"would_change": preview_rule(db, user.id, merchant_contains.strip(), category_id)}
+    return {"would_change": preview_rule(db, user.id, merchant_contains.strip(), category_id, match_exact)}
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

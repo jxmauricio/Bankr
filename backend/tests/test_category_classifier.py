@@ -180,7 +180,7 @@ def test_user_rule_beats_the_classifier(db, user, classifier):
 def test_user_override_beats_the_classifier(db, user, classifier):
     _sync(db, user, _txn("t1", confidence="HIGH"))
     row = db.query(Transaction).one()
-    row.category_overridden = True
+    row.category_source = "manual"
     db.commit()
 
     _sync(db, user, _txn("t1"))

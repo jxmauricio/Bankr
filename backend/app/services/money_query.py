@@ -852,6 +852,8 @@ def transaction_row(txn: Transaction, category_name, category_type, group_name) 
         "category": category_name,
         "parent_category": group_name if group_name != category_name else None,
         "category_type": category_type,
+        # How it got there (categorization_service); "fallback" is the review queue.
+        "category_source": txn.category_source,
         "is_pending": txn.is_pending,
         "notes": txn.notes,
         "is_excluded": txn.is_excluded,

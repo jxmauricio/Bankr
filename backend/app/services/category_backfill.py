@@ -6,7 +6,7 @@ fix never needs a re-fetch from Plaid -- run this instead. Used by the
 
 Reads and writes named columns only, never whole Transaction rows: the
 migration that calls this runs against the schema as it was then, before
-later columns (category_overridden, ...) existed.
+later columns (category_source, ...) existed.
 """
 
 from types import SimpleNamespace
@@ -16,9 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.db.models import LinkedAccount, Transaction
 from app.db.seed_categories import seed_default_categories, seed_default_groups
-from app.services.category_classifier import merchant_key, needs_second_opinion, trusted
 from app.services.category_mapper import map_raw_category
-from app.services.rules_service import apply_rules, user_rules
+from app.services import categorization_service as categorization
 
 
 def recategorize_all_transactions(db: Session) -> int:
@@ -32,8 +31,10 @@ def recategorize_all_transactions(db: Session) -> int:
         Transaction.merchant_name,
         LinkedAccount.account_type,
     ).join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
-    if "category_overridden" in columns:
-        rows = rows.filter(Transaction.category_overridden.is_(False))  # the user picked these; never re-map
+    if "category_source" in columns:
+        rows = rows.filter(Transaction.category_source != "manual")  # the user picked these; never re-map
+    elif "category_overridden" in columns:  # before e8b1d4f2a690
+        rows = rows.filter(text("NOT transactions.category_overridden"))
 
     changed = 0
     for txn_id, raw, amount, current, merchant, account_type in rows.all():
@@ -214,34 +215,60 @@ def remap_transactions(db: Session, txn_ids: list) -> None:
 
 
 def _remap_uncategorized_by_hand(db: Session, categories: dict, txn_ids: list | None = None) -> None:
+    """Run categorization_service's pipeline again over every row the user
+    didn't categorize by hand (or just `txn_ids`, whoever picked them)."""
     rows = db.execute(
         text(
             "SELECT t.id, t.raw_aggregator_category, t.amount, t.bankr_category_id, t.aggregator_category_confidence, "
             "t.merchant_name, t.original_merchant_name, t.merchant_overridden, t.is_split, t.split_parent_id, "
-            "t.linked_account_id, a.account_type, a.user_id "
+            "t.linked_account_id, t.category_source, a.account_type, a.user_id "
             "FROM transactions t JOIN linked_accounts a ON a.id = t.linked_account_id "
-            + ("WHERE t.id = ANY(:ids)" if txn_ids is not None else "WHERE NOT t.category_overridden")
+            + ("WHERE t.id = ANY(:ids)" if txn_ids is not None else "WHERE t.category_source <> 'manual'")
         ),
         {"ids": list(txn_ids)} if txn_ids is not None else {},
     ).mappings().all()
     guesses = _cached_guesses(db)
-    rules_by_user: dict = {}
+    contexts: dict = {}
     for row in rows:
-        txn = SimpleNamespace(**row, category_overridden=False)
-        mapped = categories[map_raw_category(
-            txn.raw_aggregator_category, float(txn.amount), txn.account_type, txn.original_merchant_name
-        )]
-        txn.bankr_category_id = mapped.id
-        guess = guesses.get(merchant_key(txn.original_merchant_name)) if needs_second_opinion(txn, mapped) else None
-        if guess is not None and trusted(guess):  # as a sync would: an unsure guess keeps Plaid's
-            txn.bankr_category_id = guess.category_id
-        if txn.user_id not in rules_by_user:
-            rules_by_user[txn.user_id] = user_rules(db, txn.user_id)
-        apply_rules(txn, rules_by_user[txn.user_id])
-        if txn.bankr_category_id != row["bankr_category_id"]:
+        txn = SimpleNamespace(**{**row, "category_source": categorization.AGGREGATOR})
+        if txn.user_id not in contexts:
+            contexts[txn.user_id] = categorization.context(db, txn.user_id, categories, guesses)
+        categorization.categorize(txn, txn.account_type, contexts[txn.user_id])
+        if (txn.bankr_category_id, txn.category_source) != (row["bankr_category_id"], row["category_source"]):
             db.execute(
-                text("UPDATE transactions SET bankr_category_id = :category WHERE id = :id"),
-                {"category": txn.bankr_category_id, "id": txn.id},
+                text("UPDATE transactions SET bankr_category_id = :category, category_source = :source WHERE id = :id"),
+                {"category": txn.bankr_category_id, "source": txn.category_source, "id": txn.id},
+            )
+    db.flush()
+
+
+def learn_from_history(db: Session) -> None:
+    """Seed LearnedCategory from the picks users already made by hand: a
+    merchant whose manual picks all agree counts one hit per pick, so two
+    or more are learned at once (categorization_service.LEARN_AFTER)."""
+    from app.services.category_classifier import merchant_key
+
+    rows = db.execute(
+        text(
+            "SELECT a.user_id, t.original_merchant_name, t.bankr_category_id FROM transactions t "
+            "JOIN linked_accounts a ON a.id = t.linked_account_id "
+            "WHERE t.category_source = 'manual' AND NOT t.is_split AND t.split_parent_id IS NULL "
+            "AND t.bankr_category_id IS NOT NULL"
+        )
+    ).all()
+    picks: dict = {}
+    for user_id, name, category_id in rows:
+        if key := merchant_key(name):
+            picks.setdefault((user_id, key), []).append(category_id)
+    for (user_id, key), categories in picks.items():
+        if len(set(categories)) == 1:
+            db.execute(
+                text(
+                    "INSERT INTO learned_categories (id, user_id, merchant_key, category_id, hits, updated_at) "
+                    "VALUES (gen_random_uuid(), :user_id, :key, :category, :hits, now()) "
+                    "ON CONFLICT (user_id, merchant_key) DO NOTHING"
+                ),
+                {"user_id": user_id, "key": key, "category": categories[0], "hits": len(categories)},
             )
     db.flush()
 

@@ -22,12 +22,9 @@ from app.services.category_classifier import (
     classify_merchants,
     get_classifier,
     merchant_key,
-    needs_second_opinion,
-    trusted,
 )
-from app.services.category_mapper import map_raw_category
+from app.services import categorization_service as categorization
 from app.services.crypto import decrypt_token
-from app.services.rules_service import apply_rules, user_rules
 
 
 def backfill_category_confidence(
@@ -36,7 +33,6 @@ def backfill_category_confidence(
     """`limit` caps how many merchants are sent to the classifier; None
     sends them all (about $0.003 each), unlike a sync's per-run cap."""
     categories = seed_default_categories(db)
-    rules = user_rules(db, user_id)
     linked_accounts = db.query(LinkedAccount).filter(LinkedAccount.user_id == user_id).all()
 
     from_plaid = {}
@@ -55,28 +51,17 @@ def backfill_category_confidence(
     guesses = cached_guesses(db, {k for row in rows if (k := merchant_key(row.original_merchant_name))})
     unclassified: dict[str, tuple[list[AggregatorTransaction], list[Transaction]]] = {}
     from_cache = 0
+    ctx = categorization.context(db, user_id, categories, guesses)
     for row in rows:
         t = from_plaid[row.aggregator_transaction_id]
         row.aggregator_category_confidence = t.category_confidence
-        if row.category_overridden:
-            continue
-        mapped = categories[map_raw_category(
-            row.raw_aggregator_category,
-            float(row.amount),
-            account_types[row.linked_account_id],
-            row.original_merchant_name,
-        )]
-        if not needs_second_opinion(row, mapped) or apply_rules(row, rules) is not None:
-            continue
-        key = merchant_key(row.original_merchant_name)
-        if key in guesses:
-            if trusted(guesses[key]):
-                row.bankr_category_id = guesses[key].category_id
-                from_cache += 1
-            continue
-        sent, merchant_rows = unclassified.setdefault(key, ([], []))
-        sent.append(t)
-        merchant_rows.append(row)
+        ask = categorization.categorize(row, account_types[row.linked_account_id], ctx)
+        if row.category_source == categorization.CLASSIFIER:
+            from_cache += 1
+        if ask:
+            sent, merchant_rows = unclassified.setdefault(merchant_key(row.original_merchant_name), ([], []))
+            sent.append(t)
+            merchant_rows.append(row)
 
     classified = 0
     classifier = get_classifier()
