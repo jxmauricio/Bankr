@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { ApiError, createGoal } from "../lib/api";
 import { useSession } from "../lib/session";
-import { GOAL_KIND_HINTS, GOAL_KIND_LABELS, GOAL_KINDS, SPEND_CATEGORIES, TRACKING_WINDOWS, formatMoney } from "../lib/format";
+import { GOAL_KIND_HINTS, GOAL_KIND_LABELS, GOAL_KINDS, TRACKING_WINDOWS, formatMoney } from "../lib/format";
+import { categoryName, spendCategoryNames, useCategories } from "../lib/useCategories";
 import { GoalNameField } from "../components/GoalNameField";
 import { SetupHeader, StepEyebrow } from "../components/SetupHeader";
 
@@ -15,7 +16,8 @@ export function GoalSetupPage({ onGoalSet }: { onGoalSet: () => void }) {
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [targetDate, setTargetDate] = useState("");
-  const [category, setCategory] = useState("Food & Drink");
+  const categories = useCategories(token);
+  const [category, setCategory] = useState(() => categoryName(categories, "food_and_drink"));
   const [windowName, setWindowName] = useState("this_month");
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -137,7 +139,7 @@ export function GoalSetupPage({ onGoalSet }: { onGoalSet: () => void }) {
                     }}
                     className={`${fieldClass} cursor-pointer`}
                   >
-                    {SPEND_CATEGORIES.map((item) => (
+                    {spendCategoryNames(categories).map((item) => (
                       <option key={item} value={item}>
                         {item}
                       </option>

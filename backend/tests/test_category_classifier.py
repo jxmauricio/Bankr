@@ -166,7 +166,7 @@ def test_answer_outside_the_choices_is_ignored(db, user, classifier):
 
 
 def test_user_rule_beats_the_classifier(db, user, classifier):
-    merchandise = seed_default_categories(db)["Other Shopping"]
+    merchandise = seed_default_categories(db)["other_shopping"]
     db.add(Rule(user_id=user.id, merchant_contains="moongoat", set_category_id=merchandise.id))
     db.commit()
 
@@ -230,17 +230,17 @@ def test_merchant_key_normalizes():
 
 def test_category_choices_are_the_spending_categories(db):
     choices = category_choices(seed_default_categories(db))
-    assert choices["Food & Drink > Coffee"] == "Coffee"  # subcategories carry their parent
-    assert choices["General Services > Software"] == "Software"
-    assert choices["Travel"] == "Travel"  # a top-level category without subcategories is its own leaf
+    assert choices["Food & Drink > Coffee"] == "coffee"  # subcategories carry their parent
+    assert choices["General Services > Software"] == "software"
+    assert choices["Travel"] == "travel"  # a top-level category without subcategories is its own leaf
     # A group is never a choice: its "Other ..." subcategory is.
-    assert "Food & Drink" not in choices and choices["Food & Drink > Other Food & Drink"] == "Other Food & Drink"
+    assert "Food & Drink" not in choices and choices["Food & Drink > Other Food & Drink"] == "other_food_and_drink"
     assert len(choices) == 33  # 46 expense categories, minus 7 groups, Loan Payments' 4 subcategories, Cash, People
 
 
 def test_every_choice_has_a_description(db):
-    names = set(category_choices(seed_default_categories(db)).values())
-    assert names <= set(CATEGORY_DESCRIPTIONS)
+    keys = set(category_choices(seed_default_categories(db)).values())
+    assert keys <= set(CATEGORY_DESCRIPTIONS)
 
 
 def _profile(**fields):

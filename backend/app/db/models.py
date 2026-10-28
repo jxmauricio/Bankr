@@ -87,6 +87,9 @@ class Category(Base):
         ForeignKey("categories.id"), nullable=True
     )
     is_system_default: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Stable id of a built-in category ("restaurants"), what code looks it up
+    # by: the name is only for people. None on a user's own categories.
+    system_key: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
     # Set on a category a user made for themselves (see category_service);
     # None on the built-in ones, which every user shares.
     user_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -148,9 +151,14 @@ class Goal(Base):
     status: Mapped[str] = mapped_column(String, default="active")  # active | completed | abandoned
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     name: Mapped[str | None] = mapped_column(String, nullable=True)
-    # track_spending only: canonical Bankr category ("Dining") and a rolling
+    # track_spending only: the category it watches -- a category (with its
+    # subcategories) or a named slice of a group ("eating_out", see
+    # money_query.CATEGORY_SLICES), exactly one of the two -- and a rolling
     # named window ("this_month"). Savings goals leave these null.
-    category: Mapped[str | None] = mapped_column(String, nullable=True)
+    category_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("categories.id", ondelete="SET NULL"), nullable=True
+    )
+    category_slice: Mapped[str | None] = mapped_column(String, nullable=True)
     window: Mapped[str | None] = mapped_column(String, nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="goals")

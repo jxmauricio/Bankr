@@ -61,49 +61,49 @@ DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 # cash or a Zelle to a person from Plaid's TRANSFER_OUT_* ones. Naming the
 # group excludes its subcategories too. Rows Plaid put in one of these are
 # never sent either: there's no merchant to look up.
-_NOT_CHOICES = {"Loan Payments", "Cash & ATM", "Payments to People"}
-_NEVER_ASKED = {name for name, _, parent in DEFAULT_CATEGORIES if {name, parent} & _NOT_CHOICES}
+_NOT_CHOICES = {"loan_payments", "cash_and_atm", "payments_to_people"}
+_NEVER_ASKED = {key for key, _, _, parent in DEFAULT_CATEGORIES if {key, parent} & _NOT_CHOICES}
 
-# What each choice means, so Jev isn't matching bare labels. Kept generic on
+# What each choice means, by category key, so Jev isn't matching bare labels. Kept generic on
 # purpose: naming the eval's own merchants here would only flatter the eval.
 # Groups aren't choices (see category_choices), so they have no entry.
 CATEGORY_DESCRIPTIONS = {
-    "Bank Fees": "Bank and card fees: overdraft, late, ATM, foreign transaction and annual fees.",
-    "Entertainment": "Movies, concerts, live events, theaters, museums, sporting events, video games and music.",
-    "Groceries": "Supermarkets and grocery stores, specialty and international markets, butchers, produce.",
-    "Restaurants": "Eating out: restaurants, fast food, food trucks, bakeries, desserts, food delivery.",
-    "Coffee": "Cafes, coffee and tea shops, boba.",
-    "Alcohol & Bars": "Bars, pubs, breweries, wineries and liquor stores.",
-    "Other Food & Drink": "Food and drink that fits no other choice, such as vending machines.",
-    "Clothing": "Clothing, shoes and accessories stores.",
-    "Electronics": "Electronics and computer stores.",
-    "Online Marketplaces": "Online marketplaces selling many kinds of goods, such as Amazon, eBay and Etsy.",
-    "Superstores": "Big-box stores selling groceries and general goods together, such as Target, Walmart, Costco.",
-    "Pets": "Pet stores and supplies, veterinarians, grooming and boarding.",
-    "Other Shopping": "Other retail: department, discount, convenience, thrift, gift, book and sporting goods stores.",
-    "Home Improvement": "Hardware and garden stores, furniture and home furnishings, home repair and maintenance.",
-    "Medical": "Doctors, dentists, eye care, hospitals, pharmacies, therapy and other healthcare for people.",
-    "Personal Care": "Gyms and fitness, hair and beauty, spas, laundry and dry cleaning.",
-    "Insurance": "Insurance premiums: car, home, renters, life and health insurance.",
-    "Childcare": "Daycare, babysitting, nannies and after-school care.",
-    "Education": "Tuition, schools, classes, tutoring and courses.",
-    "Software": (
+    "bank_fees": "Bank and card fees: overdraft, late, ATM, foreign transaction and annual fees.",
+    "entertainment": "Movies, concerts, live events, theaters, museums, sporting events, video games and music.",
+    "groceries": "Supermarkets and grocery stores, specialty and international markets, butchers, produce.",
+    "restaurants": "Eating out: restaurants, fast food, food trucks, bakeries, desserts, food delivery.",
+    "coffee": "Cafes, coffee and tea shops, boba.",
+    "alcohol_and_bars": "Bars, pubs, breweries, wineries and liquor stores.",
+    "other_food_and_drink": "Food and drink that fits no other choice, such as vending machines.",
+    "clothing": "Clothing, shoes and accessories stores.",
+    "electronics": "Electronics and computer stores.",
+    "online_marketplaces": "Online marketplaces selling many kinds of goods, such as Amazon, eBay and Etsy.",
+    "superstores": "Big-box stores selling groceries and general goods together, such as Target, Walmart, Costco.",
+    "pets": "Pet stores and supplies, veterinarians, grooming and boarding.",
+    "other_shopping": "Other retail: department, discount, convenience, thrift, gift, book and sporting goods stores.",
+    "home_improvement": "Hardware and garden stores, furniture and home furnishings, home repair and maintenance.",
+    "medical": "Doctors, dentists, eye care, hospitals, pharmacies, therapy and other healthcare for people.",
+    "personal_care": "Gyms and fitness, hair and beauty, spas, laundry and dry cleaning.",
+    "insurance": "Insurance premiums: car, home, renters, life and health insurance.",
+    "childcare": "Daycare, babysitting, nannies and after-school care.",
+    "education": "Tuition, schools, classes, tutoring and courses.",
+    "software": (
         "Apps, software and online services: SaaS, cloud storage, developer and productivity tools, "
         "whether billed monthly, yearly or once."
     ),
-    "Other Services": "Other paid services: legal, accounting, postage and shipping, storage, cleaning.",
-    "Taxes": "Tax payments to federal, state or local tax agencies.",
-    "Donations": "Donations to charities, churches and non-profits.",
-    "Government Fees": "Government agencies and fees: DMV, passports, permits, courts.",
-    "Gas": "Fuel at gas stations.",
-    "Car Maintenance": "Car repairs, oil changes, tires, car washes and auto parts.",
-    "Rideshare & Taxis": "Uber, Lyft, taxis.",
-    "Public Transit": "Buses, subways, trains and ferries.",
-    "Parking & Tolls": "Parking lots, garages, meters and road tolls.",
-    "Other Transportation": "Getting around in other ways, such as bike and scooter rentals.",
-    "Travel": "Flights, hotels and lodging, rental cars, travel bookings.",
-    "Rent": "Rent and property management payments.",
-    "Utilities": "Electricity, gas, water, trash, sewer, internet, cable and phone bills.",
+    "other_services": "Other paid services: legal, accounting, postage and shipping, storage, cleaning.",
+    "taxes": "Tax payments to federal, state or local tax agencies.",
+    "donations": "Donations to charities, churches and non-profits.",
+    "government_fees": "Government agencies and fees: DMV, passports, permits, courts.",
+    "gas": "Fuel at gas stations.",
+    "car_maintenance": "Car repairs, oil changes, tires, car washes and auto parts.",
+    "rideshare_and_taxis": "Uber, Lyft, taxis.",
+    "public_transit": "Buses, subways, trains and ferries.",
+    "parking_and_tolls": "Parking lots, garages, meters and road tolls.",
+    "other_transportation": "Getting around in other ways, such as bike and scooter rentals.",
+    "travel": "Flights, hotels and lodging, rental cars, travel bookings.",
+    "rent": "Rent and property management payments.",
+    "utilities": "Electricity, gas, water, trash, sewer, internet, cable and phone bills.",
 }
 
 _SAME_BUSINESS_MIN = 0.4  # wrong-business results scored <= 0.10 in the eval, right ones 0.43+
@@ -214,18 +214,18 @@ def merchant_key(name: str | None) -> str | None:
 
 
 def category_choices(categories: dict[str, Category]) -> dict[str, str]:
-    """Choice label -> category name. Subcategories carry their parent
-    ("Food & Drink > Coffee") so the model sees the hierarchy. A group is
-    never a choice: its "Other ..." subcategory is there for when no other
-    one fits."""
+    """Choice label -> category key, from seed_default_categories' key ->
+    Category. Subcategories carry their parent ("Food & Drink > Coffee") so
+    the model sees the hierarchy. A group is never a choice: its "Other ..."
+    subcategory is there for when no other one fits."""
     by_id = {c.id: c for c in categories.values()}
     groups = {c.parent_category_id for c in categories.values() if c.parent_category_id}
     choices = {}
-    for name, category in categories.items():
+    for key, category in categories.items():
         parent = by_id.get(category.parent_category_id)
-        if category.type != "expense" or category.id in groups or {name, parent and parent.name} & _NOT_CHOICES:
+        if category.type != "expense" or category.id in groups or {key, parent and parent.system_key} & _NOT_CHOICES:
             continue
-        choices[f"{parent.name} > {name}" if parent else name] = name
+        choices[f"{parent.name} > {category.name}" if parent else category.name] = key
     return choices
 
 
@@ -233,7 +233,7 @@ def needs_second_opinion(txn: Transaction, mapped: Category) -> bool:
     return (
         (txn.aggregator_category_confidence or "").upper() in LOW_CONFIDENCE
         and mapped.type == "expense"
-        and mapped.name not in _NEVER_ASKED
+        and mapped.system_key not in _NEVER_ASKED
         and float(txn.amount) < 0
         and not txn.category_overridden
         and not txn.is_split
@@ -339,7 +339,7 @@ def classify_merchants(
     the answer is confident enough. Failures are logged and leave Plaid's
     mapping in place. Returns the number of transactions recategorized."""
     labels = category_choices(categories)
-    choices = {label: CATEGORY_DESCRIPTIONS.get(name) for label, name in labels.items()}
+    choices = {label: CATEGORY_DESCRIPTIONS.get(key) for label, key in labels.items()}
     batch = list(pending.items())[:limit]
 
     def ask(profile: MerchantProfile) -> CategoryAnswer | None:
@@ -358,11 +358,11 @@ def classify_merchants(
     for (key, (_, txns)), answer in zip(batch, answers):
         if answer is None:
             continue
-        name = labels.get(answer.label)
-        if name is None:
+        category_key = labels.get(answer.label)
+        if category_key is None:
             logger.warning("category classifier returned %r, not one of the choices", answer.label)
             continue
-        category = categories[name]
+        category = categories[category_key]
         # Another sync may have cached this merchant meanwhile; first answer wins.
         db.execute(
             insert(MerchantCategoryGuess)

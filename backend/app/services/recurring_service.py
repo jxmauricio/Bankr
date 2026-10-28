@@ -39,8 +39,8 @@ MAX_VARIATION = 0.25
 MAX_VARIATION_UTILITIES = 0.6
 PRICE_CHANGE_THRESHOLD = 0.05
 
-SUBSCRIPTION_CATEGORIES = {"Entertainment", "Software"}
-UTILITY_CATEGORIES = {"Rent & Utilities"}
+SUBSCRIPTION_CATEGORIES = {"entertainment", "software"}
+UTILITY_CATEGORIES = {"rent_and_utilities"}
 
 _NOISE = re.compile(r"[^a-z ]+")
 
@@ -87,7 +87,7 @@ class _Charge:
     amount: float  # positive size
     name: str
     category_id: UUID | None
-    categories: frozenset[str]  # its category and that category's parent
+    categories: frozenset[str]  # keys of its category and that category's parent
 
 
 def _match_cadence(gaps: list[int]) -> str | None:
@@ -149,7 +149,7 @@ def _detect_group(charges: list[_Charge], direction: str) -> dict | None:
 def _charges(db: Session, user_id: UUID, since: date) -> dict[tuple[str, str], list[_Charge]]:
     parent = aliased(Category)
     rows = (
-        db.query(Transaction, Category.name, Category.type, parent.name)
+        db.query(Transaction, Category.system_key, Category.type, parent.system_key)
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
         .join(Category, Transaction.bankr_category_id == Category.id)
         .outerjoin(parent, Category.parent_category_id == parent.id)
@@ -163,7 +163,7 @@ def _charges(db: Session, user_id: UUID, since: date) -> dict[tuple[str, str], l
         .all()
     )
     groups: dict[tuple[str, str], list[_Charge]] = {}
-    for txn, name, ctype, parent_name in rows:
+    for txn, category_key, ctype, parent_key in rows:
         amount = float(txn.amount)
         direction = "in" if amount > 0 else "out"
         if (direction == "in") != (ctype == "income"):
@@ -172,7 +172,7 @@ def _charges(db: Session, user_id: UUID, since: date) -> dict[tuple[str, str], l
         if not key:
             continue
         groups.setdefault((key, direction), []).append(
-            _Charge(txn.date, abs(amount), txn.merchant_name or key, txn.bankr_category_id, frozenset({name, parent_name} - {None}))
+            _Charge(txn.date, abs(amount), txn.merchant_name or key, txn.bankr_category_id, frozenset({category_key, parent_key} - {None}))
         )
     return groups
 

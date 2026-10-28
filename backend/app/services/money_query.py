@@ -64,110 +64,111 @@ _IN_PROGRESS_PREVIOUS = {"this_week": "last_week", "this_month": "last_month", "
 # because "Spending this month" on screen must mean since the 1st.
 LEGACY_PERIODS = {"week": "this_week", "month": "this_month", "year": "this_year"}
 
-# Names for part of a group that people ask about as one thing: (group,
-# subcategories left out). Eating out is the bar and the coffee shop as well
-# as restaurants -- everything in Food & Drink except the groceries.
-CATEGORY_SLICES: dict[str, tuple[str, frozenset[str]]] = {
-    "Eating Out": ("Food & Drink", frozenset({"Groceries"})),
+# Part of a group that people ask about as one thing, by key: (name, group
+# key, subcategory keys left out). Eating out is the bar and the coffee shop
+# as well as restaurants -- everything in Food & Drink except the groceries.
+CATEGORY_SLICES: dict[str, tuple[str, str, frozenset[str]]] = {
+    "eating_out": ("Eating Out", "food_and_drink", frozenset({"groceries"})),
 }
+SLICE_NAMES = {name: key for key, (name, _, _) in CATEGORY_SLICES.items()}
 
-# Everyday words for Bankr categories. The model is told the canonical
-# names, but users say "eating out", and a miss here would otherwise be a
-# confidently wrong $0.
+# Everyday words for Bankr categories, to category or slice keys. The model
+# is told the canonical names, but users say "eating out", and a miss here
+# would otherwise be a confidently wrong $0.
 CATEGORY_ALIASES: dict[str, str] = {
-    "eating out": "Eating Out",
-    "food out": "Eating Out",
-    "food": "Food & Drink",
-    "dining": "Eating Out",
-    "dining out": "Eating Out",
-    "restaurant": "Restaurants",
-    "takeout": "Restaurants",
-    "take out": "Restaurants",
-    "delivery": "Restaurants",
-    "food delivery": "Restaurants",
-    "fast food": "Restaurants",
-    "coffee shops": "Coffee",
-    "cafes": "Coffee",
-    "bars": "Alcohol & Bars",
-    "alcohol": "Alcohol & Bars",
-    "drinks": "Alcohol & Bars",
-    "liquor": "Alcohol & Bars",
-    "grocery": "Groceries",
-    "supermarket": "Groceries",
-    "food shopping": "Groceries",
-    "gasoline": "Gas",
-    "fuel": "Gas",
-    "gas station": "Gas",
-    "gas stations": "Gas",
-    "petrol": "Gas",
-    "uber": "Rideshare & Taxis",
-    "lyft": "Rideshare & Taxis",
-    "rideshare": "Rideshare & Taxis",
-    "taxi": "Rideshare & Taxis",
-    "transit": "Public Transit",
-    "subway": "Public Transit",
-    "bus": "Public Transit",
-    "train": "Public Transit",
-    "parking": "Parking & Tolls",
-    "tolls": "Parking & Tolls",
-    "car": "Transportation",
-    "driving": "Transportation",
-    "commute": "Transportation",
-    "car repairs": "Car Maintenance",
-    "auto repairs": "Car Maintenance",
-    "oil change": "Car Maintenance",
-    "car payment": "Car Payment",
-    "car loan": "Car Payment",
-    "student loan": "Student Loans",
-    "mortgage payment": "Mortgage",
-    "apps": "Software",
-    "saas": "Software",
-    "software subscriptions": "Software",
-    "daycare": "Childcare",
-    "tuition": "Education",
-    "school": "Education",
-    "flights": "Travel",
-    "hotels": "Travel",
-    "vacation": "Travel",
-    "trips": "Travel",
-    "housing": "Rent & Utilities",
-    "bills": "Utilities",
-    "electric": "Utilities",
-    "electricity": "Utilities",
-    "internet": "Utilities",
-    "phone bill": "Utilities",
-    "gas bill": "Utilities",
-    "health": "Medical",
-    "doctor": "Medical",
-    "pharmacy": "Medical",
-    "dentist": "Medical",
-    "gym": "Personal Care",
-    "haircut": "Personal Care",
-    "beauty": "Personal Care",
-    "shopping": "General Merchandise",
-    "clothes": "Clothing",
-    "shoes": "Clothing",
-    "amazon": "Online Marketplaces",
-    "pet": "Pets",
-    "vet": "Pets",
-    "dog": "Pets",
-    "cat": "Pets",
-    "furniture": "Home Improvement",
-    "home repairs": "Home Improvement",
-    "fun": "Entertainment",
-    "movies": "Entertainment",
-    "streaming": "Entertainment",
-    "subscriptions": "Entertainment",
-    "tax": "Taxes",
-    "charity": "Donations",
-    "fees": "Bank Fees",
-    "loans": "Loan Payments",
-    "cash": "Cash & ATM",
-    "atm": "Cash & ATM",
-    "cash withdrawals": "Cash & ATM",
-    "zelle": "Payments to People",
-    "venmo": "Payments to People",
-    "payments to friends": "Payments to People",
+    "eating out": "eating_out",
+    "food out": "eating_out",
+    "food": "food_and_drink",
+    "dining": "eating_out",
+    "dining out": "eating_out",
+    "restaurant": "restaurants",
+    "takeout": "restaurants",
+    "take out": "restaurants",
+    "delivery": "restaurants",
+    "food delivery": "restaurants",
+    "fast food": "restaurants",
+    "coffee shops": "coffee",
+    "cafes": "coffee",
+    "bars": "alcohol_and_bars",
+    "alcohol": "alcohol_and_bars",
+    "drinks": "alcohol_and_bars",
+    "liquor": "alcohol_and_bars",
+    "grocery": "groceries",
+    "supermarket": "groceries",
+    "food shopping": "groceries",
+    "gasoline": "gas",
+    "fuel": "gas",
+    "gas station": "gas",
+    "gas stations": "gas",
+    "petrol": "gas",
+    "uber": "rideshare_and_taxis",
+    "lyft": "rideshare_and_taxis",
+    "rideshare": "rideshare_and_taxis",
+    "taxi": "rideshare_and_taxis",
+    "transit": "public_transit",
+    "subway": "public_transit",
+    "bus": "public_transit",
+    "train": "public_transit",
+    "parking": "parking_and_tolls",
+    "tolls": "parking_and_tolls",
+    "car": "transportation",
+    "driving": "transportation",
+    "commute": "transportation",
+    "car repairs": "car_maintenance",
+    "auto repairs": "car_maintenance",
+    "oil change": "car_maintenance",
+    "car payment": "car_payment",
+    "car loan": "car_payment",
+    "student loan": "student_loans",
+    "mortgage payment": "mortgage",
+    "apps": "software",
+    "saas": "software",
+    "software subscriptions": "software",
+    "daycare": "childcare",
+    "tuition": "education",
+    "school": "education",
+    "flights": "travel",
+    "hotels": "travel",
+    "vacation": "travel",
+    "trips": "travel",
+    "housing": "rent_and_utilities",
+    "bills": "utilities",
+    "electric": "utilities",
+    "electricity": "utilities",
+    "internet": "utilities",
+    "phone bill": "utilities",
+    "gas bill": "utilities",
+    "health": "medical",
+    "doctor": "medical",
+    "pharmacy": "medical",
+    "dentist": "medical",
+    "gym": "personal_care",
+    "haircut": "personal_care",
+    "beauty": "personal_care",
+    "shopping": "general_merchandise",
+    "clothes": "clothing",
+    "shoes": "clothing",
+    "amazon": "online_marketplaces",
+    "pet": "pets",
+    "vet": "pets",
+    "dog": "pets",
+    "cat": "pets",
+    "furniture": "home_improvement",
+    "home repairs": "home_improvement",
+    "fun": "entertainment",
+    "movies": "entertainment",
+    "streaming": "entertainment",
+    "subscriptions": "entertainment",
+    "tax": "taxes",
+    "charity": "donations",
+    "fees": "bank_fees",
+    "loans": "loan_payments",
+    "cash": "cash_and_atm",
+    "atm": "cash_and_atm",
+    "cash withdrawals": "cash_and_atm",
+    "zelle": "payments_to_people",
+    "venmo": "payments_to_people",
+    "payments to friends": "payments_to_people",
 }
 
 
@@ -333,34 +334,53 @@ class ResolvedCategory:
     ids: tuple[UUID, ...]  # the category itself plus its subcategories
     subcategories: tuple[str, ...]
     top_level: str  # the category, or the group it's in: whose budget it counts against
+    # What it is, for storing (Goal.category_id / category_slice): exactly one is set.
+    category_id: UUID | None = None
+    slice: str | None = None
 
 
 def resolve_category(db: Session, name: str, user_id: UUID | None = None) -> ResolvedCategory:
-    """A spending category by name or everyday word. With user_id, the
+    """A spending category by name, key or everyday word. With user_id, the
     user's own categories count too; without, only the built-in ones."""
     categories = user_categories(db, user_id)
     by_lower = {c.lower(): c for c in categories}
+    by_key = {c.system_key: n for n, c in categories.items() if c.system_key}
+    slice_by_lower = {n.lower(): key for n, key in SLICE_NAMES.items()}
     query = name.strip().lower()
 
-    canonical = by_lower.get(query) or CATEGORY_ALIASES.get(query)
+    def lookup(q: str) -> str | None:
+        """The category's name, or a slice's key."""
+        if q in by_lower:
+            return by_lower[q]
+        if q in by_key or q in CATEGORY_SLICES:
+            return by_key.get(q, q)
+        if q in slice_by_lower:
+            return slice_by_lower[q]
+        alias = CATEGORY_ALIASES.get(q)
+        return by_key.get(alias, alias) if alias else None
+
+    canonical = lookup(query)
     if canonical is None and query.endswith("s"):
-        canonical = by_lower.get(query[:-1]) or CATEGORY_ALIASES.get(query[:-1])
+        canonical = lookup(query[:-1])
     if canonical is None:
         suggestions = get_close_matches(query, [*by_lower, *CATEGORY_ALIASES], n=3, cutoff=0.6)
+        found = {lookup(s) for s in suggestions}
         raise QueryError(
             f"no category called {name!r}",
-            did_you_mean=sorted({by_lower.get(s) or CATEGORY_ALIASES[s] for s in suggestions}),
+            did_you_mean=sorted(CATEGORY_SLICES[f][0] if f in CATEGORY_SLICES else f for f in found),
             valid_categories=spend_category_names(db, user_id),
         )
 
     if canonical in CATEGORY_SLICES:
-        group, left_out = CATEGORY_SLICES[canonical]
-        parts = [c for c in categories.values() if c.parent_category_id == categories[group].id and c.name not in left_out]
+        slice_name, group_key, left_out = CATEGORY_SLICES[canonical]
+        group = categories[by_key[group_key]]
+        parts = [c for c in categories.values() if c.parent_category_id == group.id and c.system_key not in left_out]
         return ResolvedCategory(
-            name=canonical,
+            name=slice_name,
             ids=tuple(c.id for c in parts),
             subcategories=tuple(sorted(c.name for c in parts)),
-            top_level=group,
+            top_level=group.name,
+            slice=canonical,
         )
 
     parent = categories[canonical]
@@ -369,13 +389,27 @@ def resolve_category(db: Session, name: str, user_id: UUID | None = None) -> Res
             f"{canonical!r} is not a spending category",
             valid_categories=spend_category_names(db, user_id),
         )
-    children = [c for c in categories.values() if c.parent_category_id == parent.id]
-    by_id = {c.id: c for c in categories.values()}
+    return _resolved(categories.values(), parent)
+
+
+def resolve_category_id(db: Session, category_id: UUID, user_id: UUID) -> ResolvedCategory:
+    """A stored category (Goal.category_id) the way resolve_category gives it."""
+    categories = user_categories(db, user_id)
+    category = next((c for c in categories.values() if c.id == category_id), None)
+    if category is None:
+        raise QueryError("that category no longer exists")
+    return _resolved(categories.values(), category)
+
+
+def _resolved(categories, category: Category) -> ResolvedCategory:
+    children = [c for c in categories if c.parent_category_id == category.id]
+    parent = next((c for c in categories if c.id == category.parent_category_id), None)
     return ResolvedCategory(
-        name=canonical,
-        ids=(parent.id, *(c.id for c in children)),
+        name=category.name,
+        ids=(category.id, *(c.id for c in children)),
         subcategories=tuple(sorted(c.name for c in children)),
-        top_level=by_id[parent.parent_category_id].name if parent.parent_category_id else canonical,
+        top_level=parent.name if parent else category.name,
+        category_id=category.id,
     )
 
 
@@ -439,8 +473,8 @@ def spend_query(
     # $500 airline refund offsets travel spending, but must not turn "$50 on
     # Uber" into "-$450 spent". Any excess is reported, not hidden.
     by_top_level = _net_by_key(q, "category")
-    total_spent = sum(max(amount, 0) for amount, _ in by_top_level.values())
-    excess_refunds = sum(-min(amount, 0) for amount, _ in by_top_level.values())
+    total_spent = sum(max(amount, 0) for amount, _, _ in by_top_level.values())
+    excess_refunds = sum(-min(amount, 0) for amount, _, _ in by_top_level.values())
 
     result = {
         **window.as_dict(),
@@ -462,36 +496,43 @@ def spend_query(
     return result
 
 
-def _net_by_key(q, group_by: str) -> dict[str, tuple[float, int]]:
-    """{group name: (net spent, transaction count)}; refunds count negative."""
+def _net_by_key(q, group_by: str) -> dict[str, tuple[float, int, str | None]]:
+    """{group name: (net spent, transaction count, category key)}; refunds
+    count negative. The key is a built-in category's, else None."""
     if group_by == "merchant":
-        key = func.coalesce(Transaction.merchant_name, "Unknown merchant")
+        key, system_key = func.coalesce(Transaction.merchant_name, "Unknown merchant"), None
     elif group_by == "category":
         parent = aliased(Category)
         q = q.outerjoin(parent, Category.parent_category_id == parent.id)
         key = func.coalesce(parent.name, Category.name)
+        system_key = case((parent.id.isnot(None), parent.system_key), else_=Category.system_key)
     elif group_by == "subcategory":
-        key = Category.name
+        key, system_key = Category.name, Category.system_key
     else:
         raise QueryError("group_by must be one of: category, subcategory, merchant")
-    rows = q.with_entities(key, func.sum(-Transaction.amount), func.count(Transaction.id)).group_by(key).all()
-    return {name: (float(amount or 0), int(n)) for name, amount, n in rows}
+    columns = (key, func.sum(-Transaction.amount), func.count(Transaction.id))
+    if system_key is None:
+        rows = q.with_entities(*columns).group_by(key).all()
+        return {name: (float(amount or 0), int(n), None) for name, amount, n in rows}
+    rows = q.with_entities(*columns, system_key).group_by(key, system_key).all()
+    return {name: (float(amount or 0), int(n), k) for name, amount, n, k in rows}
 
 
-def _groups(nets: dict[str, tuple[float, int]], top_n: int | None) -> list[dict]:
+def _groups(nets: dict[str, tuple[float, int, str | None]], top_n: int | None) -> list[dict]:
     """Biggest first. Groups that net to a refund are dropped (they're in
     refunds_exceeding_spend), so category groups sum exactly to total_spent."""
     positive = {name: v for name, v in nets.items() if v[0] > 0}
-    total = sum(amount for amount, _ in positive.values())
+    total = sum(amount for amount, _, _ in positive.values())
     groups = sorted(
         (
             {
                 "name": name,
+                **({"key": key} if key else {}),
                 "amount": _money(amount),
                 "transaction_count": n,
                 "share_of_total": round(amount / total, 4) if total else None,
             }
-            for name, (amount, n) in positive.items()
+            for name, (amount, n, key) in positive.items()
         ),
         key=lambda g: g["amount"],
         reverse=True,

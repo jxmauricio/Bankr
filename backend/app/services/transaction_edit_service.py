@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.db.models import Category, LinkedAccount, Transaction
-from app.db.seed_categories import is_group, user_categories, visible_to
+from app.db.seed_categories import category_color, is_group, user_categories, visible_to
 
 MAX_SPLITS = 10
 
@@ -119,26 +119,26 @@ def set_splits(db: Session, txn: Transaction, parts: list[dict]) -> list[Transac
 def category_tree(db: Session, user_id: UUID) -> list[dict]:
     """Every category the user can see (the built-in ones and their own),
     parents first with their children nested, for pickers. `custom` marks
-    the user's own, which they can rename or delete."""
+    the user's own, which they can rename or delete; `key` is a built-in's
+    stable id and `color` its chart color, so clients never match on names."""
     rows = sorted(user_categories(db, user_id).values(), key=lambda c: c.name)
+
+    def node(c: Category) -> dict:
+        return {
+            "id": str(c.id),
+            "key": c.system_key,
+            "name": c.name,
+            "type": c.type,
+            "color": category_color(c),
+            "custom": c.user_id is not None,
+        }
+
     children: dict[UUID, list[dict]] = {}
     for c in rows:
         if c.parent_category_id:
-            children.setdefault(c.parent_category_id, []).append(
-                {"id": str(c.id), "name": c.name, "type": c.type, "custom": c.user_id is not None}
-            )
+            children.setdefault(c.parent_category_id, []).append(node(c))
     type_order = {"expense": 0, "income": 1, "transfer": 2}
     return sorted(
-        (
-            {
-                "id": str(c.id),
-                "name": c.name,
-                "type": c.type,
-                "custom": c.user_id is not None,
-                "children": children.get(c.id, []),
-            }
-            for c in rows
-            if c.parent_category_id is None
-        ),
+        ({**node(c), "children": children.get(c.id, [])} for c in rows if c.parent_category_id is None),
         key=lambda c: (type_order.get(c["type"], 3), c["name"]),
     )
