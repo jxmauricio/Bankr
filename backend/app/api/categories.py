@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -19,7 +20,12 @@ _NAME = Field(max_length=cs.MAX_NAME_LENGTH * 2)
 
 class CreateCategoryRequest(BaseModel):
     name: str = _NAME
-    group_id: UUID | None = None  # a spending group; none: alone in a new group of its name
+    group_id: UUID | None = None  # a group of its kind; none: alone in a new group of its name
+    kind: Literal["expense", "excluded"] = "expense"  # excluded: never counts in any total
+
+
+class HiddenRequest(BaseModel):
+    hidden: bool
 
 
 class CreateGroupRequest(BaseModel):
@@ -46,7 +52,7 @@ def list_categories(user: User = Depends(get_current_user), db: Session = Depend
 @router.post("", status_code=status.HTTP_201_CREATED)
 def add_category(body: CreateCategoryRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     try:
-        category = cs.create_category(db, user.id, body.name, body.group_id)
+        category = cs.create_category(db, user.id, body.name, body.group_id, body.kind)
     except cs.CategoryError as e:
         db.rollback()
         raise _bad(e)
@@ -77,6 +83,20 @@ def rename(item_id: UUID, body: RenameRequest, user: User = Depends(get_current_
         raise _bad(e)
     db.commit()
     return _tree(db, user)
+
+
+@router.put("/{category_id}/hidden")
+def hide(category_id: UUID, body: HiddenRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+    """Hide a built-in category for this user, or show it again."""
+    try:
+        moved = cs.set_hidden(db, user.id, category_id, body.hidden)
+    except cs.CategoryNotFound:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "category not found")
+    except cs.CategoryError as e:
+        db.rollback()
+        raise _bad(e)
+    refresh_net_worth(db, user.id)  # commits, and keeps spending-goal progress current
+    return {"recategorized": moved, **_tree(db, user)}
 
 
 @router.delete("/{item_id}")

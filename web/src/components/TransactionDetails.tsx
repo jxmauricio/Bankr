@@ -36,7 +36,12 @@ function initials(name: string): string {
     .toUpperCase() || "·";
 }
 
-const KIND_LABEL: Record<string, string> = { income: "Income", expense: "Spending", transfer: "Transfer between your accounts" };
+const KIND_LABEL: Record<string, string> = {
+  income: "Income",
+  expense: "Spending",
+  transfer: "Transfer between your accounts",
+  excluded: "Excluded: counts in no total",
+};
 
 function citesThis(query: SourceQuery, t: TransactionRow): boolean {
   if (t.category_type !== "expense") return false;

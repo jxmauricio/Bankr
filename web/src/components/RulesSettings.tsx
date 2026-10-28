@@ -53,10 +53,24 @@ export function RulesSettings({ token }: { token: string }) {
             <li key={rule.id} className="flex flex-col gap-2 rounded-[14px] border border-line p-3">
               <div className="flex items-start justify-between gap-3">
                 <p className="m-0 min-w-0 text-sm text-ink">
-                  Merchant contains <span className="font-medium">“{rule.merchant_contains}”</span>
+                  Merchant {rule.match_exact ? "is" : "contains"} <span className="font-medium">“{rule.merchant_contains}”</span>
                   {range && <span className="text-ink-faint"> · {range}</span>}
                   {rule.set_merchant_name && <span className="text-ink-faint"> · shown as {rule.set_merchant_name}</span>}
                 </p>
+                <div className="flex shrink-0 gap-3">
+                <button
+                  type="button"
+                  disabled={busyId === rule.id}
+                  onClick={() =>
+                    run(rule.id, async () => {
+                      const updated = await updateRule(token, rule.id, { match_exact: !rule.match_exact });
+                      setRules((rs) => rs?.map((r) => (r.id === rule.id ? updated : r)) ?? null);
+                    })
+                  }
+                  className="cursor-pointer text-sm text-ink-soft hover:text-ink disabled:opacity-60"
+                >
+                  {rule.match_exact ? "Match anywhere" : "Match exactly"}
+                </button>
                 <button
                   type="button"
                   disabled={busyId === rule.id}
@@ -66,10 +80,11 @@ export function RulesSettings({ token }: { token: string }) {
                       setRules((rs) => rs?.filter((r) => r.id !== rule.id) ?? null);
                     })
                   }
-                  className="shrink-0 cursor-pointer text-sm text-ink-soft hover:text-negative disabled:opacity-60"
+                  className="cursor-pointer text-sm text-ink-soft hover:text-negative disabled:opacity-60"
                 >
                   Delete
                 </button>
+                </div>
               </div>
               <CategorySelect
                 label={`Category for ${rule.merchant_contains}`}

@@ -57,6 +57,8 @@ export function TransactionsView({
   const [list, setList] = useState<TransactionList | null>(null);
   const [failed, setFailed] = useState(false);
   const [account, setAccount] = useState<string>("");
+  // Rows nothing could place (category_source "fallback"): the review queue.
+  const [reviewOnly, setReviewOnly] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reloads, setReloads] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -106,9 +108,11 @@ export function TransactionsView({
     return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [all]);
 
+  const toReview = all.filter((t) => t.category_source === "fallback").length;
   const q = filter.query.trim().toLowerCase();
   const shown = all.filter(
     (t) =>
+      (!reviewOnly || t.category_source === "fallback") &&
       (!filter.category || topCategories(t).includes(filter.category)) &&
       (!account || t.account.id === account) &&
       (!q ||
@@ -116,7 +120,7 @@ export function TransactionsView({
         (t.category ?? "").toLowerCase().includes(q) ||
         Math.abs(t.amount).toFixed(2).includes(q)),
   );
-  const counts = (t: TransactionRow) => !t.is_excluded && t.category_type !== "transfer";
+  const counts = (t: TransactionRow) => !t.is_excluded && t.category_type !== "transfer" && t.category_type !== "excluded";
   const moneyIn = shown.reduce((s, t) => s + (t.amount > 0 && counts(t) ? t.amount : 0), 0);
   const moneyOut = shown.reduce((s, t) => s + (t.amount < 0 && counts(t) ? -t.amount : 0), 0);
 
@@ -129,7 +133,7 @@ export function TransactionsView({
 
   const label = list?.label ?? periodInfo(period).label;
   const synced = syncedAt(list?.as_of ?? null);
-  const hasFilter = Boolean(filter.category || filter.query || account);
+  const hasFilter = Boolean(filter.category || filter.query || account || reviewOnly);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col gap-3.5 px-4 pt-4 animate-view lg:px-8 lg:pt-6">
@@ -172,6 +176,19 @@ export function TransactionsView({
           </span>
         </label>
         <div className="-mr-4 flex gap-2 overflow-x-auto pr-4 lg:mr-0 lg:pr-0">
+          {(toReview > 0 || reviewOnly) && (
+            <button
+              type="button"
+              aria-pressed={reviewOnly}
+              onClick={() => {
+                setReviewOnly(!reviewOnly);
+                setSelectedId(null);
+              }}
+              className={`flex h-9 shrink-0 cursor-pointer items-center rounded-full px-3.5 text-[13px] ${reviewOnly ? "bg-signal/15 text-signal" : "border border-control text-ink-soft hover:text-ink"}`}
+            >
+              {toReview} to review
+            </button>
+          )}
           {filter.category && (
             <button
               type="button"

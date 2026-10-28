@@ -14,7 +14,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import LinkedAccount, MerchantCategoryGuess, NetWorthSnapshot, Rule, Transaction
+from app.db.models import LinkedAccount, NetWorthSnapshot, Transaction
 from app.db.seed_categories import seed_default_categories
 from app.integrations.bank_aggregator import AggregatorTransaction, BankAggregatorClient
 from app.services.category_classifier import (
@@ -24,13 +24,10 @@ from app.services.category_classifier import (
     classify_merchants,
     get_classifier,
     merchant_key,
-    needs_second_opinion,
-    trusted,
 )
-from app.services.category_mapper import map_raw_category
+from app.services import categorization_service as categorization
 from app.services.crypto import encrypt_token
 from app.services.goal_service import recompute_goal_progress
-from app.services.rules_service import apply_rules, user_rules
 
 LIABILITY_ACCOUNT_TYPES = {"credit", "loan"}
 
@@ -100,7 +97,6 @@ def sync_user_accounts(
     cursor = next((la.sync_cursor for la in linked_accounts if la.sync_cursor), None)
     changes = aggregator.sync_transactions(access_token, cursor)
 
-    rules = user_rules(db, user_id)
     guesses = cached_guesses(
         db,
         {
@@ -109,6 +105,7 @@ def sync_user_accounts(
             if (t.category_confidence or "").upper() in LOW_CONFIDENCE and (key := merchant_key(t.merchant_name))
         },
     )
+    ctx = categorization.context(db, user_id, categories, guesses)
     # Merchant key -> (what the bank sent, the rows it became) for merchants
     # that want a second opinion nobody has cached yet.
     unclassified: dict[str, tuple[list[AggregatorTransaction], list[Transaction]]] = {}
@@ -117,7 +114,7 @@ def sync_user_accounts(
         linked = linked_by_aggregator_id.get(txn.aggregator_account_id)
         if linked is None:
             continue  # an account the user didn't grant access to
-        row = _upsert_transaction(db, txn, linked.id, linked.account_type, categories, rules, guesses)
+        row = _upsert_transaction(db, txn, linked.id, linked.account_type, ctx)
         if row is not None:
             sent, rows = unclassified.setdefault(merchant_key(row.original_merchant_name), ([], []))
             sent.append(txn)
@@ -208,9 +205,7 @@ def _upsert_transaction(
     txn: AggregatorTransaction,
     linked_account_id: UUID,
     account_type: str,
-    categories: dict,
-    rules: list[Rule] = (),
-    guesses: dict[str, MerchantCategoryGuess] | None = None,
+    ctx: categorization.Context,
 ) -> Transaction | None:
     """Returns the row when it wants a classifier's second opinion that
     isn't cached yet; see app/services/category_classifier.py."""
@@ -239,17 +234,9 @@ def _upsert_transaction(
     # rename or recategorization the user made.
     if not existing.merchant_overridden:
         existing.merchant_name = txn.merchant_name
-    if existing.category_overridden:
-        return None
-    mapped = categories[map_raw_category(txn.raw_category, txn.amount, account_type, txn.merchant_name)]
-    existing.bankr_category_id = mapped.id
-    second_opinion = needs_second_opinion(existing, mapped)
-    guess = (guesses or {}).get(merchant_key(existing.original_merchant_name)) if second_opinion else None
-    if guess is not None and trusted(guess):
-        existing.bankr_category_id = guess.category_id
-    if apply_rules(existing, rules) is not None:  # the user's own rules beat both
-        return None
-    return existing if second_opinion and guess is None else None
+    if existing.category_source is None:  # a new row, before its column default
+        existing.category_source = categorization.AGGREGATOR
+    return existing if categorization.categorize(existing, account_type, ctx) else None
 
 
 def _carry_over_edits(db: Session, pending_aggregator_id: str, posted: Transaction) -> None:
@@ -265,7 +252,7 @@ def _carry_over_edits(db: Session, pending_aggregator_id: str, posted: Transacti
         "merchant_name",
         "merchant_overridden",
         "bankr_category_id",
-        "category_overridden",
+        "category_source",
         "notes",
         "is_excluded",
         "is_split",

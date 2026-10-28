@@ -106,7 +106,7 @@ export function dateLabel(date: DateFilter): string {
 
 /** Rows that count toward money in/out totals (the web view's rule). */
 export function counts(t: TransactionRow): boolean {
-  return !t.is_excluded && t.category_type !== "transfer";
+  return !t.is_excluded && t.category_type !== "transfer" && t.category_type !== "excluded";
 }
 
 export const QUICK_FILTERS: { id: QuickId; label: string; test: (t: TransactionRow) => boolean }[] = [
@@ -114,7 +114,8 @@ export const QUICK_FILTERS: { id: QuickId; label: string; test: (t: TransactionR
   // Money back on a spending category; income and transfers in aren't refunds.
   { id: "refunds", label: "Refunds", test: (t) => t.amount > 0 && t.category_type === "expense" },
   { id: "over100", label: "Over $100", test: (t) => Math.abs(t.amount) > 100 },
-  { id: "uncategorized", label: "Uncategorized", test: (t) => !t.is_split && !t.category && !t.parent_category },
+  // Rows nothing could place (category_source "fallback"): the review queue.
+  { id: "uncategorized", label: "Needs review", test: (t) => !t.is_split && t.category_source === "fallback" },
 ];
 
 export function applyFilters(rows: TransactionRow[], f: Filters): TransactionRow[] {

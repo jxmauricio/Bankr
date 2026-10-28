@@ -54,10 +54,10 @@ export function useCategories(token: string | null): CategoryNode[] {
 export function categoryOptions(
   categories: CategoryNode[],
 ): { id: string; label: string; group: string; disabled: boolean }[] {
-  const groupName = { expense: "Spending", income: "Income", transfer: "Transfers" } as const;
-  return categories.flatMap((c) => [
+  const groupName = { expense: "Spending", income: "Income", transfer: "Transfers", excluded: "Excluded" } as const;
+  return categories.filter((c) => !c.hidden).flatMap((c) => [
     { id: c.id, label: `${c.emoji ? `${c.emoji} ` : ""}${c.name}`, group: groupName[c.type], disabled: c.kind === "group" },
-    ...c.children.map((child) => ({
+    ...c.children.filter((child) => !child.hidden).map((child) => ({
       id: child.id,
       label: `  ${child.emoji ? `${child.emoji} ` : ""}${child.name}`,
       group: groupName[c.type],
