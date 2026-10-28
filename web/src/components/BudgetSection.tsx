@@ -12,7 +12,7 @@ import {
   type BudgetStatus,
 } from "../lib/api";
 import { formatMoney } from "../lib/format";
-import { useCategories } from "../lib/useCategories";
+import { budgetTargets, useCategories } from "../lib/useCategories";
 
 const whole = (n: number) => `${n < 0 ? "−" : ""}$${Math.abs(Math.round(n)).toLocaleString("en-US")}`;
 
@@ -40,6 +40,8 @@ export function BudgetSection({
   onChanged?: () => void;
 }) {
   const categories = useCategories(token);
+  // Which groups are budgeted by category (set in Settings): lines change with it.
+  const budgetModes = categories.map((c) => `${c.group_id}:${c.budget_mode}`).join(",");
   const [month, setMonth] = useState<string | null>(null);
   const [status, setStatus] = useState<BudgetStatus | null>(null);
   const [failed, setFailed] = useState(false);
@@ -62,7 +64,7 @@ export function BudgetSection({
     return () => {
       stale = true;
     };
-  }, [token, month, refreshKey]);
+  }, [token, month, refreshKey, budgetModes]);
 
   async function run(action: () => Promise<BudgetStatus>) {
     setBusy(true);
@@ -85,7 +87,7 @@ export function BudgetSection({
   const isCurrent = status.month === status.today.slice(0, 7);
   const allLines = [...status.lines, ...(status.flex ? [status.flex] : [])];
   const budgetedIds = new Set(status.lines.map((l) => l.category_id));
-  const addable = categories.filter((c) => c.type === "expense" && !budgetedIds.has(c.id));
+  const addable = budgetTargets(categories).filter((t) => !budgetedIds.has(t.id));
 
   async function startFromHistory() {
     setBusy(true);

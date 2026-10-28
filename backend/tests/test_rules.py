@@ -4,15 +4,18 @@ a hand-picked category."""
 from datetime import date
 
 from app.agent import tools
-from app.db.models import Category, Transaction
+from app.db.models import Category, CategoryGroup, Transaction
 from app.db.seed_categories import seed_default_categories
 from app.integrations.bank_aggregator import AggregatorTransaction
 from app.services.sync_service import sync_user_accounts
 from tests.fake_aggregator import FakeAggregatorClient
 
 
-def _cat(db, name) -> Category:
-    return db.query(Category).filter(Category.name == name).one()
+def _cat(db, name):
+    """A category, or a group (Food & Drink), by name."""
+    return db.query(Category).filter(Category.name == name).one_or_none() or db.query(CategoryGroup).filter(
+        CategoryGroup.name == name
+    ).one()
 
 
 def _txn(db, aggregator_id) -> Transaction:
@@ -119,4 +122,4 @@ def test_a_rule_cannot_put_a_merchant_on_a_group(client, db, user):
     db.commit()
     r = client.post("/rules", json={"merchant_contains": "ramen", "set_category_id": str(_cat(db, "Food & Drink").id)})
     assert r.status_code == 422
-    assert "subcategories" in r.json()["detail"]
+    assert "categories" in r.json()["detail"]

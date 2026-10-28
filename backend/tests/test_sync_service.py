@@ -38,7 +38,7 @@ def test_expense_transactions_are_categorized(db, user):
 
     groceries = db.query(Transaction).filter(Transaction.merchant_name == "Trader Joe's").one()
     assert groceries.category.name == "Groceries"
-    assert groceries.category.parent_category_id is not None
+    assert groceries.category.group.name == "Food & Drink"
     assert groceries.category.type == "expense"
 
     paycheck = db.query(Transaction).filter(Transaction.merchant_name == "Employer Inc").one()

@@ -20,7 +20,6 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.db.models import Category, Goal, LinkedAccount, NetWorthSnapshot, Transaction
-from app.db.seed_categories import is_group
 from app.integrations.web_search import WebSearchClient
 from app.services import budget_service
 from app.services import answer_charts
@@ -696,12 +695,16 @@ def _any_category(db: Session, user_id: UUID, name: str):
     by_key = {c.system_key: n for n, c in categories.items() if c.system_key}
     query = name.strip().lower()
     canonical = by_lower.get(query) or by_key.get(query) or by_key.get(mq.CATEGORY_ALIASES.get(query))
-    if canonical is None:
-        raise mq.QueryError(f"no category called {name!r}", valid_categories=sorted(categories))
-    if is_group(db, categories[canonical]):
-        children = sorted(n for n, c in categories.items() if c.parent_category_id == categories[canonical].id)
-        raise mq.QueryError(f"{canonical!r} is a group: pick one of its subcategories", valid_categories=children)
-    return categories[canonical]
+    if canonical is not None:
+        return categories[canonical]
+    groups = mq.user_groups(db, user_id)
+    group = {n.lower(): g for n, g in groups.items()}.get(query) or next(
+        (g for g in groups.values() if g.system_key and g.system_key in (query, mq.CATEGORY_ALIASES.get(query))), None
+    )
+    if group is not None:
+        members = sorted(n for n, c in categories.items() if c.group_id == group.id)
+        raise mq.QueryError(f"{name!r} is a group: pick one of its categories", valid_categories=members)
+    raise mq.QueryError(f"no category called {name!r}", valid_categories=sorted(categories))
 
 
 def propose_rule(
@@ -770,9 +773,9 @@ def _budget_line_key(db: Session, user_id: UUID, name: str) -> tuple[str, str]:
     """(key, display name) for a budget line named in chat: "Flexible" or a category."""
     if name.strip().lower() in {"flex", "flexible", "flexible spending"}:
         return budget_service.FLEX, "Flexible"
-    # "Coffee" -> its parent's budget
-    parent = mq.user_categories(db, user_id)[mq.resolve_category(db, name, user_id).top_level]
-    return str(parent.id), parent.name
+    # "Coffee" -> its group's line, unless the group is budgeted by category
+    line = budget_service.line_for(db, user_id, mq.resolve_category(db, name, user_id))
+    return str(line.id), line.name
 
 
 def propose_budget_move(

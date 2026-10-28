@@ -3,7 +3,7 @@ never undoes the user's edits."""
 
 from datetime import date
 
-from app.db.models import Category, Transaction
+from app.db.models import Category, CategoryGroup, Transaction
 from app.integrations.bank_aggregator import AggregatorTransaction
 from app.services import money_query as mq
 from app.services.sync_service import sync_user_accounts
@@ -22,8 +22,11 @@ def _txn(db, aggregator_id) -> Transaction:
     return db.query(Transaction).filter(Transaction.aggregator_transaction_id == aggregator_id).one()
 
 
-def _cat(db, name) -> Category:
-    return db.query(Category).filter(Category.name == name).one()
+def _cat(db, name):
+    """A category, or a group (Food & Drink), by name."""
+    return db.query(Category).filter(Category.name == name).one_or_none() or db.query(CategoryGroup).filter(
+        CategoryGroup.name == name
+    ).one()
 
 
 def test_recategorize_survives_resync(client, db, user):
@@ -188,7 +191,7 @@ def test_a_group_is_not_a_category_a_transaction_can_have(client, db, user):
 
     r = client.patch(f"/transactions/{txn.id}", json={"category_id": str(food.id)})
     assert r.status_code == 422
-    assert "subcategories" in r.json()["detail"]
+    assert "categories" in r.json()["detail"]
     half = float(txn.amount) / 2
     splits = [{"amount": half, "category_id": str(food.id)}, {"amount": half, "category_id": str(_cat(db, "Groceries").id)}]
     assert client.put(f"/transactions/{txn.id}/splits", json={"splits": splits}).status_code == 422

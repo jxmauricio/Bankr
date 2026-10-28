@@ -28,7 +28,7 @@ class BudgetRequest(BaseModel):
 
 class MoveRequest(BaseModel):
     month: str | None = None  # YYYY-MM, default this month
-    from_key: str  # category id, or "flex"
+    from_key: str  # a line's group or category id, or "flex"
     to_key: str
     amount: float = Field(gt=0)
 
@@ -105,9 +105,27 @@ def move(body: MoveRequest, user: User = Depends(get_current_user), db: Session 
     return bs.budget_status(db, user.id, month)
 
 
+class BudgetModeRequest(BaseModel):
+    mode: Literal["by_group", "by_category"]
+
+
+@router.put("/groups/{group_id}/mode")
+def put_budget_mode(
+    group_id: UUID, body: BudgetModeRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Budget a spending group as one line, or a line per category."""
+    try:
+        bs.set_budget_mode(db, user.id, group_id, body.mode)
+    except bs.BudgetError as e:
+        raise _bad(e)
+    db.commit()
+    return bs.budget_status(db, user.id)
+
+
 @router.put("/{category_id}")
 def put_budget(
-    category_id: UUID, body: BudgetRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    category_id: UUID,  # a line's group or category id
+    body: BudgetRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> dict:
     try:
         bs.upsert_budget(db, user.id, category_id, **body.model_dump(exclude_none=True))

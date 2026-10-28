@@ -6,7 +6,7 @@ from datetime import date
 import pytest
 
 from app.agent import tools
-from app.db.models import Category, InsightLog
+from app.db.models import Category, CategoryGroup, InsightLog
 from app.integrations.bank_aggregator import AggregatorTransaction
 from app.jobs import insights_job
 from app.services import money_query as mq
@@ -50,7 +50,9 @@ def ledger(db, user):
 
 
 def _id(db, name):
-    return str(db.query(Category).filter(Category.name == name).one().id)
+    """A budget line's id: the group's, or a category's (Coffee)."""
+    group = db.query(CategoryGroup).filter(CategoryGroup.name == name).one_or_none()
+    return str((group or db.query(Category).filter(Category.name == name).one()).id)
 
 
 def _line(status, name):
@@ -96,7 +98,7 @@ def test_category_mode_rollover_and_moves(client, db, ledger):
     client.put(f"/budgets/{_id(db, 'Food & Drink')}", json={"amount": 200, "rollover": True})
     client.put(f"/budgets/{_id(db, 'General Merchandise')}", json={"amount": 400})
     # Pretend the Food & Drink budget started in July so rollover has history.
-    db.query(Budget).filter(Budget.category_id == _id(db, "Food & Drink")).update({"start_month": date(2026, 7, 1)})
+    db.query(Budget).filter(Budget.group_id == _id(db, "Food & Drink")).update({"start_month": date(2026, 7, 1)})
     db.commit()
 
     status = client.get("/budgets").json()

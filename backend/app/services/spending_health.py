@@ -16,7 +16,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.db.models import LinkedAccount
-from app.db.seed_categories import DEFAULT_CATEGORIES
+from app.db.seed_categories import DEFAULT_GROUPS
 from app.services import money_query as mq
 
 # Needs vs wants for the 50/30/20 snapshot (Elizabeth Warren, All Your Worth).
@@ -116,7 +116,7 @@ EMERGENCY_FUND_GUIDELINE = Guideline(
 CASH_ACCOUNT_TYPES = frozenset({"checking", "savings"})
 
 
-_EXPENSE_PARENTS = tuple(key for key, _, type_, parent in DEFAULT_CATEGORIES if type_ == "expense" and parent is None)
+_EXPENSE_GROUPS = tuple(key for key, _, type_ in DEFAULT_GROUPS if type_ == "expense")
 
 
 def _pct(amount: float, income: float) -> float | None:
@@ -277,13 +277,13 @@ def spending_health(db: Session, user_id: UUID) -> dict:
     spending = sum(mq.spend_query(db, user_id, w)["total_spent"] for w in months) / n
     saved = income - spending
 
-    # By key; a user's own top-level category (no key) by its name.
-    names = {key: name for key, name, _, _ in DEFAULT_CATEGORIES}
-    by_cat: dict[str, float] = {key: 0.0 for key in _EXPENSE_PARENTS}
+    # By group key; a user's own group (no key) by its name.
+    names = {key: name for key, name, _ in DEFAULT_GROUPS}
+    by_cat: dict[str, float] = {key: 0.0 for key in _EXPENSE_GROUPS}
     for w in months:
         for g in mq.spend_query(db, user_id, w, group_by="category").get("groups", []):
             cid = g.get("key", g["name"])
-            names.setdefault(cid, g["name"])
+            names[cid] = g["name"]  # the user's name for it, if they renamed it
             by_cat[cid] = by_cat.get(cid, 0.0) + g["amount"]
     for name in by_cat:
         by_cat[name] /= n

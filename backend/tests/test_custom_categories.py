@@ -5,10 +5,10 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from app.db.models import Budget, Category, Goal, Rule, Transaction, User
+from app.db.models import Budget, Category, CategoryGroup, Goal, Rule, Transaction, User
 from app.services import money_query as mq
 from app.services.account_removal import delete_user
-from app.services.category_service import CategoryError, create_category, delete_category
+from app.services.category_service import CategoryError, create_category, delete
 from app.services.sync_service import sync_user_accounts
 from tests.fake_aggregator import FakeAggregatorClient
 
@@ -18,8 +18,11 @@ def _frozen_today(monkeypatch):
     monkeypatch.setattr(mq, "_now", lambda: datetime(2026, 8, 20, 16, tzinfo=timezone.utc))
 
 
-def _cat(db, name) -> Category:
-    return db.query(Category).filter(Category.name == name).one()
+def _cat(db, name):
+    """A category, or a group (Food & Drink), by name."""
+    return db.query(Category).filter(Category.name == name).one_or_none() or db.query(CategoryGroup).filter(
+        CategoryGroup.name == name
+    ).one()
 
 
 def _txn(db, aggregator_id) -> Transaction:
@@ -41,10 +44,10 @@ def test_a_subcategory_of_ones_own_counts_in_its_group(client, db, user):
     _synced(db, user)
     shopping = _cat(db, "General Merchandise")
 
-    r = client.post("/categories", json={"name": "  Ramen   Nights ", "parent_id": str(shopping.id)})
+    r = client.post("/categories", json={"name": "  Ramen   Nights ", "group_id": str(shopping.id)})
     assert r.status_code == 201, r.text
-    assert r.json()["name"] == "Ramen Nights"  # tidied
     ramen = r.json()["id"]
+    assert db.get(Category, ramen).name == "Ramen Nights"  # tidied
     assert client.patch(f"/transactions/{_txn(db, 'txn_dining').id}", json={"category_id": ramen}).status_code == 200
 
     # The assistant finds it by name, and the group's total includes it.
@@ -58,25 +61,34 @@ def test_a_subcategory_of_ones_own_counts_in_its_group(client, db, user):
     assert group["custom"] is False
 
 
-def test_a_top_level_one_can_have_its_own_budget(client, db, user):
+def test_one_on_its_own_gets_a_group_and_a_budget_of_its_own(client, db, user):
     _synced(db, user)
     wedding = client.post("/categories", json={"name": "Wedding"}).json()
+    group = db.get(Category, wedding["id"]).group
+    assert (group.name, group.user_id) == ("Wedding", user.id)
 
+    # Pickers show the two as one row, so the category's id budgets the group.
     r = client.put(f"/budgets/{wedding['id']}", json={"amount": 2000})
     assert r.status_code == 200, r.text
-    assert db.query(Budget).filter(Budget.user_id == user.id).one().category_id == _cat(db, "Wedding").id
+    assert db.query(Budget).filter(Budget.user_id == user.id).one().group_id == group.id
 
 
 def test_the_tree_keeps_two_levels_and_unique_names(client, db, user):
     _synced(db, user)
-    travel = _cat(db, "Travel")  # a leaf: a child would make it a group with rows on it
     groceries = _cat(db, "Groceries")
     mine = client.post("/categories", json={"name": "Hobbies"}).json()
+    income = db.query(CategoryGroup).filter(CategoryGroup.system_key == "income").one()
 
+    # Any spending group takes a category, Travel's and their own included...
+    travel = db.query(CategoryGroup).filter(CategoryGroup.system_key == "travel").one()
+    assert client.post("/categories", json={"name": "Trips", "group_id": str(travel.id)}).status_code == 201
+    hobbies = db.get(Category, mine["id"]).group
+    assert client.post("/categories", json={"name": "Models", "group_id": str(hobbies.id)}).status_code == 201
+
+    # ...but a category isn't a group, and income isn't spending.
     for body in (
-        {"name": "Trips", "parent_id": str(travel.id)},
-        {"name": "Organic", "parent_id": str(groceries.id)},
-        {"name": "Models", "parent_id": mine["id"]},
+        {"name": "Organic", "group_id": str(groceries.id)},
+        {"name": "Side gigs", "group_id": str(income.id)},
         {"name": "coffee"},  # a built-in name
         {"name": "HOBBIES"},  # one of mine
         {"name": "Eating Out"},  # what "eating out" already means
@@ -113,8 +125,12 @@ def test_renaming_carries_the_tracker_along(client, db, user):
     r = client.post("/goals", json={"type": "track_spending", "category": "hobbies", "window": "this_month"})
     assert r.status_code == 200, r.text
 
-    assert client.patch(f"/categories/{hobbies['id']}", json={"name": "Crafts"}).json()["name"] == "Crafts"
-    assert str(db.query(Goal).one().category_id) == hobbies["id"]
+    # "hobbies" is the group and its one category alike; the group covers both.
+    group = db.get(Category, hobbies["id"]).group
+    assert db.query(Goal).one().group_id == group.id
+    assert client.patch(f"/categories/{hobbies['id']}", json={"name": "Crafts"}).status_code == 200
+    db.expire_all()
+    assert (db.get(Category, hobbies["id"]).name, group.name) == ("Crafts", "Crafts")  # renamed together
     assert client.get("/dashboard/goal-progress").json()["goals"][0]["category"] == "Crafts"
     # A tracker follows it, so it can't simply vanish.
     assert client.delete(f"/categories/{hobbies['id']}").status_code == 422
@@ -161,4 +177,4 @@ def test_only_so_many(db, user):
     with pytest.raises(CategoryError):
         create_category(db, user.id, "One more")
     with pytest.raises(LookupError):
-        delete_category(db, user.id, _cat(db, "Travel").id)  # a built-in one isn't theirs to delete
+        delete(db, user.id, _cat(db, "Travel").id)  # a built-in one isn't theirs to delete
