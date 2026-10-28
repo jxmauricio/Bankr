@@ -87,6 +87,11 @@ class Category(Base):
         ForeignKey("categories.id"), nullable=True
     )
     is_system_default: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Set on a category a user made for themselves (see category_service);
+    # None on the built-in ones, which every user shares.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
 
 class Transaction(Base):

@@ -38,7 +38,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.config import settings
 from app.db.models import Category, LinkedAccount, Transaction, User
-from app.db.seed_categories import seed_default_categories
+from app.db.seed_categories import user_categories
 
 NAMED_WINDOWS = (
     "today",
@@ -64,26 +64,34 @@ _IN_PROGRESS_PREVIOUS = {"this_week": "last_week", "this_month": "last_month", "
 # because "Spending this month" on screen must mean since the 1st.
 LEGACY_PERIODS = {"week": "this_week", "month": "this_month", "year": "this_year"}
 
+# Names for part of a group that people ask about as one thing: (group,
+# subcategories left out). Eating out is the bar and the coffee shop as well
+# as restaurants -- everything in Food & Drink except the groceries.
+CATEGORY_SLICES: dict[str, tuple[str, frozenset[str]]] = {
+    "Eating Out": ("Food & Drink", frozenset({"Groceries"})),
+}
+
 # Everyday words for Bankr categories. The model is told the canonical
 # names, but users say "eating out", and a miss here would otherwise be a
 # confidently wrong $0.
 CATEGORY_ALIASES: dict[str, str] = {
-    "eating out": "Food & Drink",
-    "food out": "Food & Drink",
+    "eating out": "Eating Out",
+    "food out": "Eating Out",
     "food": "Food & Drink",
-    "dining": "Food & Drink",
-    "restaurants": "Food & Drink",
-    "restaurant": "Food & Drink",
-    "takeout": "Food & Drink",
-    "take out": "Food & Drink",
-    "delivery": "Food & Drink",
-    "food delivery": "Food & Drink",
-    "fast food": "Food & Drink",
+    "dining": "Eating Out",
+    "dining out": "Eating Out",
+    "restaurant": "Restaurants",
+    "takeout": "Restaurants",
+    "take out": "Restaurants",
+    "delivery": "Restaurants",
+    "food delivery": "Restaurants",
+    "fast food": "Restaurants",
     "coffee shops": "Coffee",
     "cafes": "Coffee",
-    "bars": "Food & Drink",
-    "alcohol": "Food & Drink",
-    "drinks": "Food & Drink",
+    "bars": "Alcohol & Bars",
+    "alcohol": "Alcohol & Bars",
+    "drinks": "Alcohol & Bars",
+    "liquor": "Alcohol & Bars",
     "grocery": "Groceries",
     "supermarket": "Groceries",
     "food shopping": "Groceries",
@@ -92,25 +100,32 @@ CATEGORY_ALIASES: dict[str, str] = {
     "gas station": "Gas",
     "gas stations": "Gas",
     "petrol": "Gas",
-    "uber": "Transportation",
-    "lyft": "Transportation",
-    "rideshare": "Transportation",
-    "taxi": "Transportation",
-    "transit": "Transportation",
-    "subway": "Transportation",
-    "train": "Transportation",
-    "parking": "Transportation",
-    "tolls": "Transportation",
+    "uber": "Rideshare & Taxis",
+    "lyft": "Rideshare & Taxis",
+    "rideshare": "Rideshare & Taxis",
+    "taxi": "Rideshare & Taxis",
+    "transit": "Public Transit",
+    "subway": "Public Transit",
+    "bus": "Public Transit",
+    "train": "Public Transit",
+    "parking": "Parking & Tolls",
+    "tolls": "Parking & Tolls",
     "car": "Transportation",
     "driving": "Transportation",
     "commute": "Transportation",
-    "car repairs": "General Services",
+    "car repairs": "Car Maintenance",
+    "auto repairs": "Car Maintenance",
+    "oil change": "Car Maintenance",
+    "car payment": "Car Payment",
+    "car loan": "Car Payment",
+    "student loan": "Student Loans",
+    "mortgage payment": "Mortgage",
     "apps": "Software",
     "saas": "Software",
     "software subscriptions": "Software",
-    "insurance": "General Services",
-    "childcare": "General Services",
-    "education": "General Services",
+    "daycare": "Childcare",
+    "tuition": "Education",
+    "school": "Education",
     "flights": "Travel",
     "hotels": "Travel",
     "vacation": "Travel",
@@ -122,7 +137,6 @@ CATEGORY_ALIASES: dict[str, str] = {
     "internet": "Utilities",
     "phone bill": "Utilities",
     "gas bill": "Utilities",
-    "medical": "Medical",
     "health": "Medical",
     "doctor": "Medical",
     "pharmacy": "Medical",
@@ -131,20 +145,29 @@ CATEGORY_ALIASES: dict[str, str] = {
     "haircut": "Personal Care",
     "beauty": "Personal Care",
     "shopping": "General Merchandise",
-    "clothes": "General Merchandise",
-    "amazon": "General Merchandise",
+    "clothes": "Clothing",
+    "shoes": "Clothing",
+    "amazon": "Online Marketplaces",
+    "pet": "Pets",
+    "vet": "Pets",
+    "dog": "Pets",
+    "cat": "Pets",
     "furniture": "Home Improvement",
     "home repairs": "Home Improvement",
     "fun": "Entertainment",
     "movies": "Entertainment",
     "streaming": "Entertainment",
     "subscriptions": "Entertainment",
-    "taxes": "Government & Non-Profit",
-    "donations": "Government & Non-Profit",
-    "charity": "Government & Non-Profit",
+    "tax": "Taxes",
+    "charity": "Donations",
     "fees": "Bank Fees",
-    "bank fees": "Bank Fees",
     "loans": "Loan Payments",
+    "cash": "Cash & ATM",
+    "atm": "Cash & ATM",
+    "cash withdrawals": "Cash & ATM",
+    "zelle": "Payments to People",
+    "venmo": "Payments to People",
+    "payments to friends": "Payments to People",
 }
 
 
@@ -309,10 +332,13 @@ class ResolvedCategory:
     name: str
     ids: tuple[UUID, ...]  # the category itself plus its subcategories
     subcategories: tuple[str, ...]
+    top_level: str  # the category, or the group it's in: whose budget it counts against
 
 
-def resolve_category(db: Session, name: str) -> ResolvedCategory:
-    categories = seed_default_categories(db)
+def resolve_category(db: Session, name: str, user_id: UUID | None = None) -> ResolvedCategory:
+    """A spending category by name or everyday word. With user_id, the
+    user's own categories count too; without, only the built-in ones."""
+    categories = user_categories(db, user_id)
     by_lower = {c.lower(): c for c in categories}
     query = name.strip().lower()
 
@@ -324,25 +350,37 @@ def resolve_category(db: Session, name: str) -> ResolvedCategory:
         raise QueryError(
             f"no category called {name!r}",
             did_you_mean=sorted({by_lower.get(s) or CATEGORY_ALIASES[s] for s in suggestions}),
-            valid_categories=spend_category_names(db),
+            valid_categories=spend_category_names(db, user_id),
+        )
+
+    if canonical in CATEGORY_SLICES:
+        group, left_out = CATEGORY_SLICES[canonical]
+        parts = [c for c in categories.values() if c.parent_category_id == categories[group].id and c.name not in left_out]
+        return ResolvedCategory(
+            name=canonical,
+            ids=tuple(c.id for c in parts),
+            subcategories=tuple(sorted(c.name for c in parts)),
+            top_level=group,
         )
 
     parent = categories[canonical]
     if parent.type != "expense":
         raise QueryError(
             f"{canonical!r} is not a spending category",
-            valid_categories=spend_category_names(db),
+            valid_categories=spend_category_names(db, user_id),
         )
     children = [c for c in categories.values() if c.parent_category_id == parent.id]
+    by_id = {c.id: c for c in categories.values()}
     return ResolvedCategory(
         name=canonical,
         ids=(parent.id, *(c.id for c in children)),
         subcategories=tuple(sorted(c.name for c in children)),
+        top_level=by_id[parent.parent_category_id].name if parent.parent_category_id else canonical,
     )
 
 
-def spend_category_names(db: Session) -> list[str]:
-    return sorted(name for name, c in seed_default_categories(db).items() if c.type == "expense")
+def spend_category_names(db: Session, user_id: UUID | None = None) -> list[str]:
+    return sorted(name for name, c in user_categories(db, user_id).items() if c.type == "expense")
 
 
 # --- queries ------------------------------------------------------------------

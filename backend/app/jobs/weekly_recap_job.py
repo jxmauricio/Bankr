@@ -106,7 +106,7 @@ def _goal_facts(db: Session, user_id: UUID, week: mq.Window) -> list[dict]:
             week_spent = None
             if goal.get("category"):
                 try:
-                    week_spent = mq.spend_query(db, user_id, week, mq.resolve_category(db, goal["category"]))[
+                    week_spent = mq.spend_query(db, user_id, week, mq.resolve_category(db, goal["category"], user_id))[
                         "total_spent"
                     ]
                 except mq.QueryError:

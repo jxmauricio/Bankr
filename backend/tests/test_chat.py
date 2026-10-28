@@ -175,7 +175,7 @@ def test_chat_propose_spending_tracker_returns_category_and_window(client, db, u
     body = response.json()
     assert body["sources"] == [{"tool": "propose_goal", "label": "Proposed a spending tracker", "query": None, "searched": None}]
     assert body["goal_proposal"]["type"] == "track_spending"
-    assert body["goal_proposal"]["category"] == "Food & Drink"
+    assert body["goal_proposal"]["category"] == "Eating Out"
     assert body["goal_proposal"]["window"] == "this_month"
     assert body["goal_proposal"]["target_amount"] == 0.0
     assert db.query(Goal).filter(Goal.user_id == user.id).count() == 0

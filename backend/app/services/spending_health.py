@@ -21,7 +21,9 @@ from app.services import money_query as mq
 
 # Needs vs wants for the 50/30/20 snapshot (Elizabeth Warren, All Your Worth).
 # Food & Drink is split across the two: its Groceries are a need, the rest
-# (eating out, coffee, bars) a want; spending_health() moves it.
+# (eating out, coffee, bars) a want; spending_health() moves it. Every other
+# top-level category is a want, including Cash & ATM and Payments to People
+# (what they paid for is unknown) and any a user made themselves.
 NEEDS = frozenset(
     {
         "Rent & Utilities",
@@ -32,18 +34,6 @@ NEEDS = frozenset(
         "General Services",
     }
 )
-WANTS = frozenset(
-    {
-        "Entertainment",
-        "General Merchandise",
-        "Travel",
-        "Personal Care",
-        "Home Improvement",
-        "Government & Non-Profit",
-    }
-)
-
-
 @dataclass(frozen=True)
 class Guideline:
     pct: float
@@ -323,9 +313,11 @@ def spending_health(db: Session, user_id: UUID) -> dict:
     this_eating_out = this_by_cat.get("Food & Drink", 0.0) - this_groceries
 
     needs_amount = sum(by_cat.get(name, 0.0) for name in NEEDS) + avg_groceries
-    wants_amount = sum(by_cat.get(name, 0.0) for name in WANTS) + eating_out
+    wants_amount = sum(v for name, v in by_cat.items() if name not in NEEDS and name != "Food & Drink") + eating_out
     this_needs = sum(this_by_cat.get(name, 0.0) for name in NEEDS) + this_groceries
-    this_wants = sum(this_by_cat.get(name, 0.0) for name in WANTS) + this_eating_out
+    this_wants = (
+        sum(v for name, v in this_by_cat.items() if name not in NEEDS and name != "Food & Drink") + this_eating_out
+    )
 
     buckets = [
         _line(

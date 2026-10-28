@@ -29,11 +29,11 @@ def _cat(db, name) -> Category:
 def test_recategorize_survives_resync(client, db, user):
     fake = _sync(db, user)
     txn = _txn(db, "txn_dining")
-    shopping = _cat(db, "General Merchandise")
+    shopping = _cat(db, "Other Shopping")
 
     r = client.patch(f"/transactions/{txn.id}", json={"category_id": str(shopping.id), "merchant_name": "Ramen!"})
     assert r.status_code == 200, r.text
-    assert r.json()["category"] == "General Merchandise"
+    assert r.json()["category"] == "Other Shopping"
     assert r.json()["merchant_name"] == "Ramen!"
 
     _sync(db, user, fake)  # the fake re-reports every row, like Plaid's "modified"
@@ -67,8 +67,8 @@ def test_excluded_rows_drop_out_of_spending(client, db, user):
 def test_split_moves_spending_between_categories(client, db, user):
     _sync(db, user)
     txn = _txn(db, "txn_groceries")  # -120.50 Food & Drink, beside Ramen Spot's -45
-    shopping = _cat(db, "General Merchandise")
-    groceries = _cat(db, "Food & Drink")
+    shopping = _cat(db, "Other Shopping")
+    groceries = _cat(db, "Groceries")
 
     r = client.put(
         f"/transactions/{txn.id}/splits",
@@ -109,7 +109,7 @@ def test_split_moves_spending_between_categories(client, db, user):
 def test_split_must_add_up(client, db, user):
     _sync(db, user)
     txn = _txn(db, "txn_groceries")
-    groceries = _cat(db, "Food & Drink")
+    groceries = _cat(db, "Groceries")
     r = client.put(
         f"/transactions/{txn.id}/splits",
         json={
@@ -128,7 +128,7 @@ def test_edits_follow_a_pending_charge_when_it_posts(client, db, user):
     pending = AggregatorTransaction("p1", "acc_credit", -30.0, date(2026, 8, 6), "Cafe", "food_and_drink_coffee", True)
     fake = FakeAggregatorClient(transactions_by_account={"acc_credit": [pending]})
     _sync(db, user, fake)
-    shopping = _cat(db, "General Merchandise")
+    shopping = _cat(db, "Other Shopping")
     client.patch(f"/transactions/{_txn(db, 'p1').id}", json={"category_id": str(shopping.id)})
 
     posted = AggregatorTransaction(
@@ -164,7 +164,7 @@ def test_categories_tree(client, db, user):
     _sync(db, user)
     cats = client.get("/categories").json()["categories"]
     food = next(c for c in cats if c["name"] == "Food & Drink")
-    assert {c["name"] for c in food["children"]} == {"Groceries", "Coffee"}
+    assert {c["name"] for c in food["children"]} == {"Groceries", "Restaurants", "Coffee", "Alcohol & Bars", "Other Food & Drink"}
     assert cats[0]["type"] == "expense"
 
 
@@ -172,9 +172,23 @@ def test_backfill_leaves_manual_categories_alone(client, db, user):
     from app.services.category_backfill import recategorize_all_transactions
 
     _sync(db, user)
-    shopping = _cat(db, "General Merchandise")
+    shopping = _cat(db, "Other Shopping")
     client.patch(f"/transactions/{_txn(db, 'txn_dining').id}", json={"category_id": str(shopping.id)})
     recategorize_all_transactions(db)
     db.commit()
     db.expire_all()
     assert _txn(db, "txn_dining").bankr_category_id == shopping.id
+
+
+def test_a_group_is_not_a_category_a_transaction_can_have(client, db, user):
+    # A group's total is the sum of its subcategories, so nothing sits on it.
+    _sync(db, user)
+    txn = _txn(db, "txn_dining")
+    food = _cat(db, "Food & Drink")
+
+    r = client.patch(f"/transactions/{txn.id}", json={"category_id": str(food.id)})
+    assert r.status_code == 422
+    assert "subcategories" in r.json()["detail"]
+    half = float(txn.amount) / 2
+    splits = [{"amount": half, "category_id": str(food.id)}, {"amount": half, "category_id": str(_cat(db, "Groceries").id)}]
+    assert client.put(f"/transactions/{txn.id}/splits", json={"splits": splits}).status_code == 422

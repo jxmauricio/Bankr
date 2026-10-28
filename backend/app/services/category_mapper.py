@@ -4,18 +4,20 @@ Two-tier lookup against Plaid's PFCv2 taxonomy (verified against
 https://plaid.com/documents/transactions-personal-finance-category-taxonomy.csv,
 not assumed):
 
-Bankr's categories are the taxonomy's 16 primaries and a few subcategories.
+Bankr's categories are the taxonomy's 16 primaries, most split into
+subcategories (see seed_categories.py); this always returns a leaf.
 Spending at a known software merchant (SOFTWARE_MERCHANTS) is Software
 whatever the steps below say -- the taxonomy has no software tag.
 
 1. Try an exact match on the transaction's `detailed` value -- only needed
-   for detailed values that land somewhere other than their own primary:
-   a Bankr subcategory (TRANSPORTATION_GAS -> Gas) or a different category
-   (LOAN_PAYMENTS_CREDIT_CARD_PAYMENT -> Transfer Out). Anything not listed
-   falls through to its primary.
+   for detailed values that land somewhere other than their primary's
+   default: a Bankr subcategory (TRANSPORTATION_GAS -> Gas) or a different
+   category (LOAN_PAYMENTS_CREDIT_CARD_PAYMENT -> Transfer Out). Anything
+   not listed falls through to its primary.
 2. Fall back to a match on the `primary` value -- this also catches any
-   `detailed` value PFCv2 adds later under a primary we already know.
-3. Fall back to sign-based Income / General Merchandise if nothing
+   `detailed` value PFCv2 adds later under a primary we already know. A
+   primary that's a Bankr group lands on its "Other ..." subcategory.
+3. Fall back to sign-based Income / Other Shopping if nothing
    matched -- except that money into a credit card or loan is never
    income, so it falls back to Transfer In. Plaid tags many card payments'
    receiving side LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT, which no map
@@ -30,11 +32,36 @@ import re
 
 DETAILED_CATEGORY_MAP: dict[str, str] = {
     "food_and_drink_groceries": "Groceries",
+    "food_and_drink_restaurant": "Restaurants",
+    "food_and_drink_fast_food": "Restaurants",
     "food_and_drink_coffee": "Coffee",
+    "food_and_drink_beer_wine_and_liquor": "Alcohol & Bars",
+    "general_merchandise_clothing_and_accessories": "Clothing",
+    "general_merchandise_electronics": "Electronics",
+    "general_merchandise_online_marketplaces": "Online Marketplaces",
+    "general_merchandise_superstores": "Superstores",
+    "general_merchandise_pet_supplies": "Pets",
+    # The vet is the pet's doctor: counting it as Medical inflates what the
+    # user spends on their own health.
+    "medical_veterinary_services": "Pets",
+    "general_services_insurance": "Insurance",
+    "general_services_childcare": "Childcare",
+    "general_services_education": "Education",
+    # Repairs belong with the rest of what the car costs, not with postage.
+    "general_services_automotive": "Car Maintenance",
+    "government_and_non_profit_tax_payment": "Taxes",
+    "government_and_non_profit_donations": "Donations",
     # Gas *for the car*. The utility gas bill is
     # rent_and_utilities_gas_and_electricity -> Utilities, and must never
     # land here, or "how much did I spend on gas" includes the heating bill.
     "transportation_gas": "Gas",
+    "transportation_taxis_and_ride_shares": "Rideshare & Taxis",
+    "transportation_public_transit": "Public Transit",
+    "transportation_parking": "Parking & Tolls",
+    "transportation_tolls": "Parking & Tolls",
+    "loan_payments_mortgage_payment": "Mortgage",
+    "loan_payments_car_payment": "Car Payment",
+    "loan_payments_student_loan_payment": "Student Loans",
     "rent_and_utilities_rent": "Rent",
     "rent_and_utilities_gas_and_electricity": "Utilities",
     "rent_and_utilities_internet_and_cable": "Utilities",
@@ -46,25 +73,40 @@ DETAILED_CATEGORY_MAP: dict[str, str] = {
     # spending already happened as the card purchases. Other loan payments
     # (mortgage, car, student) are real outflows and stay under LOAN_PAYMENTS.
     "loan_payments_credit_card_payment": "Transfer Out",
+    # Cash out of an ATM or over the counter, and money sent to someone
+    # through Zelle, Venmo, Cash App: it has left the user's accounts, so it's
+    # spending, not a transfer -- otherwise rent paid to a roommate over Zelle
+    # never shows up anywhere. Money to the user's own savings or brokerage
+    # has its own tags (TRANSFER_OUT_SAVINGS, ..._INVESTMENT_...) and stays a
+    # transfer; a user can mark any of these as one by hand.
+    "transfer_out_withdrawal": "Cash & ATM",
+    "transfer_out_transfer_out_from_apps": "Payments to People",
 }
 
+# Detailed values that only describe money going out: the same tag on money
+# coming in (a card payment landing, a deposit) is a transfer in.
+_OUTFLOW_ONLY = {"Transfer Out", "Cash & ATM", "Payments to People"}
+
+# A primary that's a group in seed_categories lands on its "Other ..."
+# child: transactions never sit on a group. Every non-rent RENT_AND_UTILITIES
+# value is a utility, so that one's catch-all is Utilities.
 PRIMARY_CATEGORY_MAP: dict[str, str] = {
     "income": "Income",
     "transfer_in": "Transfer In",
     "transfer_out": "Transfer Out",
-    "loan_payments": "Loan Payments",
+    "loan_payments": "Other Loan Payments",
     "bank_fees": "Bank Fees",
     "entertainment": "Entertainment",
-    "food_and_drink": "Food & Drink",
-    "general_merchandise": "General Merchandise",
+    "food_and_drink": "Other Food & Drink",
+    "general_merchandise": "Other Shopping",
     "home_improvement": "Home Improvement",
     "medical": "Medical",
     "personal_care": "Personal Care",
-    "general_services": "General Services",
-    "government_and_non_profit": "Government & Non-Profit",
-    "transportation": "Transportation",
+    "general_services": "Other Services",
+    "government_and_non_profit": "Government Fees",
+    "transportation": "Other Transportation",
     "travel": "Travel",
-    "rent_and_utilities": "Rent & Utilities",
+    "rent_and_utilities": "Utilities",
 }
 
 
@@ -141,14 +183,17 @@ def map_raw_category(
     `merchant_name` is the bank's name for the merchant: spending at a
     known software merchant is Software whatever Plaid tagged it."""
     category = _map_plaid_category(raw_category, amount, account_type)
-    # Only where Plaid's answer was spending (a refund nets against it too):
-    # a paycheck or card payment from a software company stays what it is.
-    if category not in _NOT_SPENDING and (known := merchant_category(merchant_name)):
+    # Only where Plaid's answer was a purchase (a refund nets against it too):
+    # a paycheck, card payment or Zelle from a software company stays what it is.
+    if category not in _NOT_PURCHASES and (known := merchant_category(merchant_name)):
         return known
     return category
 
 
-_NOT_SPENDING = {"Income", "Transfer In", "Transfer Out", "Loan Payments"}
+_NOT_PURCHASES = {
+    "Income", "Transfer In", "Transfer Out", "Mortgage", "Car Payment", "Student Loans", "Other Loan Payments",
+    "Cash & ATM", "Payments to People",
+}
 
 
 def _map_plaid_category(raw_category: str | None, amount: float, account_type: str | None) -> str:
@@ -160,8 +205,8 @@ def _map_plaid_category(raw_category: str | None, amount: float, account_type: s
 
         if normalized in DETAILED_CATEGORY_MAP:
             category = DETAILED_CATEGORY_MAP[normalized]
-            # A card payment seen from the side the money lands on.
-            return "Transfer In" if category == "Transfer Out" and amount > 0 else category
+            # e.g. a card payment seen from the side the money lands on.
+            return "Transfer In" if category in _OUTFLOW_ONLY and amount > 0 else category
 
         for primary, category in PRIMARY_CATEGORY_MAP.items():
             if normalized == primary or normalized.startswith(primary + "_"):
@@ -169,4 +214,4 @@ def _map_plaid_category(raw_category: str | None, amount: float, account_type: s
 
     if amount > 0:
         return "Transfer In" if account_type in _LIABILITY_ACCOUNT_TYPES else "Income"
-    return "General Merchandise"
+    return "Other Shopping"

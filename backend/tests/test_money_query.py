@@ -86,7 +86,8 @@ def test_today_is_taken_in_the_users_timezone(db, user, monkeypatch):
 @pytest.mark.parametrize(
     "said, canonical",
     [
-        ("eating out", "Food & Drink"),
+        ("eating out", "Eating Out"),
+        ("dining", "Eating Out"),
         ("Food & Drink", "Food & Drink"),
         ("groceries", "Groceries"),
         ("gas", "Gas"),
@@ -94,8 +95,9 @@ def test_today_is_taken_in_the_users_timezone(db, user, monkeypatch):
         ("gas bill", "Utilities"),
         ("coffee shops", "Coffee"),
         ("rent", "Rent"),
-        ("restaurants", "Food & Drink"),
-        ("Uber", "Transportation"),
+        ("restaurants", "Restaurants"),
+        ("Uber", "Rideshare & Taxis"),
+        ("car", "Transportation"),
         ("shopping", "General Merchandise"),
         ("gym", "Personal Care"),
     ],
@@ -144,15 +146,20 @@ def test_q3_groceries_this_month_vs_last(db, ledger):
 def test_food_and_drink_includes_groceries_and_coffee(db, ledger):
     result = mq.spend_query(db, ledger.id, w("this_month"), mq.resolve_category(db, "Food & Drink"))
     assert result["total_spent"] == EXPECTED["food_this_month"]
-    assert set(result["includes_subcategories"]) == {"Groceries", "Coffee"}
+    assert set(result["includes_subcategories"]) == {"Groceries", "Restaurants", "Coffee", "Alcohol & Bars", "Other Food & Drink"}
 
 
 def test_q4_eating_out_last_week(db, ledger):
-    result = mq.spend_query(db, ledger.id, w("last_week"), mq.resolve_category(db, "eating out"))
-    assert result["total_spent"] == EXPECTED["food_last_week"]
-    assert result["gross_spent"] == EXPECTED["food_last_week_gross"]
+    # Eating out is Food & Drink without the groceries: the bar and the
+    # coffee count, Trader Joe's doesn't.
+    eating_out = mq.resolve_category(db, "eating out")
+    assert set(eating_out.subcategories) == {"Restaurants", "Coffee", "Alcohol & Bars", "Other Food & Drink"}
+    assert eating_out.top_level == "Food & Drink"  # its budget
+    result = mq.spend_query(db, ledger.id, w("last_week"), eating_out)
+    assert result["total_spent"] == EXPECTED["dining_last_week"]
+    assert result["gross_spent"] == EXPECTED["dining_last_week_gross"]
     assert result["refunds"] == 10.00
-    assert result["transaction_count"] == EXPECTED["food_last_week_count"]
+    assert result["transaction_count"] == EXPECTED["dining_last_week_count"]
 
 
 def test_q5_breakdown_by_category(db, ledger):

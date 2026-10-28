@@ -1,0 +1,42 @@
+merchant,count,example_amount,payment_channel,plaid_category,plaid_confidence,bankr_today,expected,jev,jev_confidence,agrees
+Hangar,31,44.0,in store,FOOD_AND_DRINK_RESTAURANT,LOW,Restaurants,,Transportation > Auto Maintenance,0.18,False
+Obsidian,24,5.0,in store,GENERAL_SERVICES_OTHER_GENERAL_SERVICES,LOW,Other,,Other,0.38,True
+BILT CARD HOUSING PPD ID: 1844372402,14,2.49,online,RENT_AND_UTILITIES_RENT,LOW,Rent & Housing,,Rent & Housing,0.4,True
+85 Degrees C Bakery Cafe,13,5.15,in store,FOOD_AND_DRINK_COFFEE,LOW,Coffee,,Dining > Coffee,0.97,True
+Honeydew,11,64.0,in store,MEDICAL_PRIMARY_CARE,LOW,Health,,Groceries,0.57,False
+Zion Market,11,34.03,in store,FOOD_AND_DRINK_GROCERIES,LOW,Groceries,,Groceries,0.96,True
+Krisp,11,17.78,in store,FOOD_AND_DRINK_OTHER_FOOD_AND_DRINK,LOW,Dining,,Dining > Restaurants,0.15,False
+Active&Fit,11,28.0,in store,PERSONAL_CARE_GYMS_AND_FITNESS_CENTERS,LOW,Health,,Health,0.48,True
+Airoma Cafe,9,15.22,in store,FOOD_AND_DRINK_COFFEE,LOW,Coffee,,Dining > Coffee,1,True
+Marugame Udon,9,19.37,in store,FOOD_AND_DRINK_FAST_FOOD,LOW,Fast Food,,Dining > Restaurants,0.78,False
+THH Sandwiches,9,21.45,in store,FOOD_AND_DRINK_RESTAURANT,LOW,Restaurants,,Dining > Fast Food,0.6,False
+KRISP Fresh Living,9,15.75,in store,FOOD_AND_DRINK_FAST_FOOD,LOW,Fast Food,,Groceries,0.43,False
+Boothbybryant LLC,8,5.0,in store,ENTERTAINMENT_SPORTING_EVENTS_AMUSEMENT_PARKS_AND_MUSEUMS,LOW,Entertainment,,Entertainment,0.15,True
+J& Q Vietnamese Sandwich,8,11.85,in store,FOOD_AND_DRINK_RESTAURANT,LOW,Restaurants,,Dining > Fast Food,0.53,False
+Yost Theatre,7,13.1,in store,ENTERTAINMENT_SPORTING_EVENTS_AMUSEMENT_PARKS_AND_MUSEUMS,LOW,Entertainment,,Entertainment,1,True
+2nd Street Usa Inc.,7,70.5,in store,GENERAL_MERCHANDISE_OTHER_GENERAL_MERCHANDISE,LOW,Shopping,,Shopping,0.87,True
+Tacos Los Cholos - Anaheim,7,3.98,in store,FOOD_AND_DRINK_FAST_FOOD,LOW,Fast Food,,Dining > Fast Food,0.82,True
+Café X,7,6.37,in store,FOOD_AND_DRINK_COFFEE,LOW,Coffee,,Dining > Coffee,1,True
+Dizzy Bird,6,19.65,in store,FOOD_AND_DRINK_FAST_FOOD,LOW,Fast Food,,Dining > Fast Food,0.57,True
+City Of Anaheim,6,194.86,online,RENT_AND_UTILITIES_OTHER_UTILITIES,LOW,Utilities,,Fees,0.23,False
+The Metro,6,2.5,in store,TRANSPORTATION_PUBLIC_TRANSIT,LOW,Public Transit,,Transportation > Public Transit,0.68,True
+Active & Fit Direct,5,28.0,in store,PERSONAL_CARE_GYMS_AND_FITNESS_CENTERS,LOW,Health,,Shopping,0.51,False
+Brodard Restaurant,5,23.06,in store,FOOD_AND_DRINK_RESTAURANT,LOW,Restaurants,,Dining > Restaurants,0.97,True
+Taco Stand,5,13.55,in store,FOOD_AND_DRINK_FAST_FOOD,LOW,Fast Food,,Dining > Fast Food,0.97,True
+76 Gas Stations,5,2.69,in store,GENERAL_MERCHANDISE_CONVENIENCE_STORES,LOW,Shopping,,Transportation > Gas,0.9,False
+Good Night John Boy,5,11.99,in store,FOOD_AND_DRINK_BEER_WINE_AND_LIQUOR,LOW,Alcohol & Bars,,Dining > Alcohol & Bars,0.54,True
+Tigawok,5,31.22,in store,FOOD_AND_DRINK_FAST_FOOD,LOW,Fast Food,,Dining > Fast Food,0.36,True
+HomeGoods,5,37.7,in store,HOME_IMPROVEMENT_FURNITURE,LOW,Other,,Shopping,0.99,False
+BCD-IRVINE,5,76.09,in store,FOOD_AND_DRINK_RESTAURANT,LOW,Restaurants,,Dining > Restaurants,0.22,True
+Lee's Sandwiches,5,20.98,in store,FOOD_AND_DRINK_FAST_FOOD,LOW,Fast Food,,Dining > Fast Food,0.68,True
+The Taco Stand,5,22.18,in store,FOOD_AND_DRINK_FAST_FOOD,LOW,Fast Food,,Dining > Fast Food,0.93,True
+HardLoop,4,30.0,in store,GENERAL_SERVICES_OTHER_GENERAL_SERVICES,LOW,Other,,Shopping,0.27,False
+Ynp Glacier Point Retail,4,3.51,in store,GENERAL_MERCHANDISE_OTHER_GENERAL_MERCHANDISE,LOW,Shopping,,Shopping,0.34,True
+Laguna Canyon,4,4.59,in store,FOOD_AND_DRINK_GROCERIES,LOW,Groceries,,Dining > Coffee,0.37,False
+Carrot & Daikon,4,19.55,in store,FOOD_AND_DRINK_RESTAURANT,LOW,Restaurants,,Groceries,0.79,False
+ampm,4,6.6,in store,GENERAL_MERCHANDISE_CONVENIENCE_STORES,LOW,Shopping,,Transportation > Gas,0.62,False
+Elephant Cafe,4,45.71,in store,FOOD_AND_DRINK_RESTAURANT,LOW,Restaurants,,Dining > Coffee,0.74,False
+Buffalo Exchange,4,24.78,in store,GENERAL_MERCHANDISE_CLOTHING_AND_ACCESSORIES,LOW,Shopping,,Shopping,0.99,True
+Stereoscope Coffee,4,18.0,in store,FOOD_AND_DRINK_COFFEE,LOW,Coffee,,Dining > Coffee,1,True
+Saiga Orange Next,4,16.92,in store,FOOD_AND_DRINK_COFFEE,LOW,Coffee,,Dining > Coffee,0.35,True
+Moongoat Greenhouse,3,13.5,in store,HOME_IMPROVEMENT_OTHER_HOME_IMPROVEMENT,LOW,Other,Dining > Coffee,Shopping,0.71,False

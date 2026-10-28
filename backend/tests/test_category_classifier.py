@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
+from app.config import Settings, settings
 from app.db.models import MerchantCategoryGuess, Rule, Transaction
 from app.db.seed_categories import seed_default_categories
 from app.integrations.bank_aggregator import AggregatorTransaction
@@ -29,7 +30,7 @@ from tests.fake_aggregator import FakeAggregatorClient
 class FakeClassifier:
     model = "fake"
 
-    def __init__(self, answer="Food & Drink", confidence=0.95, fail=False):
+    def __init__(self, answer="Food & Drink > Coffee", confidence=0.95, fail=False):
         self.answer = answer
         self.confidence = confidence
         self.fail = fail
@@ -83,7 +84,7 @@ def test_low_confidence_expense_is_reclassified_and_confidence_stored(db, user, 
 
     row = db.query(Transaction).one()
     assert row.aggregator_category_confidence == "LOW"
-    assert row.category.name == "Food & Drink"
+    assert row.category.name == "Coffee"
     profile = classifier.calls[0]
     assert (profile.merchant_name, profile.amounts, profile.channel) == ("Moongoat Greenhouse", (6.0,), "in store")
     assert (profile.bank_description, profile.payment_processor) == ("SQ *MOONGOAT GREENHOUS", "Square")
@@ -110,36 +111,42 @@ def test_confident_rows_keep_plaids_mapping(db, user, classifier):
     assert {_category(db, "t1"), _category(db, "t2")} == {"Home Improvement"}
 
 
-def test_income_and_transfers_are_never_sent(db, user, classifier):
+def test_income_transfers_cash_and_people_are_never_sent(db, user, classifier):
+    # No merchant to look up: Plaid's tag is all there is to go on.
     _sync(
         db,
         user,
         _txn("pay", 2000.0, merchant="Employer", raw="INCOME_SALARY"),
-        _txn("xfer", -500.0, merchant="Zelle", raw="TRANSFER_OUT_TRANSFER_OUT_FROM_APPS"),
+        _txn("xfer", -500.0, merchant="Ally Savings", raw="TRANSFER_OUT_SAVINGS"),
+        _txn("zelle", -500.0, merchant="Zelle", raw="TRANSFER_OUT_TRANSFER_OUT_FROM_APPS"),
+        _txn("atm", -60.0, merchant="ATM Withdrawal", raw="TRANSFER_OUT_WITHDRAWAL"),
     )
 
     assert classifier.calls == []
     assert _category(db, "pay") == "Income"
     assert _category(db, "xfer") == "Transfer Out"
+    assert _category(db, "zelle") == "Payments to People"
+    assert _category(db, "atm") == "Cash & ATM"
 
 
 def test_choices_exclude_income_transfer_and_loan_payments(db, user, classifier):
     _sync(db, user, _txn("t1"))
 
-    assert "Food & Drink" in classifier.choices
-    assert "General Merchandise" in classifier.choices
+    assert "Food & Drink > Coffee" in classifier.choices
+    assert "General Merchandise > Other Shopping" in classifier.choices
     assert not {"Income", "Transfer In", "Transfer Out", "Loan Payments"} & set(classifier.choices)
+    assert not [label for label in classifier.choices if label.startswith("Loan Payments")]
     assert all(classifier.choices.values())  # every choice comes with a description
 
 
 def test_one_call_per_merchant_and_cache_reused_on_later_syncs(db, user, classifier):
     _sync(db, user, _txn("t1"), _txn("t2"), _txn("t3", merchant="MOONGOAT  greenhouse"))
     assert len(classifier.calls) == 1
-    assert {_category(db, t) for t in ("t1", "t2", "t3")} == {"Food & Drink"}
+    assert {_category(db, t) for t in ("t1", "t2", "t3")} == {"Coffee"}
 
     _sync(db, user, _txn("t4"))
     assert len(classifier.calls) == 1
-    assert _category(db, "t4") == "Food & Drink"
+    assert _category(db, "t4") == "Coffee"
 
 
 def test_classifier_failure_keeps_plaids_mapping(db, user, classifier):
@@ -159,14 +166,14 @@ def test_answer_outside_the_choices_is_ignored(db, user, classifier):
 
 
 def test_user_rule_beats_the_classifier(db, user, classifier):
-    merchandise = seed_default_categories(db)["General Merchandise"]
+    merchandise = seed_default_categories(db)["Other Shopping"]
     db.add(Rule(user_id=user.id, merchant_contains="moongoat", set_category_id=merchandise.id))
     db.commit()
 
     _sync(db, user, _txn("t1"))
 
     assert classifier.calls == []
-    assert _category(db, "t1") == "General Merchandise"
+    assert _category(db, "t1") == "Other Shopping"
 
 
 def test_user_override_beats_the_classifier(db, user, classifier):
@@ -188,7 +195,11 @@ def test_known_software_merchants_are_never_sent(db, user, classifier):
     assert _category(db, "t1") == "Software"
 
 
-def test_disabled_by_default(db, user):
+def test_disabled_by_default(db, user, monkeypatch):
+    # The code's default, not whatever a local .env turns on: with it on,
+    # this would call the real Jev.
+    assert Settings.model_fields["jev_categorization_enabled"].default is False
+    monkeypatch.setattr(settings, "jev_categorization_enabled", False)
     _sync(db, user, _txn("t1"))
 
     row = db.query(Transaction).one()
@@ -207,7 +218,7 @@ def test_backfill_fills_confidence_and_reclassifies(db, user, monkeypatch):
 
     row = db.query(Transaction).one()
     assert row.aggregator_category_confidence == "LOW"
-    assert row.category.name == "Food & Drink"
+    assert row.category.name == "Coffee"
     assert result["recategorized_by_classifier"] == 1
 
 
@@ -219,10 +230,12 @@ def test_merchant_key_normalizes():
 
 def test_category_choices_are_the_spending_categories(db):
     choices = category_choices(seed_default_categories(db))
-    assert choices["Food & Drink"] == "Food & Drink"
     assert choices["Food & Drink > Coffee"] == "Coffee"  # subcategories carry their parent
     assert choices["General Services > Software"] == "Software"
-    assert len(choices) == 18  # 19 expense categories, minus Loan Payments
+    assert choices["Travel"] == "Travel"  # a top-level category without subcategories is its own leaf
+    # A group is never a choice: its "Other ..." subcategory is.
+    assert "Food & Drink" not in choices and choices["Food & Drink > Other Food & Drink"] == "Other Food & Drink"
+    assert len(choices) == 33  # 46 expense categories, minus 7 groups, Loan Payments' 4 subcategories, Cash, People
 
 
 def test_every_choice_has_a_description(db):

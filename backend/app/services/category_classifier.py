@@ -28,7 +28,8 @@ category_mapper already knows (Software) is never asked about.
 
 Built and tuned on an eval of 41 real low-confidence merchants
 (backend/tests/evals/category_jev_*.csv): 30/30 labeled right, against
-Plaid's 25. Small sample, and the same one it was tuned on.
+Plaid's 25. Small sample, the same one it was tuned on, and run against
+the choices from before groups were split into "Other ..." subcategories.
 """
 
 import logging
@@ -45,6 +46,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.models import Category, MerchantCategoryGuess, Transaction
+from app.db.seed_categories import DEFAULT_CATEGORIES
 from app.integrations.bank_aggregator import AggregatorTransaction
 from app.integrations.web_search import OpenRouterSearchClient, WebSearchClient
 from app.services.category_mapper import merchant_category
@@ -55,34 +57,51 @@ LOW_CONFIDENCE = {"LOW", "UNKNOWN"}
 DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 
 # Expense categories a merchant's name can't tell you about: a loan payment
-# is recognized from Plaid's LOAN_PAYMENTS_* tags, not the payee's name.
-_NOT_CHOICES = {"Loan Payments"}
+# is recognized from Plaid's LOAN_PAYMENTS_* tags, not the payee's name, and
+# cash or a Zelle to a person from Plaid's TRANSFER_OUT_* ones. Naming the
+# group excludes its subcategories too. Rows Plaid put in one of these are
+# never sent either: there's no merchant to look up.
+_NOT_CHOICES = {"Loan Payments", "Cash & ATM", "Payments to People"}
+_NEVER_ASKED = {name for name, _, parent in DEFAULT_CATEGORIES if {name, parent} & _NOT_CHOICES}
 
 # What each choice means, so Jev isn't matching bare labels. Kept generic on
 # purpose: naming the eval's own merchants here would only flatter the eval.
+# Groups aren't choices (see category_choices), so they have no entry.
 CATEGORY_DESCRIPTIONS = {
     "Bank Fees": "Bank and card fees: overdraft, late, ATM, foreign transaction and annual fees.",
     "Entertainment": "Movies, concerts, live events, theaters, museums, sporting events, video games and music.",
-    "Food & Drink": "Eating and drinking out: restaurants, fast food, bars, bakeries, desserts.",
     "Groceries": "Supermarkets and grocery stores, specialty and international markets, butchers, produce.",
+    "Restaurants": "Eating out: restaurants, fast food, food trucks, bakeries, desserts, food delivery.",
     "Coffee": "Cafes, coffee and tea shops, boba.",
-    "General Merchandise": (
-        "Retail: clothing, department and discount stores, electronics, online marketplaces, "
-        "books, gifts, thrift and convenience stores."
-    ),
+    "Alcohol & Bars": "Bars, pubs, breweries, wineries and liquor stores.",
+    "Other Food & Drink": "Food and drink that fits no other choice, such as vending machines.",
+    "Clothing": "Clothing, shoes and accessories stores.",
+    "Electronics": "Electronics and computer stores.",
+    "Online Marketplaces": "Online marketplaces selling many kinds of goods, such as Amazon, eBay and Etsy.",
+    "Superstores": "Big-box stores selling groceries and general goods together, such as Target, Walmart, Costco.",
+    "Pets": "Pet stores and supplies, veterinarians, grooming and boarding.",
+    "Other Shopping": "Other retail: department, discount, convenience, thrift, gift, book and sporting goods stores.",
     "Home Improvement": "Hardware and garden stores, furniture and home furnishings, home repair and maintenance.",
-    "Medical": "Doctors, dentists, eye care, hospitals, pharmacies, therapy and other healthcare.",
+    "Medical": "Doctors, dentists, eye care, hospitals, pharmacies, therapy and other healthcare for people.",
     "Personal Care": "Gyms and fitness, hair and beauty, spas, laundry and dry cleaning.",
-    "General Services": "Paid services: education, insurance, legal, accounting, postage and shipping, auto services.",
+    "Insurance": "Insurance premiums: car, home, renters, life and health insurance.",
+    "Childcare": "Daycare, babysitting, nannies and after-school care.",
+    "Education": "Tuition, schools, classes, tutoring and courses.",
     "Software": (
         "Apps, software and online services: SaaS, cloud storage, developer and productivity tools, "
         "whether billed monthly, yearly or once."
     ),
-    "Government & Non-Profit": "Taxes, government agencies and fees, donations and charities.",
-    "Transportation": "Getting around: rideshare and taxis, public transit, parking and tolls.",
+    "Other Services": "Other paid services: legal, accounting, postage and shipping, storage, cleaning.",
+    "Taxes": "Tax payments to federal, state or local tax agencies.",
+    "Donations": "Donations to charities, churches and non-profits.",
+    "Government Fees": "Government agencies and fees: DMV, passports, permits, courts.",
     "Gas": "Fuel at gas stations.",
+    "Car Maintenance": "Car repairs, oil changes, tires, car washes and auto parts.",
+    "Rideshare & Taxis": "Uber, Lyft, taxis.",
+    "Public Transit": "Buses, subways, trains and ferries.",
+    "Parking & Tolls": "Parking lots, garages, meters and road tolls.",
+    "Other Transportation": "Getting around in other ways, such as bike and scooter rentals.",
     "Travel": "Flights, hotels and lodging, rental cars, travel bookings.",
-    "Rent & Utilities": "Housing costs that fit neither subcategory.",
     "Rent": "Rent and property management payments.",
     "Utilities": "Electricity, gas, water, trash, sewer, internet, cable and phone bills.",
 }
@@ -196,14 +215,16 @@ def merchant_key(name: str | None) -> str | None:
 
 def category_choices(categories: dict[str, Category]) -> dict[str, str]:
     """Choice label -> category name. Subcategories carry their parent
-    ("Food & Drink > Coffee") so the model sees the hierarchy; the parent itself
-    stays a choice for when no subcategory fits."""
+    ("Food & Drink > Coffee") so the model sees the hierarchy. A group is
+    never a choice: its "Other ..." subcategory is there for when no other
+    one fits."""
     by_id = {c.id: c for c in categories.values()}
+    groups = {c.parent_category_id for c in categories.values() if c.parent_category_id}
     choices = {}
     for name, category in categories.items():
-        if category.type != "expense" or name in _NOT_CHOICES:
-            continue
         parent = by_id.get(category.parent_category_id)
+        if category.type != "expense" or category.id in groups or {name, parent and parent.name} & _NOT_CHOICES:
+            continue
         choices[f"{parent.name} > {name}" if parent else name] = name
     return choices
 
@@ -212,6 +233,7 @@ def needs_second_opinion(txn: Transaction, mapped: Category) -> bool:
     return (
         (txn.aggregator_category_confidence or "").upper() in LOW_CONFIDENCE
         and mapped.type == "expense"
+        and mapped.name not in _NEVER_ASKED
         and float(txn.amount) < 0
         and not txn.category_overridden
         and not txn.is_split

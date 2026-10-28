@@ -33,7 +33,7 @@ export function CategorySelect({
           {options
             .filter((o) => o.group === g)
             .map((o) => (
-              <option key={o.id} value={o.id}>
+              <option key={o.id} value={o.id} disabled={o.disabled}>
                 {o.label}
               </option>
             ))}

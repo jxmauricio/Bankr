@@ -1,0 +1,42 @@
+merchant,count,example_amount,payment_channel,plaid_category,bankr_today,expected,label_source
+Hangar,31,44.0,in store,FOOD_AND_DRINK_RESTAURANT,Restaurants,Health,you
+Obsidian,24,5.0,in store,GENERAL_SERVICES_OTHER_GENERAL_SERVICES,Other,Software,you (notebook app)
+BILT CARD HOUSING PPD ID: 1844372402,14,2.49,online,RENT_AND_UTILITIES_RENT,Rent & Housing,?,
+85 Degrees C Bakery Cafe,13,5.15,in store,FOOD_AND_DRINK_COFFEE,Coffee,Coffee,claude
+Honeydew,11,64.0,in store,MEDICAL_PRIMARY_CARE,Health,?,
+Zion Market,11,34.03,in store,FOOD_AND_DRINK_GROCERIES,Groceries,Groceries,claude
+Krisp,11,17.78,in store,FOOD_AND_DRINK_OTHER_FOOD_AND_DRINK,Dining,?,
+Active&Fit,11,28.0,in store,PERSONAL_CARE_GYMS_AND_FITNESS_CENTERS,Health,Health,claude
+Airoma Cafe,9,15.22,in store,FOOD_AND_DRINK_COFFEE,Coffee,Coffee,claude
+Marugame Udon,9,19.37,in store,FOOD_AND_DRINK_FAST_FOOD,Fast Food,Restaurants|Fast Food,claude
+THH Sandwiches,9,21.45,in store,FOOD_AND_DRINK_RESTAURANT,Restaurants,Restaurants|Fast Food,claude
+KRISP Fresh Living,9,15.75,in store,FOOD_AND_DRINK_FAST_FOOD,Fast Food,?,
+Boothbybryant LLC,8,5.0,in store,ENTERTAINMENT_SPORTING_EVENTS_AMUSEMENT_PARKS_AND_MUSEUMS,Entertainment,?,
+J& Q Vietnamese Sandwich,8,11.85,in store,FOOD_AND_DRINK_RESTAURANT,Restaurants,Restaurants|Fast Food,claude
+Yost Theatre,7,13.1,in store,ENTERTAINMENT_SPORTING_EVENTS_AMUSEMENT_PARKS_AND_MUSEUMS,Entertainment,Entertainment,claude
+2nd Street Usa Inc.,7,70.5,in store,GENERAL_MERCHANDISE_OTHER_GENERAL_MERCHANDISE,Shopping,Shopping,claude
+Tacos Los Cholos - Anaheim,7,3.98,in store,FOOD_AND_DRINK_FAST_FOOD,Fast Food,Restaurants|Fast Food,claude
+Café X,7,6.37,in store,FOOD_AND_DRINK_COFFEE,Coffee,Coffee,claude
+Dizzy Bird,6,19.65,in store,FOOD_AND_DRINK_FAST_FOOD,Fast Food,Restaurants|Fast Food,claude
+City Of Anaheim,6,194.86,online,RENT_AND_UTILITIES_OTHER_UTILITIES,Utilities,Utilities,you
+The Metro,6,2.5,in store,TRANSPORTATION_PUBLIC_TRANSIT,Public Transit,Public Transit,claude
+Active & Fit Direct,5,28.0,in store,PERSONAL_CARE_GYMS_AND_FITNESS_CENTERS,Health,Health,claude
+Brodard Restaurant,5,23.06,in store,FOOD_AND_DRINK_RESTAURANT,Restaurants,Restaurants,claude
+Taco Stand,5,13.55,in store,FOOD_AND_DRINK_FAST_FOOD,Fast Food,Restaurants|Fast Food,claude
+76 Gas Stations,5,2.69,in store,GENERAL_MERCHANDISE_CONVENIENCE_STORES,Shopping,Gas,claude
+Good Night John Boy,5,11.99,in store,FOOD_AND_DRINK_BEER_WINE_AND_LIQUOR,Alcohol & Bars,?,
+Tigawok,5,31.22,in store,FOOD_AND_DRINK_FAST_FOOD,Fast Food,Restaurants|Fast Food,claude
+HomeGoods,5,37.7,in store,HOME_IMPROVEMENT_FURNITURE,Other,Shopping,you
+BCD-IRVINE,5,76.09,in store,FOOD_AND_DRINK_RESTAURANT,Restaurants,Restaurants,claude
+Lee's Sandwiches,5,20.98,in store,FOOD_AND_DRINK_FAST_FOOD,Fast Food,Restaurants|Fast Food,claude
+The Taco Stand,5,22.18,in store,FOOD_AND_DRINK_FAST_FOOD,Fast Food,Restaurants|Fast Food,claude
+HardLoop,4,30.0,in store,GENERAL_SERVICES_OTHER_GENERAL_SERVICES,Other,?,
+Ynp Glacier Point Retail,4,3.51,in store,GENERAL_MERCHANDISE_OTHER_GENERAL_MERCHANDISE,Shopping,Shopping|Travel,claude
+Laguna Canyon,4,4.59,in store,FOOD_AND_DRINK_GROCERIES,Groceries,?,
+Carrot & Daikon,4,19.55,in store,FOOD_AND_DRINK_RESTAURANT,Restaurants,Restaurants|Fast Food,you
+ampm,4,6.6,in store,GENERAL_MERCHANDISE_CONVENIENCE_STORES,Shopping,?,
+Elephant Cafe,4,45.71,in store,FOOD_AND_DRINK_RESTAURANT,Restaurants,?,
+Buffalo Exchange,4,24.78,in store,GENERAL_MERCHANDISE_CLOTHING_AND_ACCESSORIES,Shopping,Shopping,claude
+Stereoscope Coffee,4,18.0,in store,FOOD_AND_DRINK_COFFEE,Coffee,Coffee,claude
+Saiga Orange Next,4,16.92,in store,FOOD_AND_DRINK_COFFEE,Coffee,?,
+Moongoat Greenhouse,3,13.5,in store,HOME_IMPROVEMENT_OTHER_HOME_IMPROVEMENT,Other,Coffee,you

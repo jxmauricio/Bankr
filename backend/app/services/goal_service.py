@@ -91,7 +91,7 @@ def list_active_goals(db: Session, user_id: UUID) -> list[Goal]:
 def spend_for_tracker(db: Session, user_id: UUID, category: str, window_name: str) -> dict:
     """Category spend in a named window -- the live number for a tracker."""
     window = mq.resolve_window(mq.today_for_user(db, user_id), window_name)
-    resolved = mq.resolve_category(db, category)
+    resolved = mq.resolve_category(db, category, user_id)
     return mq.spend_query(db, user_id, window, resolved)
 
 
@@ -181,7 +181,7 @@ def _new_spending_tracker(
     if not category or not str(category).strip():
         raise GoalValidationError("category is required for a spending tracker")
     try:
-        resolved = mq.resolve_category(db, category)
+        resolved = mq.resolve_category(db, category, user_id)
     except mq.QueryError as e:
         raise GoalValidationError(str(e), extra=e.extra) from e
 
