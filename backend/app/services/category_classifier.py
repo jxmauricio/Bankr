@@ -215,17 +215,17 @@ def merchant_key(name: str | None) -> str | None:
 
 def category_choices(categories: dict[str, Category]) -> dict[str, str]:
     """Choice label -> category key, from seed_default_categories' key ->
-    Category. Subcategories carry their parent ("Food & Drink > Coffee") so
-    the model sees the hierarchy. A group is never a choice: its "Other ..."
-    subcategory is there for when no other one fits."""
-    by_id = {c.id: c for c in categories.values()}
-    groups = {c.parent_category_id for c in categories.values() if c.parent_category_id}
+    Category. A category that shares its group carries the group's name
+    ("Food & Drink > Coffee") so the model sees the hierarchy. A group is
+    never a choice: its "Other ..." category is there for when no other one
+    fits."""
+    sizes = Counter(c.group_id for c in categories.values())
     choices = {}
     for key, category in categories.items():
-        parent = by_id.get(category.parent_category_id)
-        if category.type != "expense" or category.id in groups or {key, parent and parent.system_key} & _NOT_CHOICES:
+        group = category.group
+        if category.type != "expense" or {key, group.system_key} & _NOT_CHOICES:
             continue
-        choices[f"{parent.name} > {category.name}" if parent else category.name] = key
+        choices[f"{group.name} > {category.name}" if sizes[group.id] > 1 else category.name] = key
     return choices
 
 

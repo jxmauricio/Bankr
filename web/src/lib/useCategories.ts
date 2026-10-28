@@ -48,15 +48,15 @@ export function useCategories(token: string | null): CategoryNode[] {
   return categories;
 }
 
-/** Native <select> options, subcategories indented under their parent. A
- * parent with subcategories is only a heading: transactions always go on one
- * of its subcategories, and the backend rejects the parent. */
+/** Native <select> options, categories indented under their group. A group
+ * is only a heading: transactions always go on one of its categories, and
+ * the backend rejects the group. */
 export function categoryOptions(
   categories: CategoryNode[],
 ): { id: string; label: string; group: string; disabled: boolean }[] {
   const groupName = { expense: "Spending", income: "Income", transfer: "Transfers" } as const;
   return categories.flatMap((c) => [
-    { id: c.id, label: c.name, group: groupName[c.type], disabled: c.children.length > 0 },
+    { id: c.id, label: c.name, group: groupName[c.type], disabled: c.kind === "group" },
     ...c.children.map((child) => ({
       id: child.id,
       label: `  ${child.name}`,
@@ -77,4 +77,16 @@ export function spendCategoryNames(categories: CategoryNode[]): string[] {
 export function categoryName(categories: CategoryNode[], keyOrName: string): string {
   const all = categories.flatMap((c) => [c, ...c.children]);
   return all.find((c) => c.key === keyOrName)?.name ?? keyOrName;
+}
+
+/** What a budget line can cover, as the backend keys its lines: a spending
+ * group, or each category of a group the user budgets by category. */
+export function budgetTargets(categories: CategoryNode[]): { id: string; name: string }[] {
+  return categories
+    .filter((c) => c.type === "expense")
+    .flatMap((c) =>
+      c.budget_mode === "by_category" && c.kind === "group"
+        ? c.children.map((k) => ({ id: k.id, name: k.name }))
+        : [{ id: c.group_id, name: c.name }],
+    );
 }

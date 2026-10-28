@@ -10,8 +10,8 @@ from uuid import UUID
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.db.models import Category, LinkedAccount, Rule, Transaction
-from app.db.seed_categories import is_group, visible_to
+from app.db.models import Category, CategoryGroup, LinkedAccount, Rule, Transaction
+from app.db.seed_categories import visible_to
 
 MAX_RULES = 200
 
@@ -110,9 +110,10 @@ def _validate(db: Session, user_id: UUID, fields: dict) -> None:
     if fields.get("set_category_id") is not None:
         category = db.get(Category, fields["set_category_id"])
         if category is None or not visible_to(category, user_id):
+            group = db.get(CategoryGroup, fields["set_category_id"])
+            if group is not None and visible_to(group, user_id):
+                raise RuleError(f"pick one of {group.name}'s categories")
             raise RuleError("unknown category")
-        if is_group(db, category):
-            raise RuleError(f"pick one of {category.name}'s subcategories")
     if fields.get("linked_account_id") is not None:
         owned = (
             db.query(LinkedAccount)

@@ -5,7 +5,7 @@ from datetime import date
 
 from app.db import seed_categories
 from app.db.models import Budget, Category, Transaction
-from app.db.seed_categories import category_color, seed_default_categories
+from app.db.seed_categories import category_color, seed_default_categories, seed_default_groups
 from app.services import money_query as mq
 from app.services.sync_service import sync_user_accounts
 from app.services.transaction_edit_service import category_tree
@@ -25,8 +25,8 @@ def test_renaming_a_built_in_keeps_its_row_mapping_budget_and_color(db, user, mo
     restaurants = seed_default_categories(db)["restaurants"]
     ramen = db.query(Transaction).filter(Transaction.aggregator_transaction_id == "txn_dining").one()
     assert ramen.bankr_category_id == restaurants.id
-    food = seed_default_categories(db)["food_and_drink"]
-    db.add(Budget(user_id=user.id, category_id=food.id, amount=300, group="flex", rollover=False, start_month=date(2026, 8, 1)))
+    food = seed_default_groups(db)["food_and_drink"]
+    db.add(Budget(user_id=user.id, group_id=food.id, amount=300, group="flex", rollover=False, start_month=date(2026, 8, 1)))
     db.commit()
     color = category_color(restaurants)
 
@@ -42,7 +42,7 @@ def test_renaming_a_built_in_keeps_its_row_mapping_budget_and_color(db, user, mo
     assert db.query(Transaction).filter(Transaction.aggregator_transaction_id == "txn_dining").one().bankr_category_id == renamed.id
     for asked in ("Dining Out", "restaurants", "takeout"):
         assert mq.resolve_category(db, asked, user.id).category_id == renamed.id
-    assert db.query(Budget).one().category_id == food.id
+    assert db.query(Budget).one().group_id == food.id
 
 
 def test_the_category_tree_carries_keys_and_colors(db, user):
@@ -56,3 +56,42 @@ def test_slices_resolve_by_name_or_key(db, user):
     by_name = mq.resolve_category(db, "Eating Out", user.id)
     assert by_name.slice == "eating_out" and by_name.category_id is None
     assert mq.resolve_category(db, "eating_out", user.id).ids == by_name.ids
+
+
+def test_a_user_renames_a_built_in_for_themselves_only(client, db, user):
+    sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
+    restaurants = seed_default_categories(db)["restaurants"]
+    food = seed_default_groups(db)["food_and_drink"]
+    for item, name in ((restaurants, "Dining Out"), (food, "Food")):
+        assert client.patch(f"/categories/{item.id}", json={"name": name}).status_code == 200
+
+    # Their name everywhere they look, and in what they can ask by...
+    row = next(t for t in client.get("/dashboard/transactions?start=2026-08-01&end=2026-08-31").json()["transactions"] if t["merchant_name"] == "Ramen Spot")
+    assert (row["category"], row["parent_category"]) == ("Dining Out", "Food")
+    assert mq.resolve_category(db, "dining out", user.id).category_id == restaurants.id
+    assert mq.resolve_category(db, "Food", user.id).group_id == food.id
+    # ...while the row, and everyone else, keep the built-in name.
+    db.expire_all()
+    assert db.get(Category, restaurants.id).name == "Restaurants"
+    assert mq.resolve_category(db, "Restaurants").category_id == restaurants.id
+
+    # An empty name puts the built-in one back.
+    client.patch(f"/categories/{restaurants.id}", json={"name": ""})
+    assert mq.resolve_category(db, "restaurants", user.id).name == "Restaurants"
+
+
+def test_a_group_can_be_budgeted_by_category(client, db, user):
+    sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
+    client.put("/budgets/settings", json={"mode": "category"})  # a line per budget, not a Flexible pool
+    food = seed_default_groups(db)["food_and_drink"]
+    restaurants = seed_default_categories(db)["restaurants"]
+    assert client.put(f"/budgets/{restaurants.id}", json={"amount": 100}).status_code == 422  # budgeted by group
+
+    r = client.put(f"/budgets/groups/{food.id}/mode", json={"mode": "by_category"})
+    assert r.status_code == 200, r.text
+    assert client.put(f"/budgets/{restaurants.id}", json={"amount": 100}).status_code == 200
+    line = next(line for line in client.get("/budgets").json()["lines"] if line["name"] == "Restaurants")
+    assert (line["kind"], line["budgeted"]) == ("category", 100.0)
+    assert {n["budget_mode"] for n in client.get("/categories").json()["categories"] if n["group_id"] == str(food.id)} == {
+        "by_category"
+    }

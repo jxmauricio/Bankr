@@ -99,8 +99,8 @@ def tracker_category(db: Session, user_id: UUID, goal: Goal) -> mq.ResolvedCateg
     QueryError if its category is gone."""
     if goal.category_slice:
         return mq.resolve_category(db, goal.category_slice, user_id)
-    if goal.category_id:
-        return mq.resolve_category_id(db, goal.category_id, user_id)
+    if goal.group_id or goal.category_id:
+        return mq.resolve_stored(db, user_id, group_id=goal.group_id, category_id=goal.category_id)
     return None
 
 
@@ -211,6 +211,7 @@ def _new_spending_tracker(
         starting_amount=0,
         current_progress_amount=spent,
         status="active",
+        group_id=resolved.group_id,
         category_id=resolved.category_id,
         category_slice=resolved.slice,
         window=window_name,

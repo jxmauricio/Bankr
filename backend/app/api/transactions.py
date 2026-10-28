@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.db.base import get_db
@@ -44,19 +44,18 @@ def _owned(db: Session, user: User, transaction_id: UUID):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "transaction not found")
 
 
-def _row(db: Session, txn) -> dict:
+def _row(db: Session, user: User, txn) -> dict:
     """The edited row in the same shape /dashboard/transactions lists it."""
-    parent = aliased(Category)
     db.refresh(txn)
-    name, ctype, parent_name = (
-        db.query(Category.name, Category.type, parent.name)
-        .outerjoin(parent, Category.parent_category_id == parent.id)
+    joins, category_name, group_name = mq.category_names(user.id)
+    name, ctype, group = (
+        joins(db.query(category_name, Category.type, group_name))
         .filter(Category.id == txn.bankr_category_id)
         .one_or_none()
         or (None, None, None)
     )
-    splits = mq._splits_for(db, [txn.id]) if txn.is_split else {}
-    return {**mq.transaction_row(txn, name, ctype, parent_name), "splits": splits.get(txn.id, [])}
+    splits = mq._splits_for(db, user.id, [txn.id]) if txn.is_split else {}
+    return {**mq.transaction_row(txn, name, ctype, group), "splits": splits.get(txn.id, [])}
 
 
 @router.patch("/transactions/{transaction_id}")
@@ -79,7 +78,7 @@ def edit_transaction(
     except TransactionEditError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
     refresh_net_worth(db, user.id)  # commits, and keeps spending-goal progress current
-    return _row(db, txn)
+    return _row(db, user, txn)
 
 
 @router.put("/transactions/{transaction_id}/splits")
@@ -96,4 +95,4 @@ def replace_splits(
         db.rollback()
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
     refresh_net_worth(db, user.id)
-    return _row(db, txn)
+    return _row(db, user, txn)

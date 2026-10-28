@@ -430,6 +430,14 @@ export interface TransactionRow extends TransactionSplit {
 
 export interface CategoryOption {
   id: string;
+  /** Only a category can be picked for a transaction or rule; a group heads them. */
+  kind: "group" | "category";
+  /** Its group's id: the node's own id for a group. */
+  group_id: string;
+  /** How the user budgets that group: one line, or a line per category. */
+  budget_mode: "by_group" | "by_category";
+  /** A built-in one the user gave a name of their own. */
+  renamed: boolean;
   /** A built-in category's stable id ("restaurants"); null on the user's own. */
   key: string | null;
   name: string;

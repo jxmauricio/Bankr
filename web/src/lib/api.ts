@@ -425,6 +425,14 @@ export interface TransactionRow extends TransactionSplit {
 
 export interface CategoryOption {
   id: string;
+  /** Only a category can be picked for a transaction or rule; a group heads them. */
+  kind: "group" | "category";
+  /** Its group's id: the node's own id for a group. */
+  group_id: string;
+  /** How the user budgets that group: one line, or a line per category. */
+  budget_mode: "by_group" | "by_category";
+  /** A built-in one the user gave a name of their own. */
+  renamed: boolean;
   /** A built-in category's stable id ("restaurants"); null on the user's own. */
   key: string | null;
   name: string;
@@ -442,14 +450,15 @@ export interface CategoryNode extends CategoryOption {
 export const fetchCategories = (token: string) =>
   request<{ categories: CategoryNode[] }>("/categories", { token }).then((r) => r.categories);
 
-/** parentId: a spending group to file it under, or null for a top-level category of its own. */
-export const createCategory = (token: string, name: string, parentId: string | null) =>
-  request<CategoryOption>("/categories", { method: "POST", token, body: { name, parent_id: parentId } });
+/** groupId: a spending group to put it in, or null for one on its own (in a new group of its name). */
+export const createCategory = (token: string, name: string, groupId: string | null) =>
+  request<{ id: string; categories: CategoryNode[] }>("/categories", { method: "POST", token, body: { name, group_id: groupId } });
 
+/** Any group or category: a built-in one is renamed for this user only, and "" puts its name back. */
 export const renameCategory = (token: string, id: string, name: string) =>
-  request<CategoryOption>(`/categories/${id}`, { method: "PATCH", token, body: { name } });
+  request<{ categories: CategoryNode[] }>(`/categories/${id}`, { method: "PATCH", token, body: { name } });
 
-/** Its transactions go back to Bankr's own category for them. */
+/** One of the user's own groups or categories. Its transactions go back to Bankr's own category for them. */
 export const deleteCategory = (token: string, id: string) =>
   request<{ recategorized: number }>(`/categories/${id}`, { method: "DELETE", token });
 
@@ -572,9 +581,11 @@ export const updateRecurring = (token: string, id: string, patch: { status?: Rec
 export type BudgetLineStatus = "ok" | "warning" | "over";
 
 export interface BudgetLine {
-  /** Category id, or "flex" for the Flexible bucket. */
+  /** The line's group or category id, or "flex" for the Flexible bucket. */
   key: string;
+  /** The group's or category's id: what upsertBudget takes. */
   category_id: string | null;
+  kind: "group" | "category" | "flex";
   name: string;
   group: "fixed" | "flex" | "category";
   budgeted: number;
@@ -644,6 +655,10 @@ export const upsertBudget = (
   categoryId: string,
   patch: { amount?: number; group?: "fixed" | "flex"; rollover?: boolean },
 ) => request<BudgetStatus>(`/budgets/${categoryId}`, { method: "PUT", token, body: patch });
+
+/** Budget a spending group as one line, or a line per category. */
+export const setBudgetMode = (token: string, groupId: string, mode: "by_group" | "by_category") =>
+  request<BudgetStatus>(`/budgets/groups/${groupId}/mode`, { method: "PUT", token, body: { mode } });
 
 export const deleteBudget = (token: string, categoryId: string) =>
   request<BudgetStatus>(`/budgets/${categoryId}`, { method: "DELETE", token });

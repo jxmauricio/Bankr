@@ -10,8 +10,8 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Category, LinkedAccount, Transaction
-from app.db.seed_categories import category_color, is_group, user_categories, visible_to
+from app.db.models import Category, CategoryGroup, LinkedAccount, Transaction
+from app.db.seed_categories import BY_GROUP, budget_modes, category_color, display_names, user_categories, user_groups, visible_to
 
 MAX_SPLITS = 10
 
@@ -39,9 +39,10 @@ def get_owned_transaction(db: Session, user_id: UUID, transaction_id: UUID) -> T
 def _category(db: Session, txn: Transaction, category_id: UUID) -> Category:
     category = db.get(Category, category_id)
     if category is None or not visible_to(category, txn.linked_account.user_id):
+        group = db.get(CategoryGroup, category_id)
+        if group is not None and visible_to(group, txn.linked_account.user_id):
+            raise TransactionEditError(f"pick one of {group.name}'s categories")
         raise TransactionEditError("unknown category")
-    if is_group(db, category):
-        raise TransactionEditError(f"pick one of {category.name}'s subcategories")
     return category
 
 
@@ -117,28 +118,42 @@ def set_splits(db: Session, txn: Transaction, parts: list[dict]) -> list[Transac
 
 
 def category_tree(db: Session, user_id: UUID) -> list[dict]:
-    """Every category the user can see (the built-in ones and their own),
-    parents first with their children nested, for pickers. `custom` marks
-    the user's own, which they can rename or delete; `key` is a built-in's
-    stable id and `color` its chart color, so clients never match on names."""
-    rows = sorted(user_categories(db, user_id).values(), key=lambda c: c.name)
+    """Every group and category the user can see (the built-in ones and
+    their own, under their names for them), groups first with their
+    categories nested, for pickers. A group holding a single category is
+    that category, with no children: there's nothing to pick between.
 
-    def node(c: Category) -> dict:
+    `kind` says which a node is (only a category can be picked for a
+    transaction). Every node carries `group_id` and the group's
+    `budget_mode`; `custom`
+    marks the user's own, which they can delete; `key` is a built-in's
+    stable id and `color` its chart color, so clients never match on names."""
+    names = display_names(db, user_id)
+    modes = budget_modes(db, user_id)
+    by_group: dict[UUID, list[Category]] = {}
+    for c in user_categories(db, user_id).values():
+        by_group.setdefault(c.group_id, []).append(c)
+
+    def node(item: Category | CategoryGroup, group: CategoryGroup) -> dict:
         return {
-            "id": str(c.id),
-            "key": c.system_key,
-            "name": c.name,
-            "type": c.type,
-            "color": category_color(c),
-            "custom": c.user_id is not None,
+            "id": str(item.id),
+            "kind": "group" if isinstance(item, CategoryGroup) else "category",
+            "key": item.system_key,
+            "name": names.get(item.id, item.name),
+            "type": item.type,
+            "color": category_color(item),
+            "custom": item.user_id is not None,
+            "renamed": item.id in names,
+            "group_id": str(group.id),
+            "budget_mode": modes.get(group.id, BY_GROUP),
         }
 
-    children: dict[UUID, list[dict]] = {}
-    for c in rows:
-        if c.parent_category_id:
-            children.setdefault(c.parent_category_id, []).append(node(c))
+    tree = []
+    for group in user_groups(db, user_id).values():
+        members = sorted(by_group.get(group.id, []), key=lambda c: names.get(c.id, c.name))
+        if len(members) == 1:
+            tree.append({**node(members[0], group), "children": []})
+        else:
+            tree.append({**node(group, group), "children": [node(c, group) for c in members]})
     type_order = {"expense": 0, "income": 1, "transfer": 2}
-    return sorted(
-        ({**node(c), "children": children.get(c.id, [])} for c in rows if c.parent_category_id is None),
-        key=lambda c: (type_order.get(c["type"], 3), c["name"]),
-    )
+    return sorted(tree, key=lambda c: (type_order.get(c["type"], 3), c["name"]))

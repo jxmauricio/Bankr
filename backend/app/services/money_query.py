@@ -33,12 +33,12 @@ from difflib import get_close_matches
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import case, func
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session, aliased
 
 from app.config import settings
-from app.db.models import Category, LinkedAccount, Transaction, User
-from app.db.seed_categories import user_categories
+from app.db.models import Category, CategoryGroup, CategoryPref, LinkedAccount, Transaction, User
+from app.db.seed_categories import display_names, user_categories, user_groups
 
 NAMED_WINDOWS = (
     "today",
@@ -331,90 +331,142 @@ def same_point_in(previous: Window, current: Window) -> Window:
 @dataclass(frozen=True)
 class ResolvedCategory:
     name: str
-    ids: tuple[UUID, ...]  # the category itself plus its subcategories
+    ids: tuple[UUID, ...]  # the categories it covers: one, or all of a group's
     subcategories: tuple[str, ...]
-    top_level: str  # the category, or the group it's in: whose budget it counts against
-    # What it is, for storing (Goal.category_id / category_slice): exactly one is set.
+    top_level: str  # its group: whose budget it counts against
+    # What it is, for storing (Goal.group_id / category_id / category_slice): exactly one is set.
+    group_id: UUID | None = None
     category_id: UUID | None = None
     slice: str | None = None
 
 
 def resolve_category(db: Session, name: str, user_id: UUID | None = None) -> ResolvedCategory:
-    """A spending category by name, key or everyday word. With user_id, the
-    user's own categories count too; without, only the built-in ones."""
-    categories = user_categories(db, user_id)
-    by_lower = {c.lower(): c for c in categories}
-    by_key = {c.system_key: n for n, c in categories.items() if c.system_key}
-    slice_by_lower = {n.lower(): key for n, key in SLICE_NAMES.items()}
+    """A spending group or category by name, key or everyday word. With
+    user_id, the user's own groups and categories, and their names for the
+    built-in ones, count too; without, only the built-in ones. A group and
+    a category of the same name (Travel) are the same money: the group wins."""
+    groups, categories = user_groups(db, user_id), user_categories(db, user_id)
+    # name (lowercased) or key -> ("group" | "category" | "slice", the thing)
+    found: dict[str, tuple[str, object]] = {}
+    for key, (slice_name, _, _) in CATEGORY_SLICES.items():
+        found[key] = found[slice_name.lower()] = ("slice", key)
+    for n, c in categories.items():
+        found[n.lower()] = ("category", c)
+        if c.system_key:
+            found[c.system_key] = ("category", c)
+    for n, g in groups.items():
+        found[n.lower()] = ("group", g)
+        if g.system_key:
+            found[g.system_key] = ("group", g)
+
+    def lookup(q: str):
+        return found.get(q) or found.get(CATEGORY_ALIASES.get(q, ""))
+
     query = name.strip().lower()
-
-    def lookup(q: str) -> str | None:
-        """The category's name, or a slice's key."""
-        if q in by_lower:
-            return by_lower[q]
-        if q in by_key or q in CATEGORY_SLICES:
-            return by_key.get(q, q)
-        if q in slice_by_lower:
-            return slice_by_lower[q]
-        alias = CATEGORY_ALIASES.get(q)
-        return by_key.get(alias, alias) if alias else None
-
-    canonical = lookup(query)
-    if canonical is None and query.endswith("s"):
-        canonical = lookup(query[:-1])
-    if canonical is None:
-        suggestions = get_close_matches(query, [*by_lower, *CATEGORY_ALIASES], n=3, cutoff=0.6)
-        found = {lookup(s) for s in suggestions}
+    hit = lookup(query) or (lookup(query[:-1]) if query.endswith("s") else None)
+    if hit is None:
+        suggestions = get_close_matches(query, [*found, *CATEGORY_ALIASES], n=3, cutoff=0.6)
         raise QueryError(
             f"no category called {name!r}",
-            did_you_mean=sorted(CATEGORY_SLICES[f][0] if f in CATEGORY_SLICES else f for f in found),
+            did_you_mean=sorted({_hit_name(lookup(s), db, user_id) for s in suggestions}),
             valid_categories=spend_category_names(db, user_id),
         )
 
-    if canonical in CATEGORY_SLICES:
-        slice_name, group_key, left_out = CATEGORY_SLICES[canonical]
-        group = categories[by_key[group_key]]
-        parts = [c for c in categories.values() if c.parent_category_id == group.id and c.system_key not in left_out]
+    kind, thing = hit
+    if kind == "slice":
+        slice_name, group_key, left_out = CATEGORY_SLICES[thing]
+        group = found[group_key][1]
+        parts = [c for c in categories.values() if c.group_id == group.id and c.system_key not in left_out]
         return ResolvedCategory(
             name=slice_name,
             ids=tuple(c.id for c in parts),
-            subcategories=tuple(sorted(c.name for c in parts)),
-            top_level=group.name,
-            slice=canonical,
+            subcategories=tuple(sorted(_names(db, user_id, parts))),
+            top_level=_name(db, user_id, group),
+            slice=thing,
         )
-
-    parent = categories[canonical]
-    if parent.type != "expense":
+    if thing.type != "expense":
         raise QueryError(
-            f"{canonical!r} is not a spending category",
+            f"{_name(db, user_id, thing)!r} is not a spending category",
             valid_categories=spend_category_names(db, user_id),
         )
-    return _resolved(categories.values(), parent)
+    return _resolved_group(db, user_id, thing) if kind == "group" else _resolved_category(db, user_id, thing)
 
 
-def resolve_category_id(db: Session, category_id: UUID, user_id: UUID) -> ResolvedCategory:
-    """A stored category (Goal.category_id) the way resolve_category gives it."""
-    categories = user_categories(db, user_id)
-    category = next((c for c in categories.values() if c.id == category_id), None)
-    if category is None:
-        raise QueryError("that category no longer exists")
-    return _resolved(categories.values(), category)
+def resolve_stored(db: Session, user_id: UUID, *, group_id=None, category_id=None) -> ResolvedCategory:
+    """A stored group or category (Goal.group_id / category_id) the way
+    resolve_category gives it."""
+    if group_id is not None:
+        group = next((g for g in user_groups(db, user_id).values() if g.id == group_id), None)
+        if group is not None:
+            return _resolved_group(db, user_id, group)
+    elif category_id is not None:
+        category = next((c for c in user_categories(db, user_id).values() if c.id == category_id), None)
+        if category is not None:
+            return _resolved_category(db, user_id, category)
+    raise QueryError("that category no longer exists")
 
 
-def _resolved(categories, category: Category) -> ResolvedCategory:
-    children = [c for c in categories if c.parent_category_id == category.id]
-    parent = next((c for c in categories if c.id == category.parent_category_id), None)
+def _resolved_group(db: Session, user_id, group: CategoryGroup) -> ResolvedCategory:
+    name = _name(db, user_id, group)
+    members = [c for c in user_categories(db, user_id).values() if c.group_id == group.id]
+    names = _names(db, user_id, members)
     return ResolvedCategory(
-        name=category.name,
-        ids=(category.id, *(c.id for c in children)),
-        subcategories=tuple(sorted(c.name for c in children)),
-        top_level=parent.name if parent else category.name,
+        name=name,
+        ids=tuple(c.id for c in members),
+        # A category alone in its group of the same name isn't a part of it.
+        subcategories=() if names == [name] else tuple(sorted(names)),
+        top_level=name,
+        group_id=group.id,
+    )
+
+
+def _resolved_category(db: Session, user_id, category: Category) -> ResolvedCategory:
+    return ResolvedCategory(
+        name=_name(db, user_id, category),
+        ids=(category.id,),
+        subcategories=(),
+        top_level=_name(db, user_id, category.group),
         category_id=category.id,
     )
 
 
+def _name(db: Session, user_id, item) -> str:
+    """The name this user sees for a group or category."""
+    return display_names(db, user_id).get(item.id, item.name)
+
+
+def _names(db: Session, user_id, items) -> list[str]:
+    names = display_names(db, user_id)
+    return [names.get(i.id, i.name) for i in items]
+
+
+def _hit_name(hit, db: Session, user_id) -> str:
+    kind, thing = hit
+    return CATEGORY_SLICES[thing][0] if kind == "slice" else _name(db, user_id, thing)
+
+
 def spend_category_names(db: Session, user_id: UUID | None = None) -> list[str]:
-    return sorted(name for name, c in user_categories(db, user_id).items() if c.type == "expense")
+    """Every spending group and category this user can ask about, by name."""
+    names = {n for n, g in user_groups(db, user_id).items() if g.type == "expense"}
+    names |= {n for n, c in user_categories(db, user_id).items() if c.type == "expense"}
+    return sorted(names)
+
+
+def category_names(user_id):
+    """Columns for the names this user sees for a row's category and its
+    group, and the joins they need: (joins(q), category name, group name).
+    A query over Category gets them with q = joins(q)."""
+    category_pref, group_pref = aliased(CategoryPref), aliased(CategoryPref)
+
+    def joins(q, outer: bool = False):
+        """outer: keep rows with no category."""
+        return (
+            (q.outerjoin if outer else q.join)(CategoryGroup, Category.group_id == CategoryGroup.id)
+            .outerjoin(category_pref, and_(category_pref.category_id == Category.id, category_pref.user_id == user_id))
+            .outerjoin(group_pref, and_(group_pref.group_id == CategoryGroup.id, group_pref.user_id == user_id))
+        )
+
+    return joins, func.coalesce(category_pref.name, Category.name), func.coalesce(group_pref.name, CategoryGroup.name)
 
 
 # --- queries ------------------------------------------------------------------
@@ -472,7 +524,7 @@ def spend_query(
     # Refunds net within their own top-level category, floored at zero: a
     # $500 airline refund offsets travel spending, but must not turn "$50 on
     # Uber" into "-$450 spent". Any excess is reported, not hidden.
-    by_top_level = _net_by_key(q, "category")
+    by_top_level = _net_by_key(q, "category", user_id)
     total_spent = sum(max(amount, 0) for amount, _, _ in by_top_level.values())
     excess_refunds = sum(-min(amount, 0) for amount, _, _ in by_top_level.values())
 
@@ -492,22 +544,23 @@ def spend_query(
 
     if group_by:
         result["group_by"] = group_by
-        result["groups"] = _groups(by_top_level if group_by == "category" else _net_by_key(q, group_by), top_n)
+        result["groups"] = _groups(by_top_level if group_by == "category" else _net_by_key(q, group_by, user_id), top_n)
     return result
 
 
-def _net_by_key(q, group_by: str) -> dict[str, tuple[float, int, str | None]]:
-    """{group name: (net spent, transaction count, category key)}; refunds
-    count negative. The key is a built-in category's, else None."""
+def _net_by_key(q, group_by: str, user_id: UUID) -> dict[str, tuple[float, int, str | None]]:
+    """{name: (net spent, transaction count, key)}; refunds count negative.
+    "category" is by group, "subcategory" by category; the key is a
+    built-in group's or category's, else None."""
     if group_by == "merchant":
         key, system_key = func.coalesce(Transaction.merchant_name, "Unknown merchant"), None
-    elif group_by == "category":
-        parent = aliased(Category)
-        q = q.outerjoin(parent, Category.parent_category_id == parent.id)
-        key = func.coalesce(parent.name, Category.name)
-        system_key = case((parent.id.isnot(None), parent.system_key), else_=Category.system_key)
-    elif group_by == "subcategory":
-        key, system_key = Category.name, Category.system_key
+    elif group_by in ("category", "subcategory"):
+        joins, category_name, group_name = category_names(user_id)
+        q = joins(q)
+        if group_by == "category":
+            key, system_key = group_name, CategoryGroup.system_key
+        else:
+            key, system_key = category_name, Category.system_key
     else:
         raise QueryError("group_by must be one of: category, subcategory, merchant")
     columns = (key, func.sum(-Transaction.amount), func.count(Transaction.id))
@@ -733,18 +786,17 @@ def list_transactions(
     """Every transaction in the window -- income, spending and transfers --
     newest first, with its account, for the Transactions view. Split rows
     are nested under their parent rather than listed on their own."""
-    parent = aliased(Category)
-    q = (
-        db.query(Transaction, Category.name, Category.type, parent.name, LinkedAccount)
+    joins, category_name, group_name = category_names(user_id)
+    q = joins(
+        db.query(Transaction, category_name, Category.type, group_name, LinkedAccount)
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
-        .outerjoin(Category, Transaction.bankr_category_id == Category.id)
-        .outerjoin(parent, Category.parent_category_id == parent.id)
-        .filter(
-            LinkedAccount.user_id == user_id,
-            Transaction.date >= window.start,
-            Transaction.date <= window.end,
-            Transaction.split_parent_id.is_(None),
-        )
+        .outerjoin(Category, Transaction.bankr_category_id == Category.id),
+        outer=True,
+    ).filter(
+        LinkedAccount.user_id == user_id,
+        Transaction.date >= window.start,
+        Transaction.date <= window.end,
+        Transaction.split_parent_id.is_(None),
     )
     if account_id is not None:
         q = q.filter(LinkedAccount.id == account_id)
@@ -752,14 +804,14 @@ def list_transactions(
         q = q.filter(Transaction.merchant_name.ilike(f"%{merchant.strip()}%"))
     total_count = q.count()
     rows = q.order_by(Transaction.date.desc(), Transaction.created_at.desc()).limit(MAX_LISTED_TRANSACTIONS).all()
-    splits = _splits_for(db, [txn.id for txn, *_ in rows if txn.is_split])
+    splits = _splits_for(db, user_id, [txn.id for txn, *_ in rows if txn.is_split])
     return {
         **window.as_dict(),
         "transaction_count": total_count,
         "truncated": total_count > len(rows),
         "transactions": [
             {
-                **transaction_row(txn, category_name, category_type, parent_name),
+                **transaction_row(txn, name, category_type, group),
                 "splits": splits.get(txn.id, []),
                 "account": {
                     "id": str(account.id),
@@ -769,12 +821,14 @@ def list_transactions(
                     "type": account.account_type,
                 },
             }
-            for txn, category_name, category_type, parent_name, account in rows
+            for txn, name, category_type, group, account in rows
         ],
     }
 
 
-def transaction_row(txn: Transaction, category_name, category_type, parent_name) -> dict:
+def transaction_row(txn: Transaction, category_name, category_type, group_name) -> dict:
+    """`parent_category` is the group, unless the category stands alone in
+    a group of its own name (Travel), which would only repeat it."""
     return {
         "id": str(txn.id),
         "date": txn.date.isoformat(),
@@ -783,7 +837,7 @@ def transaction_row(txn: Transaction, category_name, category_type, parent_name)
         "original_merchant_name": txn.original_merchant_name,
         "category_id": str(txn.bankr_category_id) if txn.bankr_category_id else None,
         "category": category_name,
-        "parent_category": parent_name,
+        "parent_category": group_name if group_name != category_name else None,
         "category_type": category_type,
         "is_pending": txn.is_pending,
         "notes": txn.notes,
@@ -792,21 +846,23 @@ def transaction_row(txn: Transaction, category_name, category_type, parent_name)
     }
 
 
-def _splits_for(db: Session, parent_ids: list[UUID]) -> dict[UUID, list[dict]]:
+def _splits_for(db: Session, user_id: UUID, parent_ids: list[UUID]) -> dict[UUID, list[dict]]:
     if not parent_ids:
         return {}
-    parent = aliased(Category)
+    joins, category_name, group_name = category_names(user_id)
     rows = (
-        db.query(Transaction, Category.name, Category.type, parent.name)
-        .outerjoin(Category, Transaction.bankr_category_id == Category.id)
-        .outerjoin(parent, Category.parent_category_id == parent.id)
+        joins(
+            db.query(Transaction, category_name, Category.type, group_name)
+            .outerjoin(Category, Transaction.bankr_category_id == Category.id),
+            outer=True,
+        )
         .filter(Transaction.split_parent_id.in_(parent_ids))
         .order_by(Transaction.aggregator_transaction_id)
         .all()
     )
     out: dict[UUID, list[dict]] = {}
-    for txn, name, ctype, parent_name in rows:
-        out.setdefault(txn.split_parent_id, []).append(transaction_row(txn, name, ctype, parent_name))
+    for txn, name, ctype, group in rows:
+        out.setdefault(txn.split_parent_id, []).append(transaction_row(txn, name, ctype, group))
     return out
 
 
@@ -1061,8 +1117,9 @@ def find_transactions(
         q = q.filter(func.abs(Transaction.amount) <= max_amount)
 
     total_count = q.count()
+    joins, category_name, _ = category_names(user_id)
     rows = (
-        q.with_entities(Transaction, Category.name, Category.type, LinkedAccount)
+        joins(q.with_entities(Transaction, category_name, Category.type, LinkedAccount))
         .order_by(Transaction.date.desc(), Transaction.amount)
         .limit(max(1, min(limit, 1000)))
         .all()

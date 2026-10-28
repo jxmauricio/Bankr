@@ -11,8 +11,6 @@ hand. See app/services/category_backfill.py.
 """
 from typing import Sequence, Union
 
-from alembic import op
-from sqlalchemy.orm import Session
 
 
 # revision identifiers, used by Alembic.
@@ -23,11 +21,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Imported here, not at module top, so `alembic history` etc. don't
-    # need the app importable.
-    from app.services.category_backfill import move_to_plaid_primaries
-
-    move_to_plaid_primaries(Session(bind=op.get_bind()))
+    raise RuntimeError(
+        "this revision re-mapped categories with the app code of its time, which has since moved on "
+        "(see b3f8d1a6c742): upgrade through it with the Bankr release it shipped in"
+    )
 
 
 def downgrade() -> None:

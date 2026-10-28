@@ -78,23 +78,6 @@ def test_every_mapped_key_is_a_seeded_category():
     assert set(PRIMARY_CATEGORY_MAP.values()) <= seeded
 
 
-def test_a_transaction_never_lands_on_a_group():
-    # Every group's total must be exactly the sum of its subcategories.
-    from app.db.seed_categories import GROUPS
-    from app.services.category_mapper import DETAILED_CATEGORY_MAP, PRIMARY_CATEGORY_MAP
-
-    assert GROUPS == {
-        "loan_payments",
-        "food_and_drink",
-        "general_merchandise",
-        "general_services",
-        "government_and_non_profit",
-        "transportation",
-        "rent_and_utilities",
-    }
-    assert not (set(DETAILED_CATEGORY_MAP.values()) | set(PRIMARY_CATEGORY_MAP.values())) & GROUPS
-
-
 def test_new_subcategories_answer_the_questions_a_primary_cannot():
     # The vet is the pet's, not the user's, medical bill.
     assert map_raw_category("MEDICAL_VETERINARY_SERVICES", -180.0) == "pets"

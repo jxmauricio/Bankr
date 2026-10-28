@@ -16,9 +16,9 @@ from datetime import date, datetime, timedelta, timezone
 from statistics import mean, median, pstdev
 from uuid import UUID
 
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session
 
-from app.db.models import Category, LinkedAccount, RecurringSeries, Transaction
+from app.db.models import Category, CategoryGroup, LinkedAccount, RecurringSeries, Transaction
 from app.services import money_query as mq
 
 logger = logging.getLogger(__name__)
@@ -87,7 +87,7 @@ class _Charge:
     amount: float  # positive size
     name: str
     category_id: UUID | None
-    categories: frozenset[str]  # keys of its category and that category's parent
+    categories: frozenset[str]  # keys of its category and that category's group
 
 
 def _match_cadence(gaps: list[int]) -> str | None:
@@ -147,12 +147,11 @@ def _detect_group(charges: list[_Charge], direction: str) -> dict | None:
 
 
 def _charges(db: Session, user_id: UUID, since: date) -> dict[tuple[str, str], list[_Charge]]:
-    parent = aliased(Category)
     rows = (
-        db.query(Transaction, Category.system_key, Category.type, parent.system_key)
+        db.query(Transaction, Category.system_key, Category.type, CategoryGroup.system_key)
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
         .join(Category, Transaction.bankr_category_id == Category.id)
-        .outerjoin(parent, Category.parent_category_id == parent.id)
+        .join(CategoryGroup, Category.group_id == CategoryGroup.id)
         .filter(
             LinkedAccount.user_id == user_id,
             Transaction.date >= since,
@@ -163,7 +162,7 @@ def _charges(db: Session, user_id: UUID, since: date) -> dict[tuple[str, str], l
         .all()
     )
     groups: dict[tuple[str, str], list[_Charge]] = {}
-    for txn, category_key, ctype, parent_key in rows:
+    for txn, category_key, ctype, group_key in rows:
         amount = float(txn.amount)
         direction = "in" if amount > 0 else "out"
         if (direction == "in") != (ctype == "income"):
@@ -172,7 +171,7 @@ def _charges(db: Session, user_id: UUID, since: date) -> dict[tuple[str, str], l
         if not key:
             continue
         groups.setdefault((key, direction), []).append(
-            _Charge(txn.date, abs(amount), txn.merchant_name or key, txn.bankr_category_id, frozenset({category_key, parent_key} - {None}))
+            _Charge(txn.date, abs(amount), txn.merchant_name or key, txn.bankr_category_id, frozenset({category_key, group_key} - {None}))
         )
     return groups
 

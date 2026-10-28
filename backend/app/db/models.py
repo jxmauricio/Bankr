@@ -3,6 +3,7 @@ from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Float,
@@ -77,15 +78,33 @@ class LinkedAccount(Base):
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="linked_account")
 
 
+class CategoryGroup(Base):
+    """A heading over categories: Food & Drink over Groceries, Restaurants,
+    Coffee. Only categories hold transactions, splits and rules; a group is
+    what totals roll up to, and what a budget can cover as one line (see
+    CategoryPref.budget_mode). Every category is in exactly one group, and a
+    category that stands alone (Travel) is the only one in its group."""
+
+    __tablename__ = "category_groups"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    # Stable id of a built-in group ("food_and_drink"); None on a user's own.
+    system_key: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
+    name: Mapped[str] = mapped_column(String)
+    type: Mapped[str] = mapped_column(String)  # income | expense | transfer
+    # Set on a group a user made for themselves; None on the built-in ones.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+
+
 class Category(Base):
     __tablename__ = "categories"
 
     id: Mapped[uuid.UUID] = uuid_pk()
     name: Mapped[str] = mapped_column(String)
     type: Mapped[str] = mapped_column(String)  # income | expense | transfer
-    parent_category_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("categories.id"), nullable=True
-    )
+    group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("category_groups.id"), index=True)
     is_system_default: Mapped[bool] = mapped_column(Boolean, default=True)
     # Stable id of a built-in category ("restaurants"), what code looks it up
     # by: the name is only for people. None on a user's own categories.
@@ -95,6 +114,32 @@ class Category(Base):
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
     )
+
+    group: Mapped["CategoryGroup"] = relationship(lazy="joined")
+
+
+class CategoryPref(Base):
+    """One user's view of a built-in category or group, which every user
+    shares: their own name for it, and for a spending group, whether its
+    budget is one line for the group or a line per category."""
+
+    __tablename__ = "category_prefs"
+    __table_args__ = (
+        UniqueConstraint("user_id", "category_id"),
+        UniqueConstraint("user_id", "group_id"),
+        CheckConstraint("(category_id IS NULL) <> (group_id IS NULL)", name="category_prefs_one_target"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    category_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("categories.id", ondelete="CASCADE"), nullable=True
+    )
+    group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("category_groups.id", ondelete="CASCADE"), nullable=True
+    )
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    budget_mode: Mapped[str | None] = mapped_column(String, nullable=True)  # by_group (default) | by_category
 
 
 class Transaction(Base):
@@ -151,10 +196,13 @@ class Goal(Base):
     status: Mapped[str] = mapped_column(String, default="active")  # active | completed | abandoned
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     name: Mapped[str | None] = mapped_column(String, nullable=True)
-    # track_spending only: the category it watches -- a category (with its
-    # subcategories) or a named slice of a group ("eating_out", see
-    # money_query.CATEGORY_SLICES), exactly one of the two -- and a rolling
-    # named window ("this_month"). Savings goals leave these null.
+    # track_spending only: what it watches -- a group, a category or a named
+    # slice of a group ("eating_out", see money_query.CATEGORY_SLICES),
+    # exactly one of the three -- and a rolling named window ("this_month").
+    # Savings goals leave these null.
+    group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("category_groups.id", ondelete="SET NULL"), nullable=True
+    )
     category_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("categories.id", ondelete="SET NULL"), nullable=True
     )
@@ -313,14 +361,20 @@ class BudgetSettings(Base):
 
 
 class Budget(Base):
-    """A monthly amount for one top-level expense category."""
+    """A monthly amount for one spending group, or for one category in a
+    group the user budgets by category (CategoryPref.budget_mode)."""
 
     __tablename__ = "budgets"
-    __table_args__ = (UniqueConstraint("user_id", "category_id"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "category_id"),
+        UniqueConstraint("user_id", "group_id"),
+        CheckConstraint("(category_id IS NULL) <> (group_id IS NULL)", name="budgets_one_target"),
+    )
 
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    category_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("categories.id"))
+    category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
+    group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("category_groups.id"), nullable=True)
     amount: Mapped[float] = mapped_column(Numeric(12, 2))
     group: Mapped[str] = mapped_column(String, default="flex")  # fixed | flex (only matters in flex mode)
     # Leftover (or overspending) carries into next month.
@@ -331,7 +385,8 @@ class Budget(Base):
 
 class BudgetMove(Base):
     """Money moved between budget lines for one month -- how overspending
-    gets covered. A null category means the Flexible bucket."""
+    gets covered. Each side is a group's line or a category's; both null
+    means the Flexible bucket."""
 
     __tablename__ = "budget_moves"
 
@@ -340,5 +395,7 @@ class BudgetMove(Base):
     month: Mapped[date] = mapped_column(Date)  # first of the month
     from_category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
     to_category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
+    from_group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("category_groups.id"), nullable=True)
+    to_group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("category_groups.id"), nullable=True)
     amount: Mapped[float] = mapped_column(Numeric(12, 2))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

@@ -15,7 +15,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from app.db.models import LinkedAccount, Transaction
-from app.db.seed_categories import DEFAULT_CATEGORIES, seed_default_categories
+from app.db.seed_categories import seed_default_categories
 from app.services.category_classifier import merchant_key, needs_second_opinion, trusted
 from app.services.category_mapper import map_raw_category
 from app.services.rules_service import apply_rules, user_rules
@@ -47,161 +47,11 @@ def recategorize_all_transactions(db: Session) -> int:
     return changed
 
 
-# Where each category of the pre-PFC tree (by name: those rows never had a
-# key) goes on Plaid's primaries (by key). Names that are categories again
-# today (Groceries, Restaurants, ...) map to themselves and keep their rows.
-# Targets are leaves of today's tree, since
-# this still runs, via the c8e1f5a2d697 migration, on a database built from
-# scratch. "Transfer" is split by sign on transactions; anything else that
-# pointed at it (a rule, a budget line) becomes Transfer Out.
-LEGACY_CATEGORY_MOVES: dict[str, str] = {
-    "Transfer": "transfer_out",
-    "Groceries": "groceries",
-    "Dining": "restaurants",
-    "Restaurants": "restaurants",
-    "Fast Food": "restaurants",
-    "Coffee": "coffee",
-    "Alcohol & Bars": "alcohol_and_bars",
-    "Gas": "gas",
-    "Rideshare & Taxi": "rideshare_and_taxis",
-    "Public Transit": "public_transit",
-    "Parking & Tolls": "parking_and_tolls",
-    "Auto Maintenance": "car_maintenance",
-    "Rent & Housing": "rent",
-    "Utilities": "utilities",
-    "Subscriptions": "entertainment",
-    "Shopping": "other_shopping",
-    "Health": "medical",
-    "Fees": "bank_fees",
-    "Other": "other_shopping",
-}
-
-# Where things that point at a group go when the group gets subcategories,
-# by key:
-# the user's own picks, rules, cached guesses, recurring series. Mostly its
-# "Other ..." child -- but a pick of Food & Drink, made when Groceries and
-# Coffee were already their own choices, meant eating out, and Jev's
-# description of Food & Drink was eating out. Rent & Utilities' description
-# was "housing costs that fit neither subcategory", which is closer to Rent.
-GROUP_MOVES: dict[str, str] = {
-    "loan_payments": "other_loan_payments",
-    "food_and_drink": "restaurants",
-    "general_merchandise": "other_shopping",
-    "general_services": "other_services",
-    "government_and_non_profit": "government_fees",
-    "transportation": "other_transportation",
-    "rent_and_utilities": "rent",
-}
-
-
-def move_to_plaid_primaries(db: Session) -> None:
-    """Retire the legacy categories in LEGACY_CATEGORY_MOVES. Everything
-    that points at one moves to its new category first: the user's own
-    picks, rules, budgets (merged when two land on one line), budget moves,
-    recurring series, cached merchant guesses and spending trackers. Then
-    every row the user didn't categorize by hand is re-mapped from its raw
-    Plaid category, with the cached guesses and the user's rules applied
-    on top, as a sync would.
-
-    Like recategorize_all_transactions, it works in named columns and SQL
-    so the migration that calls it keeps running as the schema grows."""
-    categories = seed_default_categories(db)
-    # A legacy name that's a category again today (Groceries, now under
-    # Food & Drink) keeps its row: the seed above already re-parented it.
-    retired = [name for name in LEGACY_CATEGORY_MOVES if name not in {n for _, n, _, _ in DEFAULT_CATEGORIES}]
-    old = dict(
-        db.execute(
-            text("SELECT name, id FROM categories WHERE is_system_default AND name = ANY(:names)"),
-            {"names": retired},
-        ).all()
-    )
-    if not old:
-        return
-
-    goals_by_name = "category" in {c["name"] for c in inspect(db.get_bind()).get_columns("goals")}
-    for name, old_id in old.items():
-        new = categories[LEGACY_CATEGORY_MOVES[name]]
-        # Budgets go on top-level categories only: Dining's budget is Food & Drink's.
-        budget_id = new.parent_category_id or new.id
-        params = {"old": old_id, "new": new.id}
-        if name == "Transfer":
-            db.execute(
-                text("UPDATE transactions SET bankr_category_id = :into WHERE bankr_category_id = :old AND amount > 0"),
-                {"old": old_id, "into": categories["transfer_in"].id},
-            )
-        for table, column in (
-            ("transactions", "bankr_category_id"),
-            ("rules", "set_category_id"),
-            ("merchant_category_guesses", "category_id"),
-            ("recurring_series", "category_id"),
-        ):
-            db.execute(text(f"UPDATE {table} SET {column} = :new WHERE {column} = :old"), params)
-        for column in ("from_category_id", "to_category_id"):
-            db.execute(
-                text(f"UPDATE budget_moves SET {column} = :new WHERE {column} = :old"), {"old": old_id, "new": budget_id}
-            )
-        if goals_by_name:  # trackers kept a category name until a7d2e9c4b318
-            db.execute(
-                text("UPDATE goals SET category = :new_name WHERE category = :old_name"),
-                {"old_name": name, "new_name": new.name},
-            )
-        _merge_budgets(db, old_id, budget_id)
-
-    db.execute(text("UPDATE categories SET parent_category_id = NULL WHERE id = ANY(:ids)"), {"ids": list(old.values())})
-    db.execute(text("DELETE FROM categories WHERE id = ANY(:ids)"), {"ids": list(old.values())})
-    db.flush()
-    _remap_uncategorized_by_hand(db, categories)
-
-
-def move_off_groups(db: Session) -> None:
-    """Make every group in GROUP_MOVES a pure rollup. Seed the new
-    subcategories, move whatever points straight at a group to the
-    subcategory GROUP_MOVES names (user picks and splits included: the
-    group is no longer a choice they could keep), then re-map every row the
-    user didn't categorize by hand. Budgets, budget moves and spending
-    trackers stay on the group: those are meant to cover all of it."""
-    categories = seed_default_categories(db)
-    for group, leaf in GROUP_MOVES.items():
-        params = {"old": categories[group].id, "new": categories[leaf].id}
-        for table, column in (
-            ("transactions", "bankr_category_id"),
-            ("rules", "set_category_id"),
-            ("merchant_category_guesses", "category_id"),
-            ("recurring_series", "category_id"),
-        ):
-            db.execute(text(f"UPDATE {table} SET {column} = :new WHERE {column} = :old"), params)
-    db.flush()
-    _remap_uncategorized_by_hand(db, categories)
-
-
 def remap_with_current_categories(db: Session) -> None:
     """Seed any categories DEFAULT_CATEGORIES gained (e.g. subcategories)
     and re-map every transaction the user didn't categorize by hand, with
     cached guesses and the user's rules applied on top."""
     _remap_uncategorized_by_hand(db, seed_default_categories(db))
-
-
-def _merge_budgets(db: Session, old_id, new_id) -> None:
-    """Move budgets on old_id to new_id. A user with a line on both (Groceries
-    and Dining, both now Food & Drink) gets one line: amounts added, the
-    earliest start, rollover if either rolled over, fixed if either was."""
-    for user_id, amount, group, rollover, start_month in db.execute(
-        text('SELECT user_id, amount, "group", rollover, start_month FROM budgets WHERE category_id = :old'),
-        {"old": old_id},
-    ).all():
-        merged = db.execute(
-            text(
-                'UPDATE budgets SET amount = amount + :amount, rollover = rollover OR :rollover, '
-                "start_month = LEAST(start_month, :start_month), "
-                "\"group\" = CASE WHEN :group = 'fixed' THEN 'fixed' ELSE \"group\" END "
-                "WHERE user_id = :user_id AND category_id = :new"
-            ),
-            {"amount": amount, "rollover": rollover, "start_month": start_month, "group": group, "user_id": user_id, "new": new_id},
-        ).rowcount
-        if merged:
-            db.execute(text("DELETE FROM budgets WHERE user_id = :user_id AND category_id = :old"), {"user_id": user_id, "old": old_id})
-        else:
-            db.execute(text("UPDATE budgets SET category_id = :new WHERE user_id = :user_id AND category_id = :old"), {"user_id": user_id, "old": old_id, "new": new_id})
 
 
 def remap_transactions(db: Session, txn_ids: list) -> None:
