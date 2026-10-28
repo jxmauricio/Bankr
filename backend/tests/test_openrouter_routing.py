@@ -30,7 +30,7 @@ def test_openrouter_client_sends_provider_sort(monkeypatch):
 
     client.complete("system", "hello")
 
-    assert captured["extra_body"] == {"provider": {"sort": "throughput"}}
+    assert captured["extra_body"] == {"usage": {"include": True}, "provider": {"sort": "throughput"}}
 
 
 def test_openrouter_client_combines_provider_sort_with_reasoning(monkeypatch):
@@ -41,7 +41,7 @@ def test_openrouter_client_combines_provider_sort_with_reasoning(monkeypatch):
 
     client.complete("system", "hello")
 
-    assert captured["extra_body"] == {"reasoning": {"max_tokens": 1500}, "provider": {"sort": "latency"}}
+    assert captured["extra_body"] == {"usage": {"include": True}, "reasoning": {"max_tokens": 1500}, "provider": {"sort": "latency"}}
 
 
 def test_run_turn_logs_timing_tokens_and_provider(monkeypatch, caplog):
@@ -56,7 +56,7 @@ def test_run_turn_logs_timing_tokens_and_provider(monkeypatch, caplog):
 
     [line] = [r.getMessage() for r in caplog.records if r.name == "app.agent.providers"]
     assert line.startswith("agent round 0: model ")
-    assert "tokens in=1200 out=300 reasoning=250, served_by=SomeHost" in line
+    assert "tokens in=1200 out=300 reasoning=250, cost=None, served_by=SomeHost" in line
 
 
 def test_openrouter_client_caps_output_tokens(monkeypatch):

@@ -81,7 +81,7 @@ def test_openrouter_client_requests_reasoning_when_enabled(monkeypatch):
     monkeypatch.setattr(client._client.chat.completions, "create", fake_create)
 
     assert client.complete("system", "hello") == "hi"
-    assert captured["extra_body"] == {"reasoning": {"max_tokens": 1500}}
+    assert captured["extra_body"] == {"usage": {"include": True}, "reasoning": {"max_tokens": 1500}}
 
 
 def test_openrouter_client_sends_no_reasoning_param_when_disabled(monkeypatch):
@@ -96,4 +96,5 @@ def test_openrouter_client_sends_no_reasoning_param_when_disabled(monkeypatch):
 
     client.complete("system", "hello")
 
-    assert captured["extra_body"] is None
+    # Only the usage accounting every OpenRouter call asks for (for cost).
+    assert captured["extra_body"] == {"usage": {"include": True}}

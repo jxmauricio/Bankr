@@ -233,7 +233,7 @@ def test_chat_stream_sends_reset_when_the_model_drops_its_text(client, user, mon
     to drop it before the real reply streams."""
 
     class ThinksAloudClient:
-        def run_turn(self, system, tools, history, call_tool, on_text=None):
+        def run_turn(self, system, tools, history, call_tool, on_text=None, on_usage=None):
             on_text("Let me check.")
             on_text(None)
             on_text("All set.")
@@ -289,6 +289,7 @@ _ROUNDS = [
 
 
 def test_chat_has_no_usage_unless_debug_is_on(client, user, monkeypatch):
+    monkeypatch.setattr(settings, "agent_debug", False)  # whatever the local .env says
     monkeypatch.setattr(claude_agent, "_client", FakeAgentClient(turns=[ScriptedTurn(final_text="Hi!", usage=_ROUNDS)]))
 
     assert client.post("/chat", json={"message": "hi"}).json()["usage"] is None
