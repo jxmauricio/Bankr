@@ -88,18 +88,18 @@ def test_today_is_taken_in_the_users_timezone(db, user, monkeypatch):
     [
         ("eating out", "Eating Out"),
         ("dining", "Eating Out"),
-        ("Food & Drink", "Food & Drink"),
+        ("Food & Dining", "Food & Dining"),
         ("groceries", "Groceries"),
         ("gas", "Gas"),
         ("fuel", "Gas"),
-        ("gas bill", "Utilities"),
-        ("coffee shops", "Coffee"),
+        ("gas bill", "Gas & Electric"),
+        ("coffee shops", "Coffee Shops"),
         ("rent", "Rent"),
-        ("restaurants", "Restaurants"),
-        ("Uber", "Rideshare & Taxis"),
-        ("car", "Transportation"),
-        ("shopping", "General Merchandise"),
-        ("gym", "Personal Care"),
+        ("restaurants", "Restaurants & Bars"),
+        ("Uber", "Taxi & Ride Shares"),
+        ("car", "Auto & Transport"),
+        ("shopping", "Shopping"),
+        ("gym", "Fitness"),
     ],
 )
 def test_category_resolution(db, said, canonical):
@@ -109,12 +109,12 @@ def test_category_resolution(db, said, canonical):
 def test_unknown_category_suggests_instead_of_answering_zero(db):
     with pytest.raises(mq.QueryError) as exc:
         mq.resolve_category(db, "trasportation")
-    assert "Transportation" in exc.value.extra["did_you_mean"]
+    assert "Auto & Transport" in exc.value.extra["did_you_mean"]
 
 
 def test_transfer_is_not_a_spending_category(db):
     with pytest.raises(mq.QueryError):
-        mq.resolve_category(db, "Transfer Out")
+        mq.resolve_category(db, "Transfer")
 
 
 # --- the six MVP questions -------------------------------------------------------------
@@ -143,18 +143,18 @@ def test_q3_groceries_this_month_vs_last(db, ledger):
     assert result["change_vs_same_point"] == {"difference": 20.05, "percent_change": 9.3, "direction": "up"}
 
 
-def test_food_and_drink_includes_groceries_and_coffee(db, ledger):
-    result = mq.spend_query(db, ledger.id, w("this_month"), mq.resolve_category(db, "Food & Drink"))
+def test_food_and_dining_includes_groceries_and_coffee(db, ledger):
+    result = mq.spend_query(db, ledger.id, w("this_month"), mq.resolve_category(db, "Food & Dining"))
     assert result["total_spent"] == EXPECTED["food_this_month"]
-    assert set(result["includes_subcategories"]) == {"Groceries", "Restaurants", "Coffee", "Alcohol & Bars", "Other Food & Drink"}
+    assert set(result["includes_subcategories"]) == {"Groceries", "Restaurants & Bars", "Coffee Shops"}
 
 
 def test_q4_eating_out_last_week(db, ledger):
-    # Eating out is Food & Drink without the groceries: the bar and the
+    # Eating out is Food & Dining without the groceries: the bar and the
     # coffee count, Trader Joe's doesn't.
     eating_out = mq.resolve_category(db, "eating out")
-    assert set(eating_out.subcategories) == {"Restaurants", "Coffee", "Alcohol & Bars", "Other Food & Drink"}
-    assert eating_out.top_level == "Food & Drink"  # its budget
+    assert set(eating_out.subcategories) == {"Restaurants & Bars", "Coffee Shops"}
+    assert eating_out.top_level == "Food & Dining"  # its budget
     result = mq.spend_query(db, ledger.id, w("last_week"), eating_out)
     assert result["total_spent"] == EXPECTED["dining_last_week"]
     assert result["gross_spent"] == EXPECTED["dining_last_week_gross"]
@@ -166,7 +166,7 @@ def test_q5_breakdown_by_category(db, ledger):
     result = mq.spend_query(db, ledger.id, w("this_month"), group_by="category")
     assert [(g["name"], g["amount"]) for g in result["groups"]] == EXPECTED["this_month_by_category"]
     assert round(sum(g["amount"] for g in result["groups"]), 2) == result["total_spent"]
-    assert result["groups"][0]["share_of_total"] == round(1890 / EXPECTED["this_month_spending"], 4)
+    assert result["groups"][0]["share_of_total"] == round(1800 / EXPECTED["this_month_spending"], 4)
 
 
 def test_q5_breakdown_by_merchant_rolls_up_the_long_tail(db, ledger):
@@ -216,7 +216,7 @@ def test_find_transactions_can_list_transfers_when_asked(db, ledger):
 
 
 def test_find_transactions_backs_up_the_number(db, ledger):
-    found = mq.find_transactions(db, ledger.id, w("last_week"), mq.resolve_category(db, "Food & Drink"))
+    found = mq.find_transactions(db, ledger.id, w("last_week"), mq.resolve_category(db, "Food & Dining"))
     assert found["total_spent"] == EXPECTED["food_last_week"]
     assert len(found["transactions"]) == EXPECTED["food_last_week_count"]
     assert not found["truncated"]

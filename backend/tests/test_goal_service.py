@@ -154,7 +154,7 @@ def test_track_spending_keeps_a_custom_name(db, user, monkeypatch):
         "track_spending",
         target_amount=0,
         target_date=None,
-        category="Food & Drink",
+        category="Food & Dining",
         window="this_month",
         name="Eating out",
     )
@@ -172,7 +172,7 @@ def test_track_spending_budget_marks_over_without_completing(db, user, monkeypat
     sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
 
     create_goal(
-        db, user.id, "track_spending", target_amount=100.0, target_date=None, category="Food & Drink", window="this_month"
+        db, user.id, "track_spending", target_amount=100.0, target_date=None, category="Food & Dining", window="this_month"
     )
     progress = get_goal_progress(db, user.id)["goals"][0]
     assert progress["current_progress_amount"] == 165.5
@@ -195,7 +195,7 @@ def test_track_spending_budget_shows_remaining_and_pace_through_the_month(db, us
     sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
 
     create_goal(
-        db, user.id, "track_spending", target_amount=500.0, target_date=None, category="Food & Drink", window="this_month"
+        db, user.id, "track_spending", target_amount=500.0, target_date=None, category="Food & Dining", window="this_month"
     )
     progress = get_goal_progress(db, user.id)["goals"][0]
     assert progress["remaining_amount"] == 334.5
@@ -215,7 +215,7 @@ def test_track_spending_ahead_of_pace_before_the_cap(db, user, monkeypatch):
 
     # $165.50 spent of a $180 cap by Aug 20 is most of the budget with 11 days left.
     create_goal(
-        db, user.id, "track_spending", target_amount=180.0, target_date=None, category="Food & Drink", window="this_month"
+        db, user.id, "track_spending", target_amount=180.0, target_date=None, category="Food & Dining", window="this_month"
     )
     progress = get_goal_progress(db, user.id)["goals"][0]
     assert progress["remaining_amount"] == 14.5

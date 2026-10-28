@@ -439,6 +439,8 @@ export interface CategoryOption {
   type: "income" | "expense" | "transfer";
   /** Its chart color, from the backend so it follows the category, not its name. */
   color: string;
+  /** A built-in category's emoji (Monarch's); null on groups and the user's own. */
+  emoji: string | null;
   /** One the user made: they can rename or delete it. */
   custom: boolean;
 }

@@ -80,6 +80,7 @@ export function CategoriesSettings({ token }: { token: string }) {
     return (
       <>
         <p className={`m-0 min-w-0 text-sm ${nested ? "text-ink-soft" : "font-medium text-ink"}`}>
+          {item.emoji && <span aria-hidden="true">{item.emoji} </span>}
           {item.name}
           {item.custom && <span className="font-normal text-ink-faint"> · yours</span>}
         </p>

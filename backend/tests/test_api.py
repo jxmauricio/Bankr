@@ -187,7 +187,7 @@ def test_spending_drilldown_matches_a_chat_source_query(client, monkeypatch):
     _with_fake_aggregator(client)
     client.post("/linked-accounts", json={"public_token": "public-fake-token"})
 
-    r = client.get("/dashboard/spending", params={"start": "2026-08-01", "end": "2026-08-31", "category": "Food & Drink"})
+    r = client.get("/dashboard/spending", params={"start": "2026-08-01", "end": "2026-08-31", "category": "Food & Dining"})
     body = r.json()
     assert body["total"] == 165.5
     assert sorted(i["merchant_name"] for i in body["items"]) == ["Ramen Spot", "Trader Joe's"]
@@ -195,7 +195,7 @@ def test_spending_drilldown_matches_a_chat_source_query(client, monkeypatch):
 
     bad = client.get("/dashboard/spending", params={"category": "trasportation"})
     assert bad.status_code == 422
-    assert "Transportation" in bad.json()["detail"]["did_you_mean"]
+    assert "Auto & Transport" in bad.json()["detail"]["did_you_mean"]
 
 
 def _synced_in_august(client, monkeypatch):
@@ -216,8 +216,8 @@ def test_transactions_view_lists_every_kind_with_its_account(client, monkeypatch
     assert body["transaction_count"] == 3
     assert [t["merchant_name"] for t in body["transactions"]] == ["Ramen Spot", "Trader Joe's", "Employer Inc"]
     dining = body["transactions"][0]
-    assert dining["category"] == "Restaurants"
-    assert dining["parent_category"] == "Food & Drink"
+    assert dining["category"] == "Restaurants & Bars"
+    assert dining["parent_category"] == "Food & Dining"
     assert dining["category_type"] == "expense"
     assert dining["account"]["type"] == "credit"
     assert body["transactions"][2]["category_type"] == "income"
@@ -233,7 +233,7 @@ def test_cash_flow_sides_add_up_to_the_rollup(client, monkeypatch):
 
     assert body["income"] == rollup["income"] == 3000.0
     assert body["sources"] == [{"name": "Employer Inc", "amount": 3000.0}]
-    assert {c["name"]: c["amount"] for c in body["categories"]} == {"Food & Drink": 165.5}
+    assert {c["name"]: c["amount"] for c in body["categories"]} == {"Food & Dining": 165.5}
     assert sum(c["amount"] for c in body["categories"]) == rollup["spending"]
     assert body["transfer_in"] == rollup["transfer_in"] == 0
     assert body["transfer_out"] == rollup["transfer_out"] == 0

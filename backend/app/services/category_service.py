@@ -2,7 +2,7 @@
 (seed_categories), and their own names for the built-in ones.
 
 A user's own categories are spending categories, in any spending group:
-- a built-in one ("Wedding" in General Merchandise), where it counts in
+- a built-in one ("Wedding" in Shopping), where it counts in
   that group's totals and budget, or
 - one of their own, made with it ("Hobbies" alone in a Hobbies group) or
   on its own first, to fill later.

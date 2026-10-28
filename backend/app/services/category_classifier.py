@@ -24,7 +24,7 @@ Plaid's category. Precedence on a transaction, highest first: the user's own
 pick (category_overridden), the user's rules, a trusted cached guess here,
 Plaid's mapping. Income and transfers are never a choice: those stay with
 the sign and account-type logic in category_mapper.py, and a merchant
-category_mapper already knows (Software) is never asked about.
+category_mapper already knows (a software merchant) is never asked about.
 
 Built and tuned on an eval of 41 real low-confidence merchants
 (backend/tests/evals/category_jev_*.csv): 30/30 labeled right, against
@@ -56,54 +56,78 @@ logger = logging.getLogger(__name__)
 LOW_CONFIDENCE = {"LOW", "UNKNOWN"}
 DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 
-# Expense categories a merchant's name can't tell you about: a loan payment
-# is recognized from Plaid's LOAN_PAYMENTS_* tags, not the payee's name, and
-# cash or a Zelle to a person from Plaid's TRANSFER_OUT_* ones. Naming the
-# group excludes its subcategories too. Rows Plaid put in one of these are
-# never sent either: there's no merchant to look up.
-_NOT_CHOICES = {"loan_payments", "cash_and_atm", "payments_to_people"}
-_NEVER_ASKED = {key for key, _, _, parent in DEFAULT_CATEGORIES if {key, parent} & _NOT_CHOICES}
+# Expense groups and categories a merchant's name can't tell you about: a
+# loan payment is recognized from Plaid's LOAN_PAYMENTS_* tags, not the
+# payee's name, and cash or a Zelle to a person from its TRANSFER_OUT_* ones.
+# Business categories, Fun Money, Check and Uncategorized are the user's own
+# call. Naming a group excludes its categories too. Rows Plaid put in one of
+# these are never sent either: there's no merchant to look up.
+_NOT_CHOICES = {
+    "business",
+    "auto_payment",
+    "mortgage",
+    "student_loans",
+    "loan_repayment",
+    "cash_and_atm",
+    "miscellaneous",
+    "fun_money",
+    "check",
+    "uncategorized",
+}
+# Plaid's catch-alls are worth a second opinion, unless the row is cash or a
+# Zelle (a TRANSFER_OUT_* tag; see needs_second_opinion).
+_NEVER_ASKED = {key for key, _, _, group, _ in DEFAULT_CATEGORIES if {key, group} & _NOT_CHOICES} - {
+    "uncategorized",
+    "miscellaneous",
+}
 
-# What each choice means, by category key, so Jev isn't matching bare labels. Kept generic on
-# purpose: naming the eval's own merchants here would only flatter the eval.
-# Groups aren't choices (see category_choices), so they have no entry.
+# What each choice means, by category key, so Jev isn't matching bare labels.
+# Kept generic on purpose: naming the eval's own merchants here would only
+# flatter the eval.
 CATEGORY_DESCRIPTIONS = {
-    "bank_fees": "Bank and card fees: overdraft, late, ATM, foreign transaction and annual fees.",
-    "entertainment": "Movies, concerts, live events, theaters, museums, sporting events, video games and music.",
-    "groceries": "Supermarkets and grocery stores, specialty and international markets, butchers, produce.",
-    "restaurants": "Eating out: restaurants, fast food, food trucks, bakeries, desserts, food delivery.",
-    "coffee": "Cafes, coffee and tea shops, boba.",
-    "alcohol_and_bars": "Bars, pubs, breweries, wineries and liquor stores.",
-    "other_food_and_drink": "Food and drink that fits no other choice, such as vending machines.",
-    "clothing": "Clothing, shoes and accessories stores.",
-    "electronics": "Electronics and computer stores.",
-    "online_marketplaces": "Online marketplaces selling many kinds of goods, such as Amazon, eBay and Etsy.",
-    "superstores": "Big-box stores selling groceries and general goods together, such as Target, Walmart, Costco.",
-    "pets": "Pet stores and supplies, veterinarians, grooming and boarding.",
-    "other_shopping": "Other retail: department, discount, convenience, thrift, gift, book and sporting goods stores.",
-    "home_improvement": "Hardware and garden stores, furniture and home furnishings, home repair and maintenance.",
-    "medical": "Doctors, dentists, eye care, hospitals, pharmacies, therapy and other healthcare for people.",
-    "personal_care": "Gyms and fitness, hair and beauty, spas, laundry and dry cleaning.",
-    "insurance": "Insurance premiums: car, home, renters, life and health insurance.",
-    "childcare": "Daycare, babysitting, nannies and after-school care.",
-    "education": "Tuition, schools, classes, tutoring and courses.",
-    "software": (
-        "Apps, software and online services: SaaS, cloud storage, developer and productivity tools, "
-        "whether billed monthly, yearly or once."
-    ),
-    "other_services": "Other paid services: legal, accounting, postage and shipping, storage, cleaning.",
-    "taxes": "Tax payments to federal, state or local tax agencies.",
-    "donations": "Donations to charities, churches and non-profits.",
-    "government_fees": "Government agencies and fees: DMV, passports, permits, courts.",
+    "charity": "Donations to charities, churches and non-profits.",
+    "gifts": "Gift, card, novelty and party shops.",
+    "public_transit": "Buses, subways, trains, ferries, and bike or scooter rentals.",
     "gas": "Fuel at gas stations.",
-    "car_maintenance": "Car repairs, oil changes, tires, car washes and auto parts.",
-    "rideshare_and_taxis": "Uber, Lyft, taxis.",
-    "public_transit": "Buses, subways, trains and ferries.",
+    "auto_maintenance": "Car repairs, oil changes, tires, car washes and auto parts.",
     "parking_and_tolls": "Parking lots, garages, meters and road tolls.",
-    "other_transportation": "Getting around in other ways, such as bike and scooter rentals.",
-    "travel": "Flights, hotels and lodging, rental cars, travel bookings.",
+    "taxi_and_ride_shares": "Uber, Lyft, taxis.",
     "rent": "Rent and property management payments.",
-    "utilities": "Electricity, gas, water, trash, sewer, internet, cable and phone bills.",
+    "home_improvement": "Hardware and garden stores, home repair, maintenance and security.",
+    "garbage": "Trash, recycling and sewer service.",
+    "water": "Water utility bills.",
+    "gas_and_electric": "Electricity and natural gas utility bills.",
+    "internet_and_cable": "Internet, cable and satellite TV providers.",
+    "phone": "Mobile and landline phone bills.",
+    "groceries": "Supermarkets and grocery stores, specialty and international markets, butchers, produce.",
+    "restaurants_and_bars": (
+        "Eating and drinking out: restaurants, fast food, food trucks, bakeries, desserts, food delivery, "
+        "bars, pubs, breweries, wineries and liquor stores."
+    ),
+    "coffee_shops": "Cafes, coffee and tea shops, boba.",
+    "travel_and_vacation": "Flights, hotels and lodging, rental cars, travel bookings.",
+    "entertainment_and_recreation": (
+        "Movies, concerts, live events, theaters, museums, sporting events, video games, music and streaming."
+    ),
+    "personal": "Hair and beauty, spas, laundry and dry cleaning.",
+    "pets": "Pet stores and supplies, veterinarians, grooming and boarding.",
+    "general_shopping": (
+        "Retail that fits no other choice: department, discount, convenience, book and sporting goods stores, "
+        "superstores, online marketplaces, and apps, software and online services."
+    ),
+    "clothing": "Clothing, shoes and accessories stores.",
+    "furniture_and_housewares": "Furniture, home furnishings and housewares stores.",
+    "electronics": "Electronics and computer stores.",
+    "child_care": "Daycare, babysitting, nannies and after-school care.",
+    "child_activities": "Kids' classes, camps, sports and activities.",
+    "school_and_tuition": "Tuition, schools, classes, tutoring and courses.",
+    "medical": "Doctors, eye care, hospitals, pharmacies, therapy and other healthcare for people.",
+    "dentist": "Dentists and orthodontists.",
+    "fitness": "Gyms, fitness studios and classes.",
+    "financial_and_legal_services": "Accountants, financial planners, lawyers and legal services.",
+    "financial_fees": "Bank and card fees: overdraft, late, ATM, foreign transaction and annual fees.",
+    "insurance": "Insurance premiums: car, home, renters, life and health insurance.",
+    "taxes": "Tax payments to federal, state or local tax agencies.",
 }
 
 _SAME_BUSINESS_MIN = 0.4  # wrong-business results scored <= 0.10 in the eval, right ones 0.43+
@@ -194,7 +218,7 @@ def clean_bank_text(text: str | None) -> str | None:
 
 @dataclass(frozen=True)
 class CategoryAnswer:
-    label: str  # one of the choice labels, e.g. "Food & Drink > Coffee"
+    label: str  # one of the choice labels, e.g. "Food & Dining > Coffee Shops"
     confidence: float | None
 
 
@@ -216,7 +240,7 @@ def merchant_key(name: str | None) -> str | None:
 def category_choices(categories: dict[str, Category]) -> dict[str, str]:
     """Choice label -> category key, from seed_default_categories' key ->
     Category. A category that shares its group carries the group's name
-    ("Food & Drink > Coffee") so the model sees the hierarchy. A group is
+    ("Food & Dining > Coffee Shops") so the model sees the hierarchy. A group is
     never a choice: its "Other ..." category is there for when no other one
     fits."""
     sizes = Counter(c.group_id for c in categories.values())
@@ -234,12 +258,13 @@ def needs_second_opinion(txn: Transaction, mapped: Category) -> bool:
         (txn.aggregator_category_confidence or "").upper() in LOW_CONFIDENCE
         and mapped.type == "expense"
         and mapped.system_key not in _NEVER_ASKED
+        and not (txn.raw_aggregator_category or "").lower().startswith(("transfer_", "loan_"))
         and float(txn.amount) < 0
         and not txn.category_overridden
         and not txn.is_split
         and txn.split_parent_id is None
         and merchant_key(txn.original_merchant_name) is not None
-        and merchant_category(txn.original_merchant_name) is None  # already known, e.g. Software
+        and merchant_category(txn.original_merchant_name) is None  # already known, e.g. a software merchant
     )
 
 

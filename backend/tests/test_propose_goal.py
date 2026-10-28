@@ -77,7 +77,7 @@ def test_propose_goal_spending_tracker_keeps_optional_name_and_cap(db, user):
         user.id,
         type="track_spending",
         name="Coffee budget",
-        category="Food & Drink",
+        category="Food & Dining",
         window="this_week",
         target_amount=200,
     )
@@ -89,7 +89,7 @@ def test_propose_goal_spending_tracker_keeps_optional_name_and_cap(db, user):
 def test_propose_goal_spending_tracker_defaults_window(db, user):
     result = propose_goal(db, user.id, type="track_spending", category="Travel")
     assert result["proposal"]["window"] == "this_month"
-    assert result["proposal"]["name"] == "Travel"
+    assert result["proposal"]["name"] == "Travel & Vacation"
 
 
 def test_propose_goal_rejects_unknown_tracker_category(db, user):

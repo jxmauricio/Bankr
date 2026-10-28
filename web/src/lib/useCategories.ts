@@ -56,10 +56,10 @@ export function categoryOptions(
 ): { id: string; label: string; group: string; disabled: boolean }[] {
   const groupName = { expense: "Spending", income: "Income", transfer: "Transfers" } as const;
   return categories.flatMap((c) => [
-    { id: c.id, label: c.name, group: groupName[c.type], disabled: c.kind === "group" },
+    { id: c.id, label: `${c.emoji ? `${c.emoji} ` : ""}${c.name}`, group: groupName[c.type], disabled: c.kind === "group" },
     ...c.children.map((child) => ({
       id: child.id,
-      label: `  ${child.name}`,
+      label: `  ${child.emoji ? `${child.emoji} ` : ""}${child.name}`,
       group: groupName[c.type],
       disabled: false,
     })),

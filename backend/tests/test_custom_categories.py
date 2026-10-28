@@ -42,7 +42,7 @@ def _other_user(db) -> User:
 
 def test_a_subcategory_of_ones_own_counts_in_its_group(client, db, user):
     _synced(db, user)
-    shopping = _cat(db, "General Merchandise")
+    shopping = db.query(CategoryGroup).filter(CategoryGroup.system_key == "shopping").one()
 
     r = client.post("/categories", json={"name": "  Ramen   Nights ", "group_id": str(shopping.id)})
     assert r.status_code == 201, r.text
@@ -53,10 +53,10 @@ def test_a_subcategory_of_ones_own_counts_in_its_group(client, db, user):
     # The assistant finds it by name, and the group's total includes it.
     window = mq.resolve_window(date(2026, 8, 20), "this_month")
     assert mq.spend_query(db, user.id, window, mq.resolve_category(db, "ramen nights", user.id))["total_spent"] == 45.0
-    assert mq.spend_query(db, user.id, window, mq.resolve_category(db, "General Merchandise", user.id))["total_spent"] == 45.0
+    assert mq.spend_query(db, user.id, window, mq.resolve_category(db, "Shopping", user.id))["total_spent"] == 45.0
 
     tree = client.get("/categories").json()["categories"]
-    group = next(c for c in tree if c["name"] == "General Merchandise")
+    group = next(c for c in tree if c["name"] == "Shopping")
     assert {"name": "Ramen Nights", "custom": True} in [{"name": c["name"], "custom": c["custom"]} for c in group["children"]]
     assert group["custom"] is False
 
@@ -79,8 +79,8 @@ def test_the_tree_keeps_two_levels_and_unique_names(client, db, user):
     mine = client.post("/categories", json={"name": "Hobbies"}).json()
     income = db.query(CategoryGroup).filter(CategoryGroup.system_key == "income").one()
 
-    # Any spending group takes a category, Travel's and their own included...
-    travel = db.query(CategoryGroup).filter(CategoryGroup.system_key == "travel").one()
+    # Any spending group takes a category, a built-in one and their own included...
+    travel = db.query(CategoryGroup).filter(CategoryGroup.system_key == "travel_and_lifestyle").one()
     assert client.post("/categories", json={"name": "Trips", "group_id": str(travel.id)}).status_code == 201
     hobbies = db.get(Category, mine["id"]).group
     assert client.post("/categories", json={"name": "Models", "group_id": str(hobbies.id)}).status_code == 201
@@ -89,7 +89,7 @@ def test_the_tree_keeps_two_levels_and_unique_names(client, db, user):
     for body in (
         {"name": "Organic", "group_id": str(groceries.id)},
         {"name": "Side gigs", "group_id": str(income.id)},
-        {"name": "coffee"},  # a built-in name
+        {"name": "coffee shops"},  # a built-in name
         {"name": "HOBBIES"},  # one of mine
         {"name": "Eating Out"},  # what "eating out" already means
         {"name": "   "},
@@ -138,7 +138,7 @@ def test_renaming_carries_the_tracker_along(client, db, user):
 
 def test_deleting_one_sends_its_rows_back_to_plaids_category(client, db, user):
     _synced(db, user)
-    ramen = create_category(db, user.id, "Ramen Nights", _cat(db, "Food & Drink").id)
+    ramen = create_category(db, user.id, "Ramen Nights", _cat(db, "Food & Dining").id)
     db.commit()
     client.patch(f"/transactions/{_txn(db, 'txn_dining').id}", json={"category_id": str(ramen.id)})
     client.post("/rules", json={"merchant_contains": "trader", "set_category_id": str(ramen.id), "apply_to_existing": True})
@@ -150,7 +150,7 @@ def test_deleting_one_sends_its_rows_back_to_plaids_category(client, db, user):
     db.expire_all()
 
     dining, groceries = _txn(db, "txn_dining"), _txn(db, "txn_groceries")
-    assert dining.category.name == "Restaurants" and not dining.category_overridden
+    assert dining.category.name == "Restaurants & Bars" and not dining.category_overridden
     assert groceries.category.name == "Groceries"
     assert db.query(Rule).count() == 0
     assert db.query(Category).filter(Category.user_id == user.id).count() == 0
@@ -177,4 +177,4 @@ def test_only_so_many(db, user):
     with pytest.raises(CategoryError):
         create_category(db, user.id, "One more")
     with pytest.raises(LookupError):
-        delete(db, user.id, _cat(db, "Travel").id)  # a built-in one isn't theirs to delete
+        delete(db, user.id, _cat(db, "Travel & Vacation").id)  # a built-in one isn't theirs to delete

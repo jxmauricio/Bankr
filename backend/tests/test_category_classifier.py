@@ -30,7 +30,7 @@ from tests.fake_aggregator import FakeAggregatorClient
 class FakeClassifier:
     model = "fake"
 
-    def __init__(self, answer="Food & Drink > Coffee", confidence=0.95, fail=False):
+    def __init__(self, answer="Food & Dining > Coffee Shops", confidence=0.95, fail=False):
         self.answer = answer
         self.confidence = confidence
         self.fail = fail
@@ -84,7 +84,7 @@ def test_low_confidence_expense_is_reclassified_and_confidence_stored(db, user, 
 
     row = db.query(Transaction).one()
     assert row.aggregator_category_confidence == "LOW"
-    assert row.category.name == "Coffee"
+    assert row.category.name == "Coffee Shops"
     profile = classifier.calls[0]
     assert (profile.merchant_name, profile.amounts, profile.channel) == ("Moongoat Greenhouse", (6.0,), "in store")
     assert (profile.bank_description, profile.payment_processor) == ("SQ *MOONGOAT GREENHOUS", "Square")
@@ -123,30 +123,31 @@ def test_income_transfers_cash_and_people_are_never_sent(db, user, classifier):
     )
 
     assert classifier.calls == []
-    assert _category(db, "pay") == "Income"
-    assert _category(db, "xfer") == "Transfer Out"
-    assert _category(db, "zelle") == "Payments to People"
+    assert _category(db, "pay") == "Paychecks"
+    assert _category(db, "xfer") == "Transfer"
+    assert _category(db, "zelle") == "Miscellaneous"
     assert _category(db, "atm") == "Cash & ATM"
 
 
 def test_choices_exclude_income_transfer_and_loan_payments(db, user, classifier):
     _sync(db, user, _txn("t1"))
 
-    assert "Food & Drink > Coffee" in classifier.choices
-    assert "General Merchandise > Other Shopping" in classifier.choices
-    assert not {"Income", "Transfer In", "Transfer Out", "Loan Payments"} & set(classifier.choices)
-    assert not [label for label in classifier.choices if label.startswith("Loan Payments")]
+    assert "Food & Dining > Coffee Shops" in classifier.choices
+    assert "Shopping > Shopping" in classifier.choices
+    labels = {label.split(" > ")[-1] for label in classifier.choices}
+    assert not {"Paychecks", "Transfer", "Credit Card Payment", "Mortgage", "Loan Repayment", "Cash & ATM"} & labels
+    assert not [label for label in classifier.choices if label.startswith("Business")]
     assert all(classifier.choices.values())  # every choice comes with a description
 
 
 def test_one_call_per_merchant_and_cache_reused_on_later_syncs(db, user, classifier):
     _sync(db, user, _txn("t1"), _txn("t2"), _txn("t3", merchant="MOONGOAT  greenhouse"))
     assert len(classifier.calls) == 1
-    assert {_category(db, t) for t in ("t1", "t2", "t3")} == {"Coffee"}
+    assert {_category(db, t) for t in ("t1", "t2", "t3")} == {"Coffee Shops"}
 
     _sync(db, user, _txn("t4"))
     assert len(classifier.calls) == 1
-    assert _category(db, "t4") == "Coffee"
+    assert _category(db, "t4") == "Coffee Shops"
 
 
 def test_classifier_failure_keeps_plaids_mapping(db, user, classifier):
@@ -166,14 +167,14 @@ def test_answer_outside_the_choices_is_ignored(db, user, classifier):
 
 
 def test_user_rule_beats_the_classifier(db, user, classifier):
-    merchandise = seed_default_categories(db)["other_shopping"]
+    merchandise = seed_default_categories(db)["general_shopping"]
     db.add(Rule(user_id=user.id, merchant_contains="moongoat", set_category_id=merchandise.id))
     db.commit()
 
     _sync(db, user, _txn("t1"))
 
     assert classifier.calls == []
-    assert _category(db, "t1") == "Other Shopping"
+    assert _category(db, "t1") == "Shopping"
 
 
 def test_user_override_beats_the_classifier(db, user, classifier):
@@ -192,7 +193,7 @@ def test_known_software_merchants_are_never_sent(db, user, classifier):
     _sync(db, user, _txn("t1", merchant="GitHub", raw="GENERAL_SERVICES_OTHER_GENERAL_SERVICES"))
 
     assert classifier.calls == []
-    assert _category(db, "t1") == "Software"
+    assert _category(db, "t1") == "Shopping"
 
 
 def test_disabled_by_default(db, user, monkeypatch):
@@ -218,7 +219,7 @@ def test_backfill_fills_confidence_and_reclassifies(db, user, monkeypatch):
 
     row = db.query(Transaction).one()
     assert row.aggregator_category_confidence == "LOW"
-    assert row.category.name == "Coffee"
+    assert row.category.name == "Coffee Shops"
     assert result["recategorized_by_classifier"] == 1
 
 
@@ -230,12 +231,11 @@ def test_merchant_key_normalizes():
 
 def test_category_choices_are_the_spending_categories(db):
     choices = category_choices(seed_default_categories(db))
-    assert choices["Food & Drink > Coffee"] == "coffee"  # subcategories carry their parent
-    assert choices["General Services > Software"] == "software"
-    assert choices["Travel"] == "travel"  # a top-level category without subcategories is its own leaf
-    # A group is never a choice: its "Other ..." subcategory is.
-    assert "Food & Drink" not in choices and choices["Food & Drink > Other Food & Drink"] == "other_food_and_drink"
-    assert len(choices) == 33  # 46 expense categories, minus 7 groups, Loan Payments' 4 subcategories, Cash, People
+    assert choices["Food & Dining > Coffee Shops"] == "coffee_shops"  # categories carry their group
+    assert choices["Shopping > Shopping"] == "general_shopping"
+    assert "Food & Dining" not in choices  # a group is never a choice
+    # 53 spending categories, minus Business' 9, the 4 loans, Cash, Fun Money and Other's 3.
+    assert len(choices) == 53 - 9 - 4 - 1 - 1 - 3
 
 
 def test_every_choice_has_a_description(db):
@@ -321,14 +321,14 @@ def _jev(same_business_scores, choice="Food & Drink > Coffee", confidence=0.97):
 def test_jev_retries_when_the_first_search_found_another_business():
     jev, sent, fast, basic = _jev([0.1, 0.9])
 
-    answer = jev.classify(_profile(), {"Food & Drink > Coffee": "Cafes", "General Merchandise": "Retail"})
+    answer = jev.classify(_profile(), {"Food & Drink > Coffee": "Cafes", "Shopping": "Retail"})
 
     assert answer == CategoryAnswer("Food & Drink > Coffee", 0.97)
     assert fast.queries == ['"MOONGOAT GREENHOUS" yelp'] and basic.queries == ["Moongoat Greenhouse"]
     choice_state = sent[-1]["state"]
     assert "Coffee shop in Costa Mesa" in choice_state["web_search_results"]
     assert "Brewing" not in choice_state["web_search_results"]
-    assert sent[-1]["questions"]["q"]["criteria"] == {"Food & Drink > Coffee": "Cafes", "General Merchandise": "Retail"}
+    assert sent[-1]["questions"]["q"]["criteria"] == {"Food & Drink > Coffee": "Cafes", "Shopping": "Retail"}
 
 
 def test_jev_drops_search_results_that_never_match():

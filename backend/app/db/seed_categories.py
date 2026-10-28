@@ -14,166 +14,148 @@ Three types, and the third one is load-bearing for correct totals:
   still reports the ones that leave or enter the linked accounts
   (brokerage, savings elsewhere) separately from spending.
   Cash taken out and money sent to other people are *not* transfers: the
-  money is gone from the user's accounts, so Cash & ATM and Payments to
-  People are spending, as in Mint and Monarch.
+  money is gone from the user's accounts, so Cash & ATM, and Zelle or Venmo
+  to a person (Miscellaneous), are spending, as in Mint and Monarch.
 
 Two levels, as in Monarch and YNAB: groups (CategoryGroup) over categories,
 so a question can be answered at either level: "how much on gas" -> Gas;
-"on getting around" -> Transportation, which includes Gas. See
+"on getting around" -> Auto & Transport, which includes Gas. See
 app/services/money_query.py. Transactions, splits and rules always point at
 a category, never a group, so a group's total is exactly the sum of its
-categories; every group with several has an "Other ..." one (or, for Rent &
-Utilities, one that takes the rest). A category that stands alone (Travel)
-is the only one in a group of the same name and key.
+categories. A transaction nothing else places lands in Uncategorized.
 
 Code finds a built-in group or category by its key (system_key), never by
 its name: names are for people and may change, keys never do. The Plaid
 mapping, the classifier, budgets, health and the clients' colors all go by
-key, so renaming "Restaurants" moves nothing.
+key, so renaming "Restaurants & Bars" moves nothing.
 """
 
 from sqlalchemy.orm import Session
 
 from app.db.models import Category, CategoryGroup, CategoryPref
 
-# (key, name, type). The 16 primaries of Plaid's Personal Finance Category
-# taxonomy, plus Cash & ATM and Payments to People.
+# (key, name, type), in display order. Monarch's default groups, so a user
+# coming from Monarch, Mint or Copilot finds the tree they know.
 DEFAULT_GROUPS: list[tuple[str, str, str]] = [
     ("income", "Income", "income"),
-    ("transfer_in", "Transfer In", "transfer"),
-    ("transfer_out", "Transfer Out", "transfer"),
-    ("loan_payments", "Loan Payments", "expense"),
-    ("bank_fees", "Bank Fees", "expense"),
-    ("entertainment", "Entertainment", "expense"),
-    ("food_and_drink", "Food & Drink", "expense"),
-    ("general_merchandise", "General Merchandise", "expense"),
-    ("home_improvement", "Home Improvement", "expense"),
-    ("medical", "Medical", "expense"),
-    ("personal_care", "Personal Care", "expense"),
-    ("general_services", "General Services", "expense"),
-    ("government_and_non_profit", "Government & Non-Profit", "expense"),
-    ("transportation", "Transportation", "expense"),
-    ("travel", "Travel", "expense"),
-    ("cash_and_atm", "Cash & ATM", "expense"),
-    ("payments_to_people", "Payments to People", "expense"),
-    ("rent_and_utilities", "Rent & Utilities", "expense"),
+    ("gifts_and_donations", "Gifts & Donations", "expense"),
+    ("auto_and_transport", "Auto & Transport", "expense"),
+    ("housing", "Housing", "expense"),
+    ("bills_and_utilities", "Bills & Utilities", "expense"),
+    ("food_and_dining", "Food & Dining", "expense"),
+    ("travel_and_lifestyle", "Travel & Lifestyle", "expense"),
+    ("shopping", "Shopping", "expense"),
+    ("children", "Children", "expense"),
+    ("education", "Education", "expense"),
+    ("health_and_wellness", "Health & Wellness", "expense"),
+    ("financial", "Financial", "expense"),
+    ("other", "Other", "expense"),
+    ("business", "Business", "expense"),
+    ("transfers", "Transfers", "transfer"),
 ]
 
-# (key, name, type, group key). The primaries split into categories wherever
-# one is too coarse to answer a question people ask (eating out, Amazon, car
-# costs, insurance, pets, the mortgage).
-DEFAULT_CATEGORIES: list[tuple[str, str, str, str]] = [
-    ("income", "Income", "income", "income"),
-    ("transfer_in", "Transfer In", "transfer", "transfer_in"),
-    ("transfer_out", "Transfer Out", "transfer", "transfer_out"),
-    ("mortgage", "Mortgage", "expense", "loan_payments"),
-    ("car_payment", "Car Payment", "expense", "loan_payments"),
-    ("student_loans", "Student Loans", "expense", "loan_payments"),
-    ("other_loan_payments", "Other Loan Payments", "expense", "loan_payments"),
-    ("bank_fees", "Bank Fees", "expense", "bank_fees"),
-    ("entertainment", "Entertainment", "expense", "entertainment"),
-    ("groceries", "Groceries", "expense", "food_and_drink"),
-    ("restaurants", "Restaurants", "expense", "food_and_drink"),
-    ("coffee", "Coffee", "expense", "food_and_drink"),
-    ("alcohol_and_bars", "Alcohol & Bars", "expense", "food_and_drink"),
-    ("other_food_and_drink", "Other Food & Drink", "expense", "food_and_drink"),
-    ("clothing", "Clothing", "expense", "general_merchandise"),
-    ("electronics", "Electronics", "expense", "general_merchandise"),
-    ("online_marketplaces", "Online Marketplaces", "expense", "general_merchandise"),
-    ("superstores", "Superstores", "expense", "general_merchandise"),
-    ("pets", "Pets", "expense", "general_merchandise"),
-    ("other_shopping", "Other Shopping", "expense", "general_merchandise"),
-    ("home_improvement", "Home Improvement", "expense", "home_improvement"),
-    ("medical", "Medical", "expense", "medical"),
-    ("personal_care", "Personal Care", "expense", "personal_care"),
-    ("insurance", "Insurance", "expense", "general_services"),
-    ("childcare", "Childcare", "expense", "general_services"),
-    ("education", "Education", "expense", "general_services"),
-    ("software", "Software", "expense", "general_services"),
-    ("other_services", "Other Services", "expense", "general_services"),
-    ("taxes", "Taxes", "expense", "government_and_non_profit"),
-    ("donations", "Donations", "expense", "government_and_non_profit"),
-    ("government_fees", "Government Fees", "expense", "government_and_non_profit"),
-    ("gas", "Gas", "expense", "transportation"),
-    ("car_maintenance", "Car Maintenance", "expense", "transportation"),
-    ("rideshare_and_taxis", "Rideshare & Taxis", "expense", "transportation"),
-    ("public_transit", "Public Transit", "expense", "transportation"),
-    ("parking_and_tolls", "Parking & Tolls", "expense", "transportation"),
-    ("other_transportation", "Other Transportation", "expense", "transportation"),
-    ("travel", "Travel", "expense", "travel"),
-    ("cash_and_atm", "Cash & ATM", "expense", "cash_and_atm"),
-    ("payments_to_people", "Payments to People", "expense", "payments_to_people"),
-    ("rent", "Rent", "expense", "rent_and_utilities"),
-    ("utilities", "Utilities", "expense", "rent_and_utilities"),
+# (key, name, type, group key, emoji): Monarch's default categories. Plaid's
+# categories map onto these in category_mapper.py.
+DEFAULT_CATEGORIES: list[tuple[str, str, str, str, str]] = [
+    ("paychecks", "Paychecks", "income", "income", "💵"),
+    ("interest", "Interest", "income", "income", "💸"),
+    ("business_income", "Business Income", "income", "income", "💰"),
+    ("dividends_and_capital_gains", "Dividends & Capital Gains", "income", "income", "📈"),
+    ("other_income", "Other Income", "income", "income", "💰"),
+    ("charity", "Charity", "expense", "gifts_and_donations", "🎗️"),
+    ("gifts", "Gifts", "expense", "gifts_and_donations", "🎁"),
+    ("auto_payment", "Auto Payment", "expense", "auto_and_transport", "🚗"),
+    ("public_transit", "Public Transit", "expense", "auto_and_transport", "🚃"),
+    ("gas", "Gas", "expense", "auto_and_transport", "⛽️"),
+    ("auto_maintenance", "Auto Maintenance", "expense", "auto_and_transport", "🔧"),
+    ("parking_and_tolls", "Parking & Tolls", "expense", "auto_and_transport", "🏢"),
+    ("taxi_and_ride_shares", "Taxi & Ride Shares", "expense", "auto_and_transport", "🚕"),
+    ("mortgage", "Mortgage", "expense", "housing", "🏠"),
+    ("rent", "Rent", "expense", "housing", "🏠"),
+    ("home_improvement", "Home Improvement", "expense", "housing", "🔨"),
+    ("garbage", "Garbage", "expense", "bills_and_utilities", "🗑️"),
+    ("water", "Water", "expense", "bills_and_utilities", "💧"),
+    ("gas_and_electric", "Gas & Electric", "expense", "bills_and_utilities", "⚡️"),
+    ("internet_and_cable", "Internet & Cable", "expense", "bills_and_utilities", "🌐"),
+    ("phone", "Phone", "expense", "bills_and_utilities", "📱"),
+    ("groceries", "Groceries", "expense", "food_and_dining", "🍏"),
+    ("restaurants_and_bars", "Restaurants & Bars", "expense", "food_and_dining", "🍽️"),
+    ("coffee_shops", "Coffee Shops", "expense", "food_and_dining", "☕️"),
+    ("travel_and_vacation", "Travel & Vacation", "expense", "travel_and_lifestyle", "🏝️"),
+    ("entertainment_and_recreation", "Entertainment & Recreation", "expense", "travel_and_lifestyle", "🎥"),
+    ("personal", "Personal", "expense", "travel_and_lifestyle", "👑"),
+    ("pets", "Pets", "expense", "travel_and_lifestyle", "🐶"),
+    ("fun_money", "Fun Money", "expense", "travel_and_lifestyle", "😜"),
+    ("general_shopping", "Shopping", "expense", "shopping", "🛍️"),
+    ("clothing", "Clothing", "expense", "shopping", "👕"),
+    ("furniture_and_housewares", "Furniture & Housewares", "expense", "shopping", "🪑"),
+    ("electronics", "Electronics", "expense", "shopping", "🖥️"),
+    ("child_care", "Child Care", "expense", "children", "👶"),
+    ("child_activities", "Child Activities", "expense", "children", "⚽️"),
+    ("student_loans", "Student Loans", "expense", "education", "🎓"),
+    ("school_and_tuition", "Education", "expense", "education", "🏫"),
+    ("medical", "Medical", "expense", "health_and_wellness", "💊"),
+    ("dentist", "Dentist", "expense", "health_and_wellness", "🦷"),
+    ("fitness", "Fitness", "expense", "health_and_wellness", "💪"),
+    ("loan_repayment", "Loan Repayment", "expense", "financial", "💰"),
+    ("financial_and_legal_services", "Financial & Legal Services", "expense", "financial", "🗄️"),
+    ("financial_fees", "Financial Fees", "expense", "financial", "🏦"),
+    ("cash_and_atm", "Cash & ATM", "expense", "financial", "🏧"),
+    ("insurance", "Insurance", "expense", "financial", "☂️"),
+    ("taxes", "Taxes", "expense", "financial", "🏛️"),
+    ("uncategorized", "Uncategorized", "expense", "other", "❓"),
+    ("check", "Check", "expense", "other", "💸"),
+    ("miscellaneous", "Miscellaneous", "expense", "other", "💲"),
+    ("advertising_and_promotion", "Advertising & Promotion", "expense", "business", "📣"),
+    ("business_utilities_and_communication", "Business Utilities & Communication", "expense", "business", "📞"),
+    ("employee_wages_and_contract_labor", "Employee Wages & Contract Labor", "expense", "business", "💵"),
+    ("business_travel_and_meals", "Business Travel & Meals", "expense", "business", "🍴"),
+    ("business_auto_expenses", "Business Auto Expenses", "expense", "business", "🚖"),
+    ("business_insurance", "Business Insurance", "expense", "business", "📁"),
+    ("office_supplies_and_expenses", "Office Supplies & Expenses", "expense", "business", "📎"),
+    ("office_rent", "Office Rent", "expense", "business", "🏢"),
+    ("postage_and_shipping", "Postage & Shipping", "expense", "business", "📦"),
+    ("transfer", "Transfer", "transfer", "transfers", "🔁"),
+    ("credit_card_payment", "Credit Card Payment", "transfer", "transfers", "💳"),
+    ("balance_adjustments", "Balance Adjustments", "transfer", "transfers", "⚖️"),
+    ("buy", "Buy", "transfer", "transfers", "➡️"),
+    ("sell", "Sell", "transfer", "transfers", "⬅️"),
 ]
+_EMOJI = {key: emoji for key, _, _, _, emoji in DEFAULT_CATEGORIES}
 
-# Built-in group or category -> color slot, most-seen spending first so those get
-# distinct hues. Fixed (not cycled per render) so a category's color is the
-# same on every screen and every visit: "color follows the entity". The
+# Built-in group or category -> color slot, most-seen spending first so those
+# get distinct hues. Fixed (not cycled per render) so a category's color is
+# the same on every screen and every visit: "color follows the entity". The
 # palette is the validated dark-mode categorical set (8 hues, checked
 # against the app's #10131C surface). A user's own are grey.
 _COLOR_ORDER = [
-    "food_and_drink",
-    "transportation",
-    "rent_and_utilities",
-    "general_merchandise",
-    "entertainment",
-    "travel",
-    "medical",
-    "personal_care",
+    # Groups first, so the donut's slices are told apart.
+    "food_and_dining",
+    "auto_and_transport",
+    "housing",
+    "shopping",
+    "bills_and_utilities",
+    "travel_and_lifestyle",
+    "health_and_wellness",
+    "financial",
     "income",
-    "transfer_in",
-    "transfer_out",
-    "loan_payments",
-    "bank_fees",
-    "home_improvement",
-    "general_services",
-    "government_and_non_profit",
-    "groceries",
-    "coffee",
-    "gas",
-    "rent",
-    "utilities",
-    "software",
-    "restaurants",
-    "clothing",
-    "online_marketplaces",
-    "superstores",
-    "insurance",
-    "mortgage",
-    "rideshare_and_taxis",
-    "car_maintenance",
-    "pets",
-    "alcohol_and_bars",
-    "electronics",
-    "childcare",
+    "transfers",
+    "gifts_and_donations",
+    "children",
     "education",
-    "taxes",
-    "donations",
-    "public_transit",
-    "parking_and_tolls",
-    "car_payment",
-    "student_loans",
-    "other_food_and_drink",
-    "other_shopping",
-    "other_services",
-    "other_transportation",
-    "government_fees",
-    "other_loan_payments",
-    "cash_and_atm",
-    "payments_to_people",
-    "3987e5",
-    "d95926",
-    "199e70",
-    "c98500",
-    "d55181",
-    "008300",
-    "9085e9",
-    "e66767",
+    "other",
+    "business",
+    *(key for key, *_ in DEFAULT_CATEGORIES),
 ]
 CATEGORY_PALETTE = ("#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767")
 UNCOLORED = "#565D72"
-_COLORS = {key: CATEGORY_PALETTE[i % len(CATEGORY_PALETTE)] for i, key in enumerate(_COLOR_ORDER)}
+_COLORS = {}
+for _i, _key in enumerate(_COLOR_ORDER):
+    _COLORS.setdefault(_key, CATEGORY_PALETTE[_i % len(CATEGORY_PALETTE)])
+
+
+def category_emoji(item: Category | CategoryGroup) -> str | None:
+    return _EMOJI.get(item.system_key) if isinstance(item, Category) else None
 
 
 def category_color(item: Category | CategoryGroup) -> str:
@@ -245,7 +227,7 @@ def seed_default_categories(db: Session) -> dict[str, Category]:
     right name, type and group; return key -> Category."""
     groups = seed_default_groups(db)
     existing = {c.system_key: c for c in db.query(Category).filter(Category.system_key.isnot(None))}
-    for key, name, type_, group_key in DEFAULT_CATEGORIES:
+    for key, name, type_, group_key, _ in DEFAULT_CATEGORIES:
         category = existing.get(key)
         if category is None:
             category = existing[key] = Category(system_key=key, is_system_default=True)

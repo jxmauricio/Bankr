@@ -106,7 +106,7 @@ function SpendingTrackerProposalCard({ proposal }: { proposal: GoalProposal }) {
   const token = useToken();
   const { refresh } = useMoney();
   const categories = useCategories(token);
-  const proposed = categoryName(categories, proposal.category ?? "food_and_drink");
+  const proposed = categoryName(categories, proposal.category ?? "food_and_dining");
   const [category, setCategory] = useState(proposed);
   const [name, setName] = useState(proposal.name?.trim() || proposed);
   const [windowName, setWindowName] = useState(proposal.window ?? "this_month");

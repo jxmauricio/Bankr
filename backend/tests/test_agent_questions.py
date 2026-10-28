@@ -105,5 +105,5 @@ def test_q6_gas_last_month(db, ledger, monkeypatch):
 
 def test_a_bad_category_comes_back_as_a_recoverable_error(db, ledger, monkeypatch):
     _, result, source = ask(db, ledger, monkeypatch, "get_spending", {"category": "trasportation"})
-    assert "Transportation" in result["did_you_mean"]
+    assert "Auto & Transport" in result["did_you_mean"]
     assert "query" not in source  # no drill-down for a figure that doesn't exist

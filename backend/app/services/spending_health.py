@@ -19,21 +19,29 @@ from app.db.models import LinkedAccount
 from app.db.seed_categories import DEFAULT_GROUPS
 from app.services import money_query as mq
 
-# Needs vs wants for the 50/30/20 snapshot (Elizabeth Warren, All Your Worth).
-# Food & Drink is split across the two: its Groceries are a need, the rest
-# (eating out, coffee, bars) a want; spending_health() moves it. Every other
-# top-level category is a want, including Cash & ATM and Payments to People
-# (what they paid for is unknown) and any a user made themselves.
+# Needs vs wants for the 50/30/20 snapshot (Elizabeth Warren, All Your Worth),
+# by group, with a category on the other side of its group's line where it
+# belongs there: Groceries are a need though eating out is a want, and Cash &
+# ATM is a want (what it paid for is unknown) though Financial is a need.
+# Every other group is a want, including Other (a Zelle to a person lands in
+# Miscellaneous) and any a user made themselves.
 NEEDS = frozenset(
     {
-        "rent_and_utilities",
-        "transportation",
-        "medical",
-        "loan_payments",
-        "bank_fees",
-        "general_services",
+        "housing",
+        "bills_and_utilities",
+        "auto_and_transport",
+        "health_and_wellness",
+        "financial",
+        "children",
+        "education",
     }
 )
+NEED_CATEGORIES = frozenset({"groceries"})
+WANT_CATEGORIES = frozenset({"cash_and_atm"})
+# Debt payments for debt-to-income. The mortgage is housing's.
+DEBT_CATEGORIES = frozenset({"auto_payment", "student_loans", "loan_repayment"})
+
+
 @dataclass(frozen=True)
 class Guideline:
     pct: float
@@ -59,52 +67,47 @@ WANTS_GUIDELINE = Guideline(
 )
 
 CATEGORY_GUIDELINES: dict[str, Guideline] = {
-    "rent_and_utilities": Guideline(
+    "housing": Guideline(
         30,
         "HUD / CFPB",
-        "Households spending over 30% of income on rent and utilities are considered rent-burdened.",
+        "Households spending over 30% of income on housing are considered cost-burdened.",
     ),
-    "food_and_drink": Guideline(
+    "bills_and_utilities": Guideline(
+        10,
+        "Common budget share",
+        "Budget templates often keep utilities, internet, and phone around 5–10% of take-home.",
+    ),
+    "food_and_dining": Guideline(
         15,
         "Common budget share",
         "Budget templates often put groceries around 10% of take-home and eating out around 5%.",
     ),
-    "transportation": Guideline(
+    "auto_and_transport": Guideline(
         15,
         "Common budget share",
         "Budget templates often keep gas, transit, and car costs around 10–15% of take-home.",
     ),
-    "medical": Guideline(
+    "health_and_wellness": Guideline(
         10,
         "Common budget share",
-        "Out-of-pocket medical costs are often budgeted around 5–10% of take-home.",
+        "Out-of-pocket medical and fitness costs are often budgeted around 5–10% of take-home.",
     ),
-    "personal_care": Guideline(
-        5,
+    "travel_and_lifestyle": Guideline(
+        15,
         "50/30/20 wants",
-        "Gym, hair, and beauty are mostly wants; a common cap is about 5% of take-home.",
+        "Travel, entertainment, and personal care are wants; about 5% each is a common cap.",
     ),
-    "entertainment": Guideline(
-        10,
-        "50/30/20 wants",
-        "Entertainment and streaming are wants; about 5% each is a common cap.",
-    ),
-    "general_merchandise": Guideline(
+    "shopping": Guideline(
         5,
         "50/30/20 wants",
         "Non-essential shopping is a want; a common cap is about 5% of take-home.",
     ),
-    "travel": Guideline(
-        5,
-        "50/30/20 wants",
-        "Travel is lumpy, but averaged monthly it still sits in wants — about 5% is a common ceiling.",
-    ),
-    "loan_payments": Guideline(
-        15,
-        "Common budget share",
-        "Non-mortgage debt payments are often kept under 10–15% of take-home (mortgage lives in housing).",
-    ),
 }
+DEBT_GUIDELINE = Guideline(
+    15,
+    "Common budget share",
+    "Non-mortgage debt payments are often kept under 10–15% of take-home (the mortgage lives in housing).",
+)
 
 
 # Months of average spending that checking and savings would cover. A minimum, like savings.
@@ -307,21 +310,31 @@ def spending_health(db: Session, user_id: UUID) -> dict:
             this_month_income=this_income,
         )
         for cid, amount in sorted(by_cat.items(), key=lambda kv: kv[1], reverse=True)
-        if amount > 0 or cid in ("rent_and_utilities", "food_and_drink")
+        if amount > 0 or cid in ("housing", "food_and_dining")
     ]
 
-    groceries = mq.resolve_category(db, "groceries")
-    avg_groceries = sum(mq.spend_query(db, user_id, w, groceries)["total_spent"] for w in months) / n
-    this_groceries = mq.spend_query(db, user_id, this_month, groceries)["total_spent"]
-    eating_out = by_cat.get("food_and_drink", 0.0) - avg_groceries
-    this_eating_out = this_by_cat.get("food_and_drink", 0.0) - this_groceries
+    # By category key, for the categories that sit on the other side of
+    # their group's needs/wants line, and for debt.
+    by_key: dict[str, float] = {}
+    for w in months:
+        for g in mq.spend_query(db, user_id, w, group_by="subcategory").get("groups", []):
+            if "key" in g:
+                by_key[g["key"]] = by_key.get(g["key"], 0.0) + g["amount"] / n
+    this_by_key = {
+        g["key"]: g["amount"] for g in mq.spend_query(db, user_id, this_month, group_by="subcategory").get("groups", []) if "key" in g
+    }
 
-    needs_amount = sum(by_cat.get(key, 0.0) for key in NEEDS) + avg_groceries
-    wants_amount = sum(v for cid, v in by_cat.items() if cid not in NEEDS and cid != "food_and_drink") + eating_out
-    this_needs = sum(this_by_cat.get(key, 0.0) for key in NEEDS) + this_groceries
-    this_wants = (
-        sum(v for cid, v in this_by_cat.items() if cid not in NEEDS and cid != "food_and_drink") + this_eating_out
-    )
+    def needs(groups: dict[str, float], categories: dict[str, float]) -> float:
+        return (
+            sum(groups.get(key, 0.0) for key in NEEDS)
+            + sum(categories.get(key, 0.0) for key in NEED_CATEGORIES)
+            - sum(categories.get(key, 0.0) for key in WANT_CATEGORIES)
+        )
+
+    needs_amount = needs(by_cat, by_key)
+    wants_amount = sum(by_cat.values()) - needs_amount
+    this_needs = needs(this_by_cat, this_by_key)
+    this_wants = sum(this_by_cat.values()) - this_needs
 
     buckets = [
         _line(
@@ -355,34 +368,26 @@ def spending_health(db: Session, user_id: UUID) -> dict:
     ]
 
     by_id = {c["id"]: c for c in categories}
-    snapshots = [
-        buckets[2],  # saved
-        by_id.get("rent_and_utilities")
-        or _line(
-            id="rent_and_utilities",
-            name=names["rent_and_utilities"],
+
+    def snapshot(key: str) -> dict:
+        return by_id.get(key) or _line(
+            id=key,
+            name=names[key],
             amount=0,
             income=income,
-            guideline=CATEGORY_GUIDELINES["rent_and_utilities"],
+            guideline=CATEGORY_GUIDELINES[key],
             this_month_amount=0,
             this_month_income=this_income,
-        ),
-        by_id.get("food_and_drink")
-        or _line(
-            id="food_and_drink",
-            name=names["food_and_drink"],
-            amount=0,
-            income=income,
-            guideline=CATEGORY_GUIDELINES["food_and_drink"],
-            this_month_amount=0,
-            this_month_income=this_income,
-        ),
-    ]
+        )
+
+    snapshots = [buckets[2], snapshot("housing"), snapshot("food_and_dining")]  # saved first
 
     cash = _cash_on_hand(db, user_id)
     months_covered = round(cash / spending, 1) if cash is not None and spending > 0 else None
-    housing, loans = by_id.get("rent_and_utilities") or snapshots[1], by_id.get("loan_payments")
-    loans_guideline = CATEGORY_GUIDELINES["loan_payments"]
+    debt_pct = _pct(sum(by_key.get(key, 0.0) for key in DEBT_CATEGORIES), income)
+    # What HUD counts: the home and the bills that come with it.
+    housing_pct = _pct(by_cat.get("housing", 0.0) + by_cat.get("bills_and_utilities", 0.0), income)
+    housing_guideline = CATEGORY_GUIDELINES["housing"]
     metrics = [
         _metric(
             id="saved",
@@ -403,21 +408,21 @@ def spending_health(db: Session, user_id: UUID) -> dict:
             higher_is_better=True,
         ),
         _metric(
-            id="loan_payments",
+            id="debt",
             name="Debt to income",
-            value=loans["pct"] if loans else _pct(0, income),
+            value=debt_pct,
             unit="pct",
-            tone=loans["tone"] if loans else _spend_tone(_pct(0, income), loans_guideline.pct),
-            rec=loans_guideline.pct,
+            tone=_spend_tone(debt_pct, DEBT_GUIDELINE.pct),
+            rec=DEBT_GUIDELINE.pct,
             higher_is_better=False,
         ),
         _metric(
-            id="rent_and_utilities",
+            id="housing",
             name="Housing",
-            value=housing["pct"],
+            value=housing_pct,
             unit="pct",
-            tone=housing["tone"],
-            rec=CATEGORY_GUIDELINES["rent_and_utilities"].pct,
+            tone=_spend_tone(housing_pct, housing_guideline.pct),
+            rec=housing_guideline.pct,
             higher_is_better=False,
         ),
     ]
