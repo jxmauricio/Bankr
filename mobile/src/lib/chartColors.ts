@@ -1,79 +1,26 @@
 // Copied from web/src/lib/chartColors.ts; keep in step until they share a package.
-/**
- * Fixed category -> color slot order over seed_categories.py's
- * DEFAULT_CATEGORIES, most-seen spending first so those get distinct hues.
- * Fixed (not cycled per-render) so a category's color
- * is stable across opens, per the dataviz rule "color follows the entity."
- * Palette is the validated dark-mode categorical set (8 hues, ΔE-checked
- * against this app's #10131C surface).
- */
-const CATEGORY_ORDER = [
-  "Food & Drink",
-  "Transportation",
-  "Rent & Utilities",
-  "General Merchandise",
-  "Entertainment",
-  "Travel",
-  "Medical",
-  "Personal Care",
-  "Income",
-  "Transfer In",
-  "Transfer Out",
-  "Loan Payments",
-  "Bank Fees",
-  "Home Improvement",
-  "General Services",
-  "Government & Non-Profit",
-  "Groceries",
-  "Coffee",
-  "Gas",
-  "Rent",
-  "Utilities",
-  "Software",
-  "Restaurants",
-  "Clothing",
-  "Online Marketplaces",
-  "Superstores",
-  "Insurance",
-  "Mortgage",
-  "Rideshare & Taxis",
-  "Car Maintenance",
-  "Pets",
-  "Alcohol & Bars",
-  "Electronics",
-  "Childcare",
-  "Education",
-  "Taxes",
-  "Donations",
-  "Public Transit",
-  "Parking & Tolls",
-  "Car Payment",
-  "Student Loans",
-  "Other Food & Drink",
-  "Other Shopping",
-  "Other Services",
-  "Other Transportation",
-  "Government Fees",
-  "Other Loan Payments",
-  "Cash & ATM",
-  "Payments to People",
-];
-export const CATEGORY_PALETTE = [
-  "#3987e5",
-  "#d95926",
-  "#199e70",
-  "#c98500",
-  "#d55181",
-  "#008300",
-  "#9085e9",
-  "#e66767",
-];
+import type { CategoryNode } from "./api";
 
-export function colorForCategory(name: string): string {
-  const i = CATEGORY_ORDER.indexOf(name);
-  return i === -1 ? "#565D72" : CATEGORY_PALETTE[i % CATEGORY_PALETTE.length];
+/**
+ * Category colors come from the backend (seed_categories.category_color),
+ * fixed per category so a color is stable across screens and visits, per the
+ * dataviz rule "color follows the entity". This registry maps the names the
+ * other endpoints send to those colors; useCategories fills it on sign-in,
+ * before any chart renders, and again after a category changes.
+ */
+const UNCOLORED = "#565D72";
+let colors = new Map<string, string>();
+
+export function setCategoryColors(categories: CategoryNode[]) {
+  colors = new Map(categories.flatMap((c) => [[c.name, c.color] as const, ...c.children.map((k) => [k.name, k.color] as const)]));
 }
 
+export function colorForCategory(name: string): string {
+  return colors.get(name) ?? UNCOLORED;
+}
+
+/** A built-in category with a color of its own (the user's are grey). */
 export function hasCategoryColor(name: string): boolean {
-  return CATEGORY_ORDER.includes(name);
+  const color = colors.get(name);
+  return color !== undefined && color !== UNCOLORED;
 }

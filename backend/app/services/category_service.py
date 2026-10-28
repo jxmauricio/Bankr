@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Budget, BudgetMove, Category, Goal, RecurringSeries, Rule, Transaction
 from app.db.seed_categories import is_group, user_categories
 from app.services.category_backfill import remap_transactions
-from app.services.money_query import CATEGORY_SLICES
+from app.services.money_query import SLICE_NAMES
 
 MAX_CUSTOM_CATEGORIES = 50
 MAX_NAME_LENGTH = 40
@@ -50,7 +50,7 @@ def _clean_name(db: Session, user_id: UUID, name: str, *, renaming: Category | N
     # Names are how the assistant and trackers find a category, so they must
     # be unique among everything this user can see.
     taken = {n.lower() for n, c in user_categories(db, user_id).items() if c is not renaming} | {
-        n.lower() for n in CATEGORY_SLICES
+        n.lower() for n in SLICE_NAMES
     }
     if cleaned.lower() in taken:
         raise CategoryError(f"there's already a category called {cleaned!r}")
@@ -79,12 +79,7 @@ def create_category(db: Session, user_id: UUID, name: str, parent_id: UUID | Non
 
 def rename_category(db: Session, user_id: UUID, category_id: UUID, name: str) -> Category:
     category = _owned(db, user_id, category_id)
-    old = category.name
     category.name = _clean_name(db, user_id, name, renaming=category)
-    # Trackers follow a category by name.
-    db.query(Goal).filter(Goal.user_id == user_id, Goal.category == old).update(
-        {Goal.category: category.name}, synchronize_session=False
-    )
     db.flush()
     return category
 
@@ -95,7 +90,7 @@ def delete_category(db: Session, user_id: UUID, category_id: UUID) -> int:
     budgets that only made sense for it go with it. Returns how many
     transactions moved."""
     category = _owned(db, user_id, category_id)
-    if db.query(Goal).filter(Goal.user_id == user_id, Goal.category == category.name).count():
+    if db.query(Goal).filter(Goal.user_id == user_id, Goal.category_id == category.id, Goal.status == "active").count():
         raise CategoryError("a spending tracker follows this category: change or delete the tracker first")
 
     db.query(Rule).filter(Rule.user_id == user_id, Rule.set_category_id == category.id).delete(synchronize_session=False)

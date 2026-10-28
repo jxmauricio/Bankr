@@ -26,12 +26,12 @@ from app.services import money_query as mq
 # (what they paid for is unknown) and any a user made themselves.
 NEEDS = frozenset(
     {
-        "Rent & Utilities",
-        "Transportation",
-        "Medical",
-        "Loan Payments",
-        "Bank Fees",
-        "General Services",
+        "rent_and_utilities",
+        "transportation",
+        "medical",
+        "loan_payments",
+        "bank_fees",
+        "general_services",
     }
 )
 @dataclass(frozen=True)
@@ -59,47 +59,47 @@ WANTS_GUIDELINE = Guideline(
 )
 
 CATEGORY_GUIDELINES: dict[str, Guideline] = {
-    "Rent & Utilities": Guideline(
+    "rent_and_utilities": Guideline(
         30,
         "HUD / CFPB",
         "Households spending over 30% of income on rent and utilities are considered rent-burdened.",
     ),
-    "Food & Drink": Guideline(
+    "food_and_drink": Guideline(
         15,
         "Common budget share",
         "Budget templates often put groceries around 10% of take-home and eating out around 5%.",
     ),
-    "Transportation": Guideline(
+    "transportation": Guideline(
         15,
         "Common budget share",
         "Budget templates often keep gas, transit, and car costs around 10–15% of take-home.",
     ),
-    "Medical": Guideline(
+    "medical": Guideline(
         10,
         "Common budget share",
         "Out-of-pocket medical costs are often budgeted around 5–10% of take-home.",
     ),
-    "Personal Care": Guideline(
+    "personal_care": Guideline(
         5,
         "50/30/20 wants",
         "Gym, hair, and beauty are mostly wants; a common cap is about 5% of take-home.",
     ),
-    "Entertainment": Guideline(
+    "entertainment": Guideline(
         10,
         "50/30/20 wants",
         "Entertainment and streaming are wants; about 5% each is a common cap.",
     ),
-    "General Merchandise": Guideline(
+    "general_merchandise": Guideline(
         5,
         "50/30/20 wants",
         "Non-essential shopping is a want; a common cap is about 5% of take-home.",
     ),
-    "Travel": Guideline(
+    "travel": Guideline(
         5,
         "50/30/20 wants",
         "Travel is lumpy, but averaged monthly it still sits in wants — about 5% is a common ceiling.",
     ),
-    "Loan Payments": Guideline(
+    "loan_payments": Guideline(
         15,
         "Common budget share",
         "Non-mortgage debt payments are often kept under 10–15% of take-home (mortgage lives in housing).",
@@ -116,7 +116,7 @@ EMERGENCY_FUND_GUIDELINE = Guideline(
 CASH_ACCOUNT_TYPES = frozenset({"checking", "savings"})
 
 
-_EXPENSE_PARENTS = tuple(name for name, type_, parent in DEFAULT_CATEGORIES if type_ == "expense" and parent is None)
+_EXPENSE_PARENTS = tuple(key for key, _, type_, parent in DEFAULT_CATEGORIES if type_ == "expense" and parent is None)
 
 
 def _pct(amount: float, income: float) -> float | None:
@@ -277,16 +277,20 @@ def spending_health(db: Session, user_id: UUID) -> dict:
     spending = sum(mq.spend_query(db, user_id, w)["total_spent"] for w in months) / n
     saved = income - spending
 
-    by_cat: dict[str, float] = {name: 0.0 for name in _EXPENSE_PARENTS}
+    # By key; a user's own top-level category (no key) by its name.
+    names = {key: name for key, name, _, _ in DEFAULT_CATEGORIES}
+    by_cat: dict[str, float] = {key: 0.0 for key in _EXPENSE_PARENTS}
     for w in months:
         for g in mq.spend_query(db, user_id, w, group_by="category").get("groups", []):
-            by_cat[g["name"]] = by_cat.get(g["name"], 0.0) + g["amount"]
+            cid = g.get("key", g["name"])
+            names.setdefault(cid, g["name"])
+            by_cat[cid] = by_cat.get(cid, 0.0) + g["amount"]
     for name in by_cat:
         by_cat[name] /= n
 
     this_income = mq.income_query(db, user_id, this_month)["total_income"]
     this_spend = mq.spend_query(db, user_id, this_month)
-    this_by_cat = {g["name"]: g["amount"] for g in this_spend.get("groups", [])}
+    this_by_cat = {g.get("key", g["name"]): g["amount"] for g in this_spend.get("groups", [])}
     this_saved = this_income - this_spend["total_spent"]
 
     start = min(w.start for w in months)
@@ -294,29 +298,29 @@ def spending_health(db: Session, user_id: UUID) -> dict:
 
     categories = [
         _line(
-            id=name,
-            name=name,
+            id=cid,
+            name=names[cid],
             amount=amount,
             income=income,
-            guideline=CATEGORY_GUIDELINES.get(name),
-            this_month_amount=this_by_cat.get(name, 0.0),
+            guideline=CATEGORY_GUIDELINES.get(cid),
+            this_month_amount=this_by_cat.get(cid, 0.0),
             this_month_income=this_income,
         )
-        for name, amount in sorted(by_cat.items(), key=lambda kv: kv[1], reverse=True)
-        if amount > 0 or name in ("Rent & Utilities", "Food & Drink")
+        for cid, amount in sorted(by_cat.items(), key=lambda kv: kv[1], reverse=True)
+        if amount > 0 or cid in ("rent_and_utilities", "food_and_drink")
     ]
 
-    groceries = mq.resolve_category(db, "Groceries")
+    groceries = mq.resolve_category(db, "groceries")
     avg_groceries = sum(mq.spend_query(db, user_id, w, groceries)["total_spent"] for w in months) / n
     this_groceries = mq.spend_query(db, user_id, this_month, groceries)["total_spent"]
-    eating_out = by_cat.get("Food & Drink", 0.0) - avg_groceries
-    this_eating_out = this_by_cat.get("Food & Drink", 0.0) - this_groceries
+    eating_out = by_cat.get("food_and_drink", 0.0) - avg_groceries
+    this_eating_out = this_by_cat.get("food_and_drink", 0.0) - this_groceries
 
-    needs_amount = sum(by_cat.get(name, 0.0) for name in NEEDS) + avg_groceries
-    wants_amount = sum(v for name, v in by_cat.items() if name not in NEEDS and name != "Food & Drink") + eating_out
-    this_needs = sum(this_by_cat.get(name, 0.0) for name in NEEDS) + this_groceries
+    needs_amount = sum(by_cat.get(key, 0.0) for key in NEEDS) + avg_groceries
+    wants_amount = sum(v for cid, v in by_cat.items() if cid not in NEEDS and cid != "food_and_drink") + eating_out
+    this_needs = sum(this_by_cat.get(key, 0.0) for key in NEEDS) + this_groceries
     this_wants = (
-        sum(v for name, v in this_by_cat.items() if name not in NEEDS and name != "Food & Drink") + this_eating_out
+        sum(v for cid, v in this_by_cat.items() if cid not in NEEDS and cid != "food_and_drink") + this_eating_out
     )
 
     buckets = [
@@ -353,23 +357,23 @@ def spending_health(db: Session, user_id: UUID) -> dict:
     by_id = {c["id"]: c for c in categories}
     snapshots = [
         buckets[2],  # saved
-        by_id.get("Rent & Utilities")
+        by_id.get("rent_and_utilities")
         or _line(
-            id="Rent & Utilities",
-            name="Rent & Utilities",
+            id="rent_and_utilities",
+            name=names["rent_and_utilities"],
             amount=0,
             income=income,
-            guideline=CATEGORY_GUIDELINES["Rent & Utilities"],
+            guideline=CATEGORY_GUIDELINES["rent_and_utilities"],
             this_month_amount=0,
             this_month_income=this_income,
         ),
-        by_id.get("Food & Drink")
+        by_id.get("food_and_drink")
         or _line(
-            id="Food & Drink",
-            name="Food & Drink",
+            id="food_and_drink",
+            name=names["food_and_drink"],
             amount=0,
             income=income,
-            guideline=CATEGORY_GUIDELINES["Food & Drink"],
+            guideline=CATEGORY_GUIDELINES["food_and_drink"],
             this_month_amount=0,
             this_month_income=this_income,
         ),
@@ -377,8 +381,8 @@ def spending_health(db: Session, user_id: UUID) -> dict:
 
     cash = _cash_on_hand(db, user_id)
     months_covered = round(cash / spending, 1) if cash is not None and spending > 0 else None
-    housing, loans = by_id.get("Rent & Utilities") or snapshots[1], by_id.get("Loan Payments")
-    loans_guideline = CATEGORY_GUIDELINES["Loan Payments"]
+    housing, loans = by_id.get("rent_and_utilities") or snapshots[1], by_id.get("loan_payments")
+    loans_guideline = CATEGORY_GUIDELINES["loan_payments"]
     metrics = [
         _metric(
             id="saved",
@@ -399,7 +403,7 @@ def spending_health(db: Session, user_id: UUID) -> dict:
             higher_is_better=True,
         ),
         _metric(
-            id="Loan Payments",
+            id="loan_payments",
             name="Debt to income",
             value=loans["pct"] if loans else _pct(0, income),
             unit="pct",
@@ -408,12 +412,12 @@ def spending_health(db: Session, user_id: UUID) -> dict:
             higher_is_better=False,
         ),
         _metric(
-            id="Rent & Utilities",
+            id="rent_and_utilities",
             name="Housing",
             value=housing["pct"],
             unit="pct",
             tone=housing["tone"],
-            rec=CATEGORY_GUIDELINES["Rent & Utilities"].pct,
+            rec=CATEGORY_GUIDELINES["rent_and_utilities"].pct,
             higher_is_better=False,
         ),
     ]

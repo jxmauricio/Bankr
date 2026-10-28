@@ -430,8 +430,12 @@ export interface TransactionRow extends TransactionSplit {
 
 export interface CategoryOption {
   id: string;
+  /** A built-in category's stable id ("restaurants"); null on the user's own. */
+  key: string | null;
   name: string;
   type: "income" | "expense" | "transfer";
+  /** Its chart color, from the backend so it follows the category, not its name. */
+  color: string;
 }
 
 export interface CategoryNode extends CategoryOption {

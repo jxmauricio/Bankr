@@ -29,7 +29,7 @@ MODES = ("flex", "category")
 GROUPS = ("fixed", "flex")
 MAX_ROLLOVER_MONTHS = 12
 # Usually fixed: suggest these as their own lines in flex mode.
-FIXED_BY_DEFAULT = {"Rent & Utilities", "Loan Payments"}
+FIXED_BY_DEFAULT = {"rent_and_utilities", "loan_payments"}
 # Don't call a line "on pace to go over" from the first few days of spending.
 MIN_ELAPSED_FOR_PACE = 0.2
 
@@ -433,7 +433,7 @@ def suggest_budget(db: Session, user_id: UUID) -> dict:
         typical = median([m.get(cid, 0.0) for m in per_month]) if per_month else 0.0
         if typical <= 0:
             continue
-        fixed = cid in recurring_categories or category.name in FIXED_BY_DEFAULT
+        fixed = cid in recurring_categories or category.system_key in FIXED_BY_DEFAULT
         lines.append(
             {
                 "category_id": str(cid),

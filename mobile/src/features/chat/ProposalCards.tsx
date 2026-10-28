@@ -3,7 +3,8 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import { useMoney } from "@/features/money/MoneyContext";
 import { ApiError, createGoal, createRule, moveBudgetMoney, type ActionProposal, type GoalProposal } from "@/lib/api";
-import { formatMoney, SAVE_NAME_SUGGESTIONS, SPEND_CATEGORIES, TRACKING_WINDOWS } from "@/lib/format";
+import { formatMoney, SAVE_NAME_SUGGESTIONS, TRACKING_WINDOWS } from "@/lib/format";
+import { categoryName, spendCategoryNames, useCategories } from "@/lib/useCategories";
 import { useToken } from "@/lib/session";
 import { radius, space } from "@/theme/tokens";
 import { makeStyles } from "@/theme/theme";
@@ -104,8 +105,10 @@ function SavingsGoalProposalCard({ proposal }: { proposal: GoalProposal }) {
 function SpendingTrackerProposalCard({ proposal }: { proposal: GoalProposal }) {
   const token = useToken();
   const { refresh } = useMoney();
-  const [category, setCategory] = useState(proposal.category ?? "Food & Drink");
-  const [name, setName] = useState(proposal.name?.trim() || proposal.category || "Food & Drink");
+  const categories = useCategories(token);
+  const proposed = categoryName(categories, proposal.category ?? "food_and_drink");
+  const [category, setCategory] = useState(proposed);
+  const [name, setName] = useState(proposal.name?.trim() || proposed);
   const [windowName, setWindowName] = useState(proposal.window ?? "this_month");
   const [budget, setBudget] = useState(proposal.target_amount > 0 ? String(proposal.target_amount) : "");
   const [status, setStatus] = useState<CardStatus>("pending");
@@ -155,7 +158,7 @@ function SpendingTrackerProposalCard({ proposal }: { proposal: GoalProposal }) {
         What to track
       </Text>
       <Chips
-        options={SPEND_CATEGORIES.map((c) => ({ value: c, label: c }))}
+        options={spendCategoryNames(categories).map((c) => ({ value: c, label: c }))}
         value={category}
         onChange={(next) => {
           // Keep the name in step while it's still the default.

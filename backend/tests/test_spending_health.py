@@ -85,9 +85,9 @@ def test_health_endpoint_returns_the_same_shape(client, db, ledger):
 def test_score_averages_four_metrics(db, ledger):
     health = spending_health(db, ledger.id)
     metrics = {m["id"]: m for m in health["metrics"]}
-    assert list(metrics) == ["saved", "emergency_fund", "Loan Payments", "Rent & Utilities"]
+    assert list(metrics) == ["saved", "emergency_fund", "loan_payments", "rent_and_utilities"]
     assert metrics["saved"]["value"] == health["saved_pct"]
-    assert metrics["Rent & Utilities"]["value"] == next(c["pct"] for c in health["categories"] if c["name"] == "Rent & Utilities")
+    assert metrics["rent_and_utilities"]["value"] == next(c["pct"] for c in health["categories"] if c["name"] == "Rent & Utilities")
     assert metrics["emergency_fund"]["unit"] == "months"
     scored = [m["points"] for m in health["metrics"] if m["points"] is not None]
     assert scored and health["score"] == round(sum(scored) / len(scored))

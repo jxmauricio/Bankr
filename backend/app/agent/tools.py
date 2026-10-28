@@ -36,6 +36,7 @@ from app.services.goal_service import (
     list_active_goals,
     normalize_goal_kind,
     spend_for_tracker,
+    tracker_category,
 )
 from app.services.recurring_service import merchant_key, recurring_merchant_keys, recurring_overview
 from app.services.rules_service import preview_rule
@@ -487,12 +488,16 @@ def _progress_for(db: Session, user_id: UUID, goal: Goal) -> dict:
 def _tracker_progress(db: Session, user_id: UUID, goal: Goal) -> dict:
     spent = float(goal.current_progress_amount)
     spend: dict = {}
-    if goal.category and goal.window:
-        try:
-            spend = spend_for_tracker(db, user_id, goal.category, goal.window)
-            spent = float(spend["total_spent"])
-        except mq.QueryError:
-            pass
+    category_name = None
+    try:
+        category = tracker_category(db, user_id, goal)
+        if category is not None:
+            category_name = category.name
+            if goal.window:
+                spend = spend_for_tracker(db, user_id, category, goal.window)
+                spent = float(spend["total_spent"])
+    except mq.QueryError:
+        pass
 
     budget = float(goal.target_amount) if goal.target_amount and float(goal.target_amount) > 0 else None
     over_budget = bool(budget is not None and spent > budget)
@@ -508,8 +513,8 @@ def _tracker_progress(db: Session, user_id: UUID, goal: Goal) -> dict:
     result = {
         "id": str(goal.id),
         "type": goal.type,
-        "name": goal.name or goal.category or "Spending",
-        "category": goal.category,
+        "name": goal.name or category_name or "Spending",
+        "category": category_name,
         "window": goal.window,
         "window_label": TRACKING_WINDOW_LABELS.get(goal.window or "", goal.window),
         "window_start": spend.get("start"),
@@ -688,9 +693,10 @@ def _any_category(db: Session, user_id: UUID, name: str):
     that a transaction can be put in: not a group."""
     categories = mq.user_categories(db, user_id)
     by_lower = {c.lower(): c for c in categories}
+    by_key = {c.system_key: n for n, c in categories.items() if c.system_key}
     query = name.strip().lower()
-    canonical = by_lower.get(query) or mq.CATEGORY_ALIASES.get(query)
-    if canonical is None or canonical not in categories:
+    canonical = by_lower.get(query) or by_key.get(query) or by_key.get(mq.CATEGORY_ALIASES.get(query))
+    if canonical is None:
         raise mq.QueryError(f"no category called {name!r}", valid_categories=sorted(categories))
     if is_group(db, categories[canonical]):
         children = sorted(n for n, c in categories.items() if c.parent_category_id == categories[canonical].id)

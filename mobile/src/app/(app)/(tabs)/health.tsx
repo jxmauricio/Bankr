@@ -27,8 +27,10 @@ export default function HealthScreen() {
   function openMetric(m: HealthMetric) {
     if (m.id === "saved") return router.navigate("/cash-flow");
     if (m.id === "emergency_fund") return router.push("/money");
-    // The rest are categories; show their transactions over the same months.
-    update({ ...DEFAULT_FILTERS, date: h ? { kind: "custom", start: h.start, end: h.end } : DEFAULT_FILTERS.date, categories: [m.id] });
+    // The rest are categories, by key; show their transactions over the same
+    // months. Rows are filtered by category name.
+    const name = h?.categories.find((c) => c.id === m.id)?.name ?? m.name;
+    update({ ...DEFAULT_FILTERS, date: h ? { kind: "custom", start: h.start, end: h.end } : DEFAULT_FILTERS.date, categories: [name] });
     router.navigate("/transactions");
   }
 

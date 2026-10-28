@@ -88,11 +88,20 @@ def list_active_goals(db: Session, user_id: UUID) -> list[Goal]:
     )
 
 
-def spend_for_tracker(db: Session, user_id: UUID, category: str, window_name: str) -> dict:
+def spend_for_tracker(db: Session, user_id: UUID, category: mq.ResolvedCategory, window_name: str) -> dict:
     """Category spend in a named window -- the live number for a tracker."""
     window = mq.resolve_window(mq.today_for_user(db, user_id), window_name)
-    resolved = mq.resolve_category(db, category, user_id)
-    return mq.spend_query(db, user_id, window, resolved)
+    return mq.spend_query(db, user_id, window, category)
+
+
+def tracker_category(db: Session, user_id: UUID, goal: Goal) -> mq.ResolvedCategory | None:
+    """What a spending tracker watches, or None for a savings goal. Raises
+    QueryError if its category is gone."""
+    if goal.category_slice:
+        return mq.resolve_category(db, goal.category_slice, user_id)
+    if goal.category_id:
+        return mq.resolve_category_id(db, goal.category_id, user_id)
+    return None
 
 
 def normalize_goal_kind(goal_type: str | None, name: str | None, category: str | None = None) -> tuple[str, str]:
@@ -191,7 +200,7 @@ def _new_spending_tracker(
     if target_amount < 0:
         raise GoalValidationError("target_amount must be zero or positive")
 
-    spent = spend_for_tracker(db, user_id, resolved.name, window_name)["total_spent"]
+    spent = spend_for_tracker(db, user_id, resolved, window_name)["total_spent"]
     title = name.strip() if name and name.strip() else resolved.name
     return Goal(
         user_id=user_id,
@@ -202,7 +211,8 @@ def _new_spending_tracker(
         starting_amount=0,
         current_progress_amount=spent,
         status="active",
-        category=resolved.name,
+        category_id=resolved.category_id,
+        category_slice=resolved.slice,
         window=window_name,
     )
 
@@ -210,12 +220,11 @@ def _new_spending_tracker(
 def recompute_goal_progress(db: Session, user_id: UUID, snapshot: NetWorthSnapshot) -> None:
     for goal in list_active_goals(db, user_id):
         if goal.type == TRACK_SPENDING:
-            if not goal.category or not goal.window:
-                continue
             try:
-                goal.current_progress_amount = spend_for_tracker(
-                    db, user_id, goal.category, goal.window
-                )["total_spent"]
+                category = tracker_category(db, user_id, goal)
+                if category is None or not goal.window:
+                    continue
+                goal.current_progress_amount = spend_for_tracker(db, user_id, category, goal.window)["total_spent"]
             except mq.QueryError:
                 continue
             # Hitting a spending cap is over-budget, not "goal complete".

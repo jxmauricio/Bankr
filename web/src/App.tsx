@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, fetchGoalProgress, fetchNetWorth } from "./lib/api";
 import { useSession } from "./lib/session";
+import { loadCategories } from "./lib/useCategories";
 import { AuthPage } from "./pages/AuthPage";
 import { LinkBankPage } from "./pages/LinkBankPage";
 import { GoalSetupPage } from "./pages/GoalSetupPage";
@@ -31,6 +32,7 @@ function PostSignInGate() {
       const [netWorth, goalProgress] = await Promise.all([
         fetchNetWorth(token).finally(() => setBalancesRead(true)),
         fetchGoalProgress(token).finally(() => setGoalsRead(true)),
+        loadCategories(token), // chart colors, before any chart renders
       ]);
       if (netWorth.current === null) {
         setStep("link-bank");
