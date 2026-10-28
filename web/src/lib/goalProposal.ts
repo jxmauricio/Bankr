@@ -38,6 +38,8 @@ const CATEGORY_HINTS: [RegExp, string][] = [
   [/\b(insurance)\b/i, "Insurance"],
   [/\b(childcare|daycare|babysit(?:ter|ting)?)\b/i, "Childcare"],
   [/\b(mortgage)\b/i, "Mortgage"],
+  [/\b(cash|atm)\b/i, "Cash & ATM"],
+  [/\b(zelle|venmo|cash app)\b/i, "Payments to People"],
   [/\b(shopping)\b/i, "General Merchandise"],
   [/\b(health|medical|doctor|pharmacy|dentist)\b/i, "Medical"],
   [/\b(gym|haircuts?|beauty)\b/i, "Personal Care"],

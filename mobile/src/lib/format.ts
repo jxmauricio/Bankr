@@ -84,6 +84,8 @@ export const SPEND_CATEGORIES = [
   "Student Loans",
   "Other Loan Payments",
   "Bank Fees",
+  "Cash & ATM",
+  "Payments to People",
 ] as const;
 
 export const TRACKING_WINDOWS: { id: string; label: string }[] = [

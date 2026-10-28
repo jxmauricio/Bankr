@@ -55,6 +55,8 @@ const CATEGORY_ORDER = [
   "Other Transportation",
   "Government Fees",
   "Other Loan Payments",
+  "Cash & ATM",
+  "Payments to People",
 ];
 export const CATEGORY_PALETTE = [
   "#3987e5",

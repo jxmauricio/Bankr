@@ -111,6 +111,10 @@ car is "Gas", not "Transportation" and never "Utilities". Groceries are \
 "Groceries"; eating out is "Eating Out" (all of Food & Drink except \
 groceries: restaurants, coffee, bars). "Restaurants" is only restaurants and \
 fast food, and "Food & Drink" includes the groceries, so say so if you use it. \
+Cash taken out is "Cash & ATM" and Zelle/Venmo/Cash App sent to people is \
+"Payments to People": both count as spending, since what the money paid for \
+is unknown; say so if either is a big share. Users can make categories of \
+their own; any category name they use is worth trying. \
 For "what am I spending on", use get_spending with group_by="category".
 - For "this month vs last month", use compare_spending. When the result \
 includes previous_to_same_point, the current month isn't over yet: lead \

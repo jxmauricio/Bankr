@@ -51,6 +51,19 @@ def test_credit_card_payment_is_a_transfer_not_spending():
     assert map_raw_category("TRANSFER_IN_SAVINGS", 200.0) == "Transfer In"
 
 
+def test_cash_and_money_sent_to_people_are_spending():
+    # Gone from the user's accounts, so spent -- unlike moving money to
+    # their own savings or brokerage.
+    assert map_raw_category("TRANSFER_OUT_WITHDRAWAL", -200.0, "checking") == "Cash & ATM"
+    assert map_raw_category("TRANSFER_OUT_TRANSFER_OUT_FROM_APPS", -1200.0, "checking", "Zelle payment to Sam") == "Payments to People"
+    assert map_raw_category("TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS", -500.0, "checking") == "Transfer Out"
+    assert map_raw_category("TRANSFER_OUT_ACCOUNT_TRANSFER", -500.0, "checking") == "Transfer Out"
+    # The same tags on money coming in aren't spending, and a Zelle to a
+    # software company's founder is still a Zelle.
+    assert map_raw_category("TRANSFER_OUT_WITHDRAWAL", 200.0, "checking") == "Transfer In"
+    assert map_raw_category("TRANSFER_OUT_TRANSFER_OUT_FROM_APPS", -40.0, "checking", "Zelle to GitHub") == "Payments to People"
+
+
 def test_flights_are_travel_not_transportation():
     assert map_raw_category("TRAVEL_FLIGHTS", -420.0) == "Travel"
     assert map_raw_category("TRANSPORTATION_TAXIS_AND_RIDE_SHARES", -18.0) == "Rideshare & Taxis"

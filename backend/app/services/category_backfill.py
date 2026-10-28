@@ -200,15 +200,24 @@ def _merge_budgets(db: Session, old_id, new_id) -> None:
             db.execute(text("UPDATE budgets SET category_id = :new WHERE user_id = :user_id AND category_id = :old"), {"user_id": user_id, "old": old_id, "new": new_id})
 
 
-def _remap_uncategorized_by_hand(db: Session, categories: dict) -> None:
+def remap_transactions(db: Session, txn_ids: list) -> None:
+    """Re-map these rows from their raw Plaid category, with cached guesses
+    and the user's rules on top, whether or not the user had picked theirs:
+    for when what they picked is gone (category_service.delete_category)."""
+    if txn_ids:
+        _remap_uncategorized_by_hand(db, seed_default_categories(db), txn_ids)
+
+
+def _remap_uncategorized_by_hand(db: Session, categories: dict, txn_ids: list | None = None) -> None:
     rows = db.execute(
         text(
             "SELECT t.id, t.raw_aggregator_category, t.amount, t.bankr_category_id, t.aggregator_category_confidence, "
             "t.merchant_name, t.original_merchant_name, t.merchant_overridden, t.is_split, t.split_parent_id, "
             "t.linked_account_id, a.account_type, a.user_id "
             "FROM transactions t JOIN linked_accounts a ON a.id = t.linked_account_id "
-            "WHERE NOT t.category_overridden"
-        )
+            + ("WHERE t.id = ANY(:ids)" if txn_ids is not None else "WHERE NOT t.category_overridden")
+        ),
+        {"ids": list(txn_ids)} if txn_ids is not None else {},
     ).mappings().all()
     guesses = _cached_guesses(db)
     rules_by_user: dict = {}

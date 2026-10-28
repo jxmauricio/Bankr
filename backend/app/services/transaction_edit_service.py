@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.db.models import Category, LinkedAccount, Transaction
-from app.db.seed_categories import is_group
+from app.db.seed_categories import is_group, user_categories, visible_to
 
 MAX_SPLITS = 10
 
@@ -36,9 +36,9 @@ def get_owned_transaction(db: Session, user_id: UUID, transaction_id: UUID) -> T
     return txn
 
 
-def _category(db: Session, category_id: UUID) -> Category:
+def _category(db: Session, txn: Transaction, category_id: UUID) -> Category:
     category = db.get(Category, category_id)
-    if category is None:
+    if category is None or not visible_to(category, txn.linked_account.user_id):
         raise TransactionEditError("unknown category")
     if is_group(db, category):
         raise TransactionEditError(f"pick one of {category.name}'s subcategories")
@@ -59,7 +59,7 @@ def update_transaction(
     if category_id is not None:
         if txn.is_split:
             raise TransactionEditError("a split transaction is categorized by its splits")
-        txn.bankr_category_id = _category(db, category_id).id
+        txn.bankr_category_id = _category(db, txn, category_id).id
         txn.category_overridden = True
     if merchant_name is not None:
         cleaned = merchant_name.strip()
@@ -104,7 +104,7 @@ def set_splits(db: Session, txn: Transaction, parts: list[dict]) -> list[Transac
             merchant_name=txn.merchant_name,
             original_merchant_name=txn.original_merchant_name,
             raw_aggregator_category=txn.raw_aggregator_category,
-            bankr_category_id=_category(db, part["category_id"]).id,
+            bankr_category_id=_category(db, txn, part["category_id"]).id,
             category_overridden=True,
             is_pending=txn.is_pending,
             notes=(part.get("note") or "").strip() or None,
@@ -116,17 +116,27 @@ def set_splits(db: Session, txn: Transaction, parts: list[dict]) -> list[Transac
     return children
 
 
-def category_tree(db: Session) -> list[dict]:
-    """Every category, parents first with their children nested, for pickers."""
-    rows = db.query(Category).order_by(Category.name).all()
+def category_tree(db: Session, user_id: UUID) -> list[dict]:
+    """Every category the user can see (the built-in ones and their own),
+    parents first with their children nested, for pickers. `custom` marks
+    the user's own, which they can rename or delete."""
+    rows = sorted(user_categories(db, user_id).values(), key=lambda c: c.name)
     children: dict[UUID, list[dict]] = {}
     for c in rows:
         if c.parent_category_id:
-            children.setdefault(c.parent_category_id, []).append({"id": str(c.id), "name": c.name, "type": c.type})
+            children.setdefault(c.parent_category_id, []).append(
+                {"id": str(c.id), "name": c.name, "type": c.type, "custom": c.user_id is not None}
+            )
     type_order = {"expense": 0, "income": 1, "transfer": 2}
     return sorted(
         (
-            {"id": str(c.id), "name": c.name, "type": c.type, "children": children.get(c.id, [])}
+            {
+                "id": str(c.id),
+                "name": c.name,
+                "type": c.type,
+                "custom": c.user_id is not None,
+                "children": children.get(c.id, []),
+            }
             for c in rows
             if c.parent_category_id is None
         ),

@@ -38,7 +38,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.config import settings
 from app.db.models import Category, LinkedAccount, Transaction, User
-from app.db.seed_categories import seed_default_categories
+from app.db.seed_categories import user_categories
 
 NAMED_WINDOWS = (
     "today",
@@ -162,6 +162,12 @@ CATEGORY_ALIASES: dict[str, str] = {
     "charity": "Donations",
     "fees": "Bank Fees",
     "loans": "Loan Payments",
+    "cash": "Cash & ATM",
+    "atm": "Cash & ATM",
+    "cash withdrawals": "Cash & ATM",
+    "zelle": "Payments to People",
+    "venmo": "Payments to People",
+    "payments to friends": "Payments to People",
 }
 
 
@@ -329,8 +335,10 @@ class ResolvedCategory:
     top_level: str  # the category, or the group it's in: whose budget it counts against
 
 
-def resolve_category(db: Session, name: str) -> ResolvedCategory:
-    categories = seed_default_categories(db)
+def resolve_category(db: Session, name: str, user_id: UUID | None = None) -> ResolvedCategory:
+    """A spending category by name or everyday word. With user_id, the
+    user's own categories count too; without, only the built-in ones."""
+    categories = user_categories(db, user_id)
     by_lower = {c.lower(): c for c in categories}
     query = name.strip().lower()
 
@@ -342,7 +350,7 @@ def resolve_category(db: Session, name: str) -> ResolvedCategory:
         raise QueryError(
             f"no category called {name!r}",
             did_you_mean=sorted({by_lower.get(s) or CATEGORY_ALIASES[s] for s in suggestions}),
-            valid_categories=spend_category_names(db),
+            valid_categories=spend_category_names(db, user_id),
         )
 
     if canonical in CATEGORY_SLICES:
@@ -359,7 +367,7 @@ def resolve_category(db: Session, name: str) -> ResolvedCategory:
     if parent.type != "expense":
         raise QueryError(
             f"{canonical!r} is not a spending category",
-            valid_categories=spend_category_names(db),
+            valid_categories=spend_category_names(db, user_id),
         )
     children = [c for c in categories.values() if c.parent_category_id == parent.id]
     by_id = {c.id: c for c in categories.values()}
@@ -371,8 +379,8 @@ def resolve_category(db: Session, name: str) -> ResolvedCategory:
     )
 
 
-def spend_category_names(db: Session) -> list[str]:
-    return sorted(name for name, c in seed_default_categories(db).items() if c.type == "expense")
+def spend_category_names(db: Session, user_id: UUID | None = None) -> list[str]:
+    return sorted(name for name, c in user_categories(db, user_id).items() if c.type == "expense")
 
 
 # --- queries ------------------------------------------------------------------

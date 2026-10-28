@@ -21,6 +21,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.models import Budget, BudgetMove, BudgetSettings, Category, LinkedAccount, RecurringSeries, Transaction
+from app.db.seed_categories import user_categories, visible_to
 from app.services import money_query as mq
 
 FLEX = "flex"
@@ -69,9 +70,9 @@ def get_settings(db: Session, user_id: UUID, today: date | None = None) -> Budge
     return settings
 
 
-def _top_level_expense(db: Session, category_id: UUID) -> Category:
+def _top_level_expense(db: Session, user_id: UUID, category_id: UUID) -> Category:
     category = db.get(Category, category_id)
-    if category is None or category.type != "expense":
+    if category is None or category.type != "expense" or not visible_to(category, user_id):
         raise BudgetError("budgets are for spending categories")
     if category.parent_category_id is not None:
         raise BudgetError("budget the parent category, not a subcategory")
@@ -162,10 +163,7 @@ class _Ledger:
 def _ledger(db: Session, user_id: UUID, today: date) -> _Ledger:
     settings = get_settings(db, user_id, today)
     budgets = {b.category_id: b for b in db.query(Budget).filter(Budget.user_id == user_id)}
-    mq.seed_default_categories(db)
-    categories = {
-        c.id: c for c in db.query(Category).filter(Category.type == "expense", Category.parent_category_id.is_(None))
-    }
+    categories = {c.id: c for c in user_categories(db, user_id).values() if c.type == "expense" and c.parent_category_id is None}
     return _Ledger(db, user_id, settings, budgets, categories)
 
 
@@ -311,7 +309,7 @@ def upsert_budget(
     group: str | None = None,
     rollover: bool | None = None,
 ) -> Budget:
-    _top_level_expense(db, category_id)
+    _top_level_expense(db, user_id, category_id)
     budget = db.query(Budget).filter(Budget.user_id == user_id, Budget.category_id == category_id).one_or_none()
     if budget is None:
         if amount is None:

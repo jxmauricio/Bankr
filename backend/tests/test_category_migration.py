@@ -68,7 +68,7 @@ def test_everything_on_a_legacy_category_moves_to_its_new_one(db, user):
     assert db.query(Goal).one().category == "Restaurants"
     names = {c.name for c in db.query(Category)}
     assert not names & {"Dining", "Fast Food", "Rent & Housing", "Shopping", "Transfer"}
-    assert len(names) == 47  # the 16 primaries and their 31 subcategories
+    assert len(names) == 49  # the 16 primaries, Cash & ATM, Payments to People and 31 subcategories
 
 
 def test_a_legacy_name_that_is_a_category_again_keeps_its_rows(db, user):

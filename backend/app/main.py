@@ -9,6 +9,7 @@ from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.dashboard import router as dashboard_router
 from app.api.budgets import router as budgets_router
+from app.api.categories import router as categories_router
 from app.api.goals import router as goals_router
 from app.api.insights import router as insights_router
 from app.api.recaps import router as recaps_router
@@ -46,6 +47,7 @@ app.include_router(accounts_router)
 app.include_router(dashboard_router)
 app.include_router(goals_router)
 app.include_router(transactions_router)
+app.include_router(categories_router)
 app.include_router(rules_router)
 app.include_router(recurring_router)
 app.include_router(budgets_router)

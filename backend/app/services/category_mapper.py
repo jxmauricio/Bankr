@@ -73,7 +73,19 @@ DETAILED_CATEGORY_MAP: dict[str, str] = {
     # spending already happened as the card purchases. Other loan payments
     # (mortgage, car, student) are real outflows and stay under LOAN_PAYMENTS.
     "loan_payments_credit_card_payment": "Transfer Out",
+    # Cash out of an ATM or over the counter, and money sent to someone
+    # through Zelle, Venmo, Cash App: it has left the user's accounts, so it's
+    # spending, not a transfer -- otherwise rent paid to a roommate over Zelle
+    # never shows up anywhere. Money to the user's own savings or brokerage
+    # has its own tags (TRANSFER_OUT_SAVINGS, ..._INVESTMENT_...) and stays a
+    # transfer; a user can mark any of these as one by hand.
+    "transfer_out_withdrawal": "Cash & ATM",
+    "transfer_out_transfer_out_from_apps": "Payments to People",
 }
+
+# Detailed values that only describe money going out: the same tag on money
+# coming in (a card payment landing, a deposit) is a transfer in.
+_OUTFLOW_ONLY = {"Transfer Out", "Cash & ATM", "Payments to People"}
 
 # A primary that's a group in seed_categories lands on its "Other ..."
 # child: transactions never sit on a group. Every non-rent RENT_AND_UTILITIES
@@ -171,14 +183,17 @@ def map_raw_category(
     `merchant_name` is the bank's name for the merchant: spending at a
     known software merchant is Software whatever Plaid tagged it."""
     category = _map_plaid_category(raw_category, amount, account_type)
-    # Only where Plaid's answer was spending (a refund nets against it too):
-    # a paycheck or card payment from a software company stays what it is.
-    if category not in _NOT_SPENDING and (known := merchant_category(merchant_name)):
+    # Only where Plaid's answer was a purchase (a refund nets against it too):
+    # a paycheck, card payment or Zelle from a software company stays what it is.
+    if category not in _NOT_PURCHASES and (known := merchant_category(merchant_name)):
         return known
     return category
 
 
-_NOT_SPENDING = {"Income", "Transfer In", "Transfer Out", "Mortgage", "Car Payment", "Student Loans", "Other Loan Payments"}
+_NOT_PURCHASES = {
+    "Income", "Transfer In", "Transfer Out", "Mortgage", "Car Payment", "Student Loans", "Other Loan Payments",
+    "Cash & ATM", "Payments to People",
+}
 
 
 def _map_plaid_category(raw_category: str | None, amount: float, account_type: str | None) -> str:
@@ -190,8 +205,8 @@ def _map_plaid_category(raw_category: str | None, amount: float, account_type: s
 
         if normalized in DETAILED_CATEGORY_MAP:
             category = DETAILED_CATEGORY_MAP[normalized]
-            # A card payment seen from the side the money lands on.
-            return "Transfer In" if category == "Transfer Out" and amount > 0 else category
+            # e.g. a card payment seen from the side the money lands on.
+            return "Transfer In" if category in _OUTFLOW_ONLY and amount > 0 else category
 
         for primary, category in PRIMARY_CATEGORY_MAP.items():
             if normalized == primary or normalized.startswith(primary + "_"):

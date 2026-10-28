@@ -1,7 +1,8 @@
 """Default Category rows Bankr normalizes every aggregator category into.
 
-Not user-editable in MVP (see backend/README.md) -- this is a small,
-backend-maintained mapping, not a full categorization engine.
+These built-in rows are shared by every user and never edited. A user can
+add categories of their own on top (category_service): those carry their
+user_id and are only ever seen, picked or resolved for that user.
 
 Three types, and the third one is load-bearing for correct totals:
 - income / expense: what "income" and "spending" sum over.
@@ -10,7 +11,10 @@ Three types, and the third one is load-bearing for correct totals:
   counted as spending or income -- otherwise a $500 card payment is
   "spent" on top of the $500 of card purchases it pays for. Cash flow
   still reports the ones that leave or enter the linked accounts
-  (brokerage, Venmo) separately from spending.
+  (brokerage, savings elsewhere) separately from spending.
+  Cash taken out and money sent to other people are *not* transfers: the
+  money is gone from the user's accounts, so Cash & ATM and Payments to
+  People are spending, as in Mint and Monarch.
 
 Two levels, as in Monarch and YNAB. Subcategories hang off a parent via
 parent_category_id so a question can be answered at either level: "how much
@@ -78,6 +82,8 @@ DEFAULT_CATEGORIES: list[tuple[str, str, str | None]] = [
     ("Parking & Tolls", "expense", "Transportation"),
     ("Other Transportation", "expense", "Transportation"),
     ("Travel", "expense", None),
+    ("Cash & ATM", "expense", None),
+    ("Payments to People", "expense", None),
     ("Rent & Utilities", "expense", None),
     ("Rent", "expense", "Rent & Utilities"),
     ("Utilities", "expense", "Rent & Utilities"),
@@ -89,6 +95,18 @@ GROUPS = frozenset(parent for _, _, parent in DEFAULT_CATEGORIES if parent)
 
 def is_group(db: Session, category: Category) -> bool:
     return db.query(Category.id).filter(Category.parent_category_id == category.id).first() is not None
+
+
+def user_categories(db: Session, user_id) -> dict[str, Category]:
+    """name -> Category: the built-in ones plus the user's own."""
+    categories = seed_default_categories(db)
+    if user_id is not None:
+        categories.update({c.name: c for c in db.query(Category).filter(Category.user_id == user_id)})
+    return categories
+
+
+def visible_to(category: Category, user_id) -> bool:
+    return category.user_id is None or category.user_id == user_id
 
 
 def seed_default_categories(db: Session) -> dict[str, Category]:

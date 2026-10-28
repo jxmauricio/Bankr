@@ -427,6 +427,8 @@ export interface CategoryOption {
   id: string;
   name: string;
   type: "income" | "expense" | "transfer";
+  /** One the user made: they can rename or delete it. */
+  custom: boolean;
 }
 
 export interface CategoryNode extends CategoryOption {
@@ -435,6 +437,17 @@ export interface CategoryNode extends CategoryOption {
 
 export const fetchCategories = (token: string) =>
   request<{ categories: CategoryNode[] }>("/categories", { token }).then((r) => r.categories);
+
+/** parentId: a spending group to file it under, or null for a top-level category of its own. */
+export const createCategory = (token: string, name: string, parentId: string | null) =>
+  request<CategoryOption>("/categories", { method: "POST", token, body: { name, parent_id: parentId } });
+
+export const renameCategory = (token: string, id: string, name: string) =>
+  request<CategoryOption>(`/categories/${id}`, { method: "PATCH", token, body: { name } });
+
+/** Its transactions go back to Bankr's own category for them. */
+export const deleteCategory = (token: string, id: string) =>
+  request<{ recategorized: number }>(`/categories/${id}`, { method: "DELETE", token });
 
 export interface TransactionEdit {
   category_id?: string;

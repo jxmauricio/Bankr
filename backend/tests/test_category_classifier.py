@@ -111,17 +111,22 @@ def test_confident_rows_keep_plaids_mapping(db, user, classifier):
     assert {_category(db, "t1"), _category(db, "t2")} == {"Home Improvement"}
 
 
-def test_income_and_transfers_are_never_sent(db, user, classifier):
+def test_income_transfers_cash_and_people_are_never_sent(db, user, classifier):
+    # No merchant to look up: Plaid's tag is all there is to go on.
     _sync(
         db,
         user,
         _txn("pay", 2000.0, merchant="Employer", raw="INCOME_SALARY"),
-        _txn("xfer", -500.0, merchant="Zelle", raw="TRANSFER_OUT_TRANSFER_OUT_FROM_APPS"),
+        _txn("xfer", -500.0, merchant="Ally Savings", raw="TRANSFER_OUT_SAVINGS"),
+        _txn("zelle", -500.0, merchant="Zelle", raw="TRANSFER_OUT_TRANSFER_OUT_FROM_APPS"),
+        _txn("atm", -60.0, merchant="ATM Withdrawal", raw="TRANSFER_OUT_WITHDRAWAL"),
     )
 
     assert classifier.calls == []
     assert _category(db, "pay") == "Income"
     assert _category(db, "xfer") == "Transfer Out"
+    assert _category(db, "zelle") == "Payments to People"
+    assert _category(db, "atm") == "Cash & ATM"
 
 
 def test_choices_exclude_income_transfer_and_loan_payments(db, user, classifier):
@@ -230,7 +235,7 @@ def test_category_choices_are_the_spending_categories(db):
     assert choices["Travel"] == "Travel"  # a top-level category without subcategories is its own leaf
     # A group is never a choice: its "Other ..." subcategory is.
     assert "Food & Drink" not in choices and choices["Food & Drink > Other Food & Drink"] == "Other Food & Drink"
-    assert len(choices) == 33  # 44 expense categories, minus 7 groups and Loan Payments' 4 subcategories
+    assert len(choices) == 33  # 46 expense categories, minus 7 groups, Loan Payments' 4 subcategories, Cash, People
 
 
 def test_every_choice_has_a_description(db):

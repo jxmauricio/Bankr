@@ -20,6 +20,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.db.models import Category, Goal, LinkedAccount, NetWorthSnapshot, Transaction
+from app.db.seed_categories import is_group
 from app.integrations.web_search import WebSearchClient
 from app.services import budget_service
 from app.services import answer_charts
@@ -62,8 +63,8 @@ def _window(db: Session, user_id: UUID, window=None, start=None, end=None) -> mq
     return mq.resolve_window(mq.today_for_user(db, user_id), window, start, end)
 
 
-def _category(db: Session, category: str | None) -> mq.ResolvedCategory | None:
-    return mq.resolve_category(db, category) if category else None
+def _category(db: Session, user_id: UUID, category: str | None) -> mq.ResolvedCategory | None:
+    return mq.resolve_category(db, category, user_id) if category else None
 
 
 @_grounded
@@ -136,7 +137,7 @@ def get_spending(
     **_extra,
 ) -> dict:
     return mq.spend_query(
-        db, user_id, _window(db, user_id, window, start, end), _category(db, category), group_by, top_n
+        db, user_id, _window(db, user_id, window, start, end), _category(db, user_id, category), group_by, top_n
     )
 
 
@@ -166,7 +167,7 @@ def compare_spending(
         user_id,
         _window(db, user_id, current_window, current_start, current_end),
         _window(db, user_id, previous_window, previous_start, previous_end),
-        _category(db, category),
+        _category(db, user_id, category),
     )
 
 
@@ -212,7 +213,7 @@ def find_transactions(
         db,
         user_id,
         _window(db, user_id, window, start, end),
-        _category(db, category) if category and result_kind in ("spending", "all") else None,
+        _category(db, user_id, category) if category and result_kind in ("spending", "all") else None,
         merchant,
         min_amount,
         max_amount,
@@ -295,7 +296,7 @@ def show_chart(
     app/services/answer_charts.py."""
     if kind in ("daily", "merchant", "recurring", "net_worth"):
         if kind == "daily":
-            chart = answer_charts.daily(db, user_id, _window(db, user_id, window, start, end), _category(db, category))
+            chart = answer_charts.daily(db, user_id, _window(db, user_id, window, start, end), _category(db, user_id, category))
         elif kind == "merchant":
             chart = answer_charts.merchant(db, user_id, merchant, months)
         elif kind == "recurring":
@@ -307,7 +308,7 @@ def show_chart(
         return {"shown": True, "chart": {**chart, "unit": "usd"}, "message": _CHART_SHOWN}
 
     months = months or 6
-    cat = _category(db, category)
+    cat = _category(db, user_id, category)
     query = None
     top = None
     if kind == "breakdown":
@@ -544,6 +545,7 @@ def get_goal_progress(db: Session, user_id: UUID) -> dict:
 
 def _parse_goal_proposal(
     db: Session,
+    user_id: UUID,
     goal_type: str | None,
     target_amount,
     target_date: str | None,
@@ -559,7 +561,7 @@ def _parse_goal_proposal(
         return {"error": str(e)}
 
     if kind == TRACK_SPENDING:
-        parsed = _parse_spending_tracker_proposal(db, target_amount, category, window)
+        parsed = _parse_spending_tracker_proposal(db, user_id, target_amount, category, window)
         if "error" in parsed:
             return parsed
         parsed["name"] = (name or "").strip() or parsed.get("category") or title or "Spending"
@@ -589,11 +591,13 @@ def _parse_goal_proposal(
     }
 
 
-def _parse_spending_tracker_proposal(db: Session, target_amount, category: str | None, window: str | None) -> dict:
+def _parse_spending_tracker_proposal(
+    db: Session, user_id: UUID, target_amount, category: str | None, window: str | None
+) -> dict:
     canonical = None
     if category and str(category).strip():
         try:
-            canonical = mq.resolve_category(db, category).name
+            canonical = mq.resolve_category(db, category, user_id).name
         except mq.QueryError as e:
             return {"error": str(e), **e.extra}
 
@@ -640,6 +644,7 @@ def propose_goal(
     """
     parsed = _parse_goal_proposal(
         db,
+        user_id,
         type or goal_type,
         target_amount,
         target_date,
@@ -678,14 +683,18 @@ def propose_goal(
     }
 
 
-def _any_category(db: Session, name: str):
-    """A category of any type (income and transfers too) by name or alias."""
-    categories = mq.seed_default_categories(db)
+def _any_category(db: Session, user_id: UUID, name: str):
+    """A category of any type (income and transfers too) by name or alias,
+    that a transaction can be put in: not a group."""
+    categories = mq.user_categories(db, user_id)
     by_lower = {c.lower(): c for c in categories}
     query = name.strip().lower()
     canonical = by_lower.get(query) or mq.CATEGORY_ALIASES.get(query)
-    if canonical is None:
+    if canonical is None or canonical not in categories:
         raise mq.QueryError(f"no category called {name!r}", valid_categories=sorted(categories))
+    if is_group(db, categories[canonical]):
+        children = sorted(n for n, c in categories.items() if c.parent_category_id == categories[canonical].id)
+        raise mq.QueryError(f"{canonical!r} is a group: pick one of its subcategories", valid_categories=children)
     return categories[canonical]
 
 
@@ -698,7 +707,7 @@ def propose_rule(
     if len(merchant) < 2:
         return {"error": "merchant needs at least 2 characters"}
     try:
-        target = _any_category(db, category)
+        target = _any_category(db, user_id, category)
     except mq.QueryError as e:
         return {"error": str(e), **e.extra}
     would_change = preview_rule(db, user_id, merchant, target.id)
@@ -756,7 +765,7 @@ def _budget_line_key(db: Session, user_id: UUID, name: str) -> tuple[str, str]:
     if name.strip().lower() in {"flex", "flexible", "flexible spending"}:
         return budget_service.FLEX, "Flexible"
     # "Coffee" -> its parent's budget
-    parent = mq.seed_default_categories(db)[mq.resolve_category(db, name).top_level]
+    parent = mq.user_categories(db, user_id)[mq.resolve_category(db, name, user_id).top_level]
     return str(parent.id), parent.name
 
 

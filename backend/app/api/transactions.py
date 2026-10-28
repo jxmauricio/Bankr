@@ -12,7 +12,6 @@ from app.services.sync_service import refresh_net_worth
 from app.services.transaction_edit_service import (
     TransactionEditError,
     TransactionNotFound,
-    category_tree,
     get_owned_transaction,
     set_splits,
     update_transaction,
@@ -36,11 +35,6 @@ class SplitPart(BaseModel):
 
 class SetSplitsRequest(BaseModel):
     splits: list[SplitPart]
-
-
-@router.get("/categories")
-def list_categories(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    return {"categories": category_tree(db)}
 
 
 def _owned(db: Session, user: User, transaction_id: UUID):

@@ -46,6 +46,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.models import Category, MerchantCategoryGuess, Transaction
+from app.db.seed_categories import DEFAULT_CATEGORIES
 from app.integrations.bank_aggregator import AggregatorTransaction
 from app.integrations.web_search import OpenRouterSearchClient, WebSearchClient
 from app.services.category_mapper import merchant_category
@@ -56,9 +57,12 @@ LOW_CONFIDENCE = {"LOW", "UNKNOWN"}
 DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 
 # Expense categories a merchant's name can't tell you about: a loan payment
-# is recognized from Plaid's LOAN_PAYMENTS_* tags, not the payee's name.
-# Naming the group excludes its subcategories too.
-_NOT_CHOICES = {"Loan Payments"}
+# is recognized from Plaid's LOAN_PAYMENTS_* tags, not the payee's name, and
+# cash or a Zelle to a person from Plaid's TRANSFER_OUT_* ones. Naming the
+# group excludes its subcategories too. Rows Plaid put in one of these are
+# never sent either: there's no merchant to look up.
+_NOT_CHOICES = {"Loan Payments", "Cash & ATM", "Payments to People"}
+_NEVER_ASKED = {name for name, _, parent in DEFAULT_CATEGORIES if {name, parent} & _NOT_CHOICES}
 
 # What each choice means, so Jev isn't matching bare labels. Kept generic on
 # purpose: naming the eval's own merchants here would only flatter the eval.
@@ -229,6 +233,7 @@ def needs_second_opinion(txn: Transaction, mapped: Category) -> bool:
     return (
         (txn.aggregator_category_confidence or "").upper() in LOW_CONFIDENCE
         and mapped.type == "expense"
+        and mapped.name not in _NEVER_ASKED
         and float(txn.amount) < 0
         and not txn.category_overridden
         and not txn.is_split

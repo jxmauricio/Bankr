@@ -1,0 +1,42 @@
+merchant,expected,plaid,A,B,C,D
+Hangar,Health,Restaurants,Auto Maintenance 0.12 ✗,Auto Maintenance 0.21 ✗,Coffee 0.17 ✗,Health 1.00 ✓
+Obsidian,?,Other,Other 0.38,Shopping 0.32,Shopping 0.18,Subscriptions 0.90
+BILT CARD HOUSING PPD ID: 1844372402,?,Rent & Housing,Rent & Housing 0.41,Rent & Housing 0.88,Rent & Housing 0.83,Rent & Housing 0.97
+85 Degrees C Bakery Cafe,Coffee,Coffee,Coffee 0.95 ✓,Coffee 1.00 ✓,Coffee 1.00 ✓,Coffee 1.00 ✓
+Honeydew,?,Health,Groceries 0.52,Groceries 0.43,Health 0.65,Other 0.27
+Zion Market,Groceries,Groceries,Groceries 0.96 ✓,Groceries 1.00 ✓,Groceries 1.00 ✓,Groceries 1.00 ✓
+Krisp,?,Dining,Restaurants 0.17,Fast Food 0.51,Coffee 0.48,Coffee 1.00
+Active&Fit,Health,Health,Health 0.53 ✓,Health 0.99 ✓,Health 0.99 ✓,Health 0.96 ✓
+Airoma Cafe,Coffee,Coffee,Coffee 0.98 ✓,Coffee 1.00 ✓,Coffee 1.00 ✓,Coffee 1.00 ✓
+Marugame Udon,Restaurants|Fast Food,Fast Food,Restaurants 0.77 ✓,Fast Food 0.86 ✓,Fast Food 0.90 ✓,Fast Food 0.71 ✓
+THH Sandwiches,Restaurants|Fast Food,Restaurants,Fast Food 0.66 ✓,Fast Food 1.00 ✓,Fast Food 1.00 ✓,Fast Food 0.99 ✓
+KRISP Fresh Living,?,Fast Food,Groceries 0.45,Groceries 0.70,Groceries 0.50,Coffee 1.00
+Boothbybryant LLC,?,Entertainment,Entertainment 0.13,Coffee 0.93,Coffee 0.80,Other 0.31
+J& Q Vietnamese Sandwich,Restaurants|Fast Food,Restaurants,Fast Food 0.56 ✓,Fast Food 1.00 ✓,Fast Food 1.00 ✓,Fast Food 0.98 ✓
+Yost Theatre,Entertainment,Entertainment,Entertainment 1.00 ✓,Entertainment 1.00 ✓,Entertainment 1.00 ✓,Entertainment 0.99 ✓
+2nd Street Usa Inc.,Shopping,Shopping,Shopping 0.86 ✓,Shopping 0.58 ✓,Shopping 1.00 ✓,Shopping 1.00 ✓
+Tacos Los Cholos - Anaheim,Restaurants|Fast Food,Fast Food,Fast Food 0.86 ✓,Fast Food 0.97 ✓,Fast Food 0.96 ✓,Fast Food 0.67 ✓
+Café X,Coffee,Coffee,Coffee 1.00 ✓,Coffee 1.00 ✓,Coffee 1.00 ✓,Coffee 1.00 ✓
+Dizzy Bird,Restaurants|Fast Food,Fast Food,Fast Food 0.56 ✓,Coffee 0.86 ✗,Coffee 0.63 ✗,Fast Food 0.56 ✓
+City Of Anaheim,Utilities,Utilities,Utilities 0.24 ✓,Utilities 0.58 ✓,Utilities 1.00 ✓,Utilities 1.00 ✓
+The Metro,Public Transit,Public Transit,Public Transit 0.71 ✓,Public Transit 0.97 ✓,Public Transit 0.55 ✓,Public Transit 0.70 ✓
+Active & Fit Direct,Health,Health,Shopping 0.50 ✗,Health 0.92 ✓,Health 0.98 ✓,Health 0.99 ✓
+Brodard Restaurant,Restaurants,Restaurants,Restaurants 0.95 ✓,Restaurants 0.80 ✓,Restaurants 0.86 ✓,Restaurants 1.00 ✓
+Taco Stand,Restaurants|Fast Food,Fast Food,Fast Food 0.96 ✓,Fast Food 1.00 ✓,Fast Food 1.00 ✓,Restaurants 0.65 ✓
+76 Gas Stations,Gas,Shopping,Gas 0.87 ✓,Gas 1.00 ✓,Gas 1.00 ✓,Gas 1.00 ✓
+Good Night John Boy,?,Alcohol & Bars,Alcohol & Bars 0.48,Restaurants 0.54,Restaurants 0.57,Alcohol & Bars 0.86
+Tigawok,Restaurants|Fast Food,Fast Food,Fast Food 0.36 ✓,Restaurants 0.73 ✓,Restaurants 0.84 ✓,Fast Food 0.68 ✓
+HomeGoods,Shopping,Other,Shopping 0.99 ✓,Shopping 1.00 ✓,Shopping 1.00 ✓,Shopping 1.00 ✓
+BCD-IRVINE,Restaurants,Restaurants,Restaurants 0.23 ✓,Restaurants 0.21 ✓,Groceries 0.20 ✗,Restaurants 0.90 ✓
+Lee's Sandwiches,Restaurants|Fast Food,Fast Food,Fast Food 0.64 ✓,Fast Food 1.00 ✓,Fast Food 1.00 ✓,Fast Food 1.00 ✓
+The Taco Stand,Restaurants|Fast Food,Fast Food,Fast Food 0.96 ✓,Fast Food 1.00 ✓,Fast Food 1.00 ✓,Fast Food 1.00 ✓
+HardLoop,?,Other,Shopping 0.25,Health 0.48,Health 0.63,Health 0.50
+Ynp Glacier Point Retail,Shopping|Travel,Shopping,Shopping 0.30 ✓,Coffee 0.67 ✗,Shopping 0.55 ✓,Groceries 0.44 ✗
+Laguna Canyon,?,Groceries,Coffee 0.31,Coffee 0.87,Coffee 0.59,Coffee 0.51
+Carrot & Daikon,Restaurants,Restaurants,Groceries 0.76 ✗,Groceries 0.82 ✗,Groceries 0.70 ✗,Fast Food 0.98 ✗
+ampm,?,Shopping,Gas 0.62,Gas 1.00,Gas 1.00,Gas 1.00
+Elephant Cafe,?,Restaurants,Coffee 0.76,Coffee 0.96,Coffee 0.98,Coffee 0.99
+Buffalo Exchange,Shopping,Shopping,Shopping 0.99 ✓,Shopping 1.00 ✓,Shopping 1.00 ✓,Shopping 1.00 ✓
+Stereoscope Coffee,Coffee,Coffee,Coffee 1.00 ✓,Coffee 1.00 ✓,Coffee 1.00 ✓,Coffee 1.00 ✓
+Saiga Orange Next,?,Coffee,Coffee 0.35,Coffee 0.58,Coffee 0.50,Restaurants 0.84
+Moongoat Greenhouse,Coffee,Other,Shopping 0.70 ✗,Groceries 0.38 ✗,Shopping 0.51 ✗,Coffee 1.00 ✓

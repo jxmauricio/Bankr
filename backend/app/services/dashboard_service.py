@@ -61,7 +61,7 @@ def get_itemized_transactions(
     refunds (positive amounts) because the total is net of them -- the
     list must visibly add up to the headline figure."""
     w = _window(db, user_id, period, window, start, end)
-    resolved_category = mq.resolve_category(db, category) if category and kind == "expense" else None
+    resolved_category = mq.resolve_category(db, category, user_id) if category and kind == "expense" else None
     listing = mq.find_transactions(
         db, user_id, w, resolved_category, merchant=merchant, limit=1000, category_type=kind
     )
