@@ -18,6 +18,7 @@ from app.services.goal_service import (
     GoalValidationError,
     abandon_goal,
     create_goal,
+    tracker_category,
 )
 
 router = APIRouter(prefix="/goals", tags=["goals"])
@@ -85,7 +86,7 @@ def set_goal(
         starting_amount=float(goal.starting_amount),
         current_progress_amount=float(goal.current_progress_amount),
         status=goal.status,
-        category=goal.category,
+        category=category.name if (category := tracker_category(db, user.id, goal)) else None,
         window=goal.window,
     )
 

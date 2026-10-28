@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.db.base import get_db
 from app.db.models import Category, User
+from app.db.seed_categories import category_color
 from app.services.category_service import (
     MAX_NAME_LENGTH,
     CategoryError,
@@ -33,8 +34,10 @@ class RenameCategoryRequest(BaseModel):
 def _category_dict(category: Category) -> dict:
     return {
         "id": str(category.id),
+        "key": category.system_key,
         "name": category.name,
         "type": category.type,
+        "color": category_color(category),
         "parent_id": str(category.parent_category_id) if category.parent_category_id else None,
         "custom": True,
     }

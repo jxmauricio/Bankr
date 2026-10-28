@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { ApiError, createGoal, type GoalProposal } from "../lib/api";
-import { SPEND_CATEGORIES, TRACKING_WINDOWS } from "../lib/format";
+import { TRACKING_WINDOWS } from "../lib/format";
+import { categoryName, spendCategoryNames, useCategories } from "../lib/useCategories";
 import { GoalNameField } from "./GoalNameField";
 
 type CardStatus = "pending" | "created" | "dismissed";
@@ -181,8 +182,10 @@ function SpendingTrackerProposalCard({
   initialStatus: CardStatus;
   onCreated: () => void | Promise<void>;
 }) {
-  const [category, setCategory] = useState(proposal.category ?? "Food & Drink");
-  const [name, setName] = useState(proposal.name?.trim() || proposal.category || "Food & Drink");
+  const categories = useCategories(token);
+  const proposed = categoryName(categories, proposal.category ?? "food_and_drink");
+  const [category, setCategory] = useState(proposed);
+  const [name, setName] = useState(proposal.name?.trim() || proposed);
   const [windowName, setWindowName] = useState(proposal.window ?? "this_month");
   const [budget, setBudget] = useState(proposal.target_amount > 0 ? String(proposal.target_amount) : "");
   const [status, setStatus] = useState<CardStatus>(initialStatus);
@@ -254,7 +257,7 @@ function SpendingTrackerProposalCard({
           }}
           className="w-full min-h-11 rounded-[14px] border border-control bg-surface px-3.5 py-2 text-sm text-ink outline-none focus:border-accent cursor-pointer"
         >
-          {SPEND_CATEGORIES.map((item) => (
+          {spendCategoryNames(categories).map((item) => (
             <option key={item} value={item}>
               {item}
             </option>

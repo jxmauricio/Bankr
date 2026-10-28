@@ -134,7 +134,7 @@ function SnapshotCard({ line, onClick }: { line: HealthLine; onClick: () => void
       className="flex cursor-pointer flex-col gap-2 card p-4 text-left ring-1 ring-transparent hover:ring-line-strong"
     >
       <span className="flex items-center justify-between gap-2">
-        <span className="text-[13px] text-ink-soft">{line.id === "saved" ? "Saving" : line.name === "Rent & Utilities" ? "Rent" : line.name}</span>
+        <span className="text-[13px] text-ink-soft">{line.id === "saved" ? "Saving" : line.id === "rent_and_utilities" ? "Rent" : line.name}</span>
         <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TONE_BG[line.tone]} ${TONE[line.tone]}`}>
           {badge(line)}
         </span>

@@ -48,7 +48,6 @@ def test_everything_on_a_legacy_category_moves_to_its_new_one(db, user):
             Budget(user_id=user.id, category_id=dining.id, amount=200, group="fixed", rollover=True, start_month=date(2026, 7, 1)),
         ]
     )
-    db.add(Goal(user_id=user.id, type="track_spending", target_amount=0, starting_amount=0, category="Dining", window="this_month"))
     db.commit()
 
     move_to_plaid_primaries(db)
@@ -65,7 +64,6 @@ def test_everything_on_a_legacy_category_moves_to_its_new_one(db, user):
     assert _name(db, budget.category_id) == "Food & Drink"
     assert (float(budget.amount), budget.group, budget.rollover, budget.start_month) == (600.0, "fixed", True, date(2026, 7, 1))
 
-    assert db.query(Goal).one().category == "Restaurants"
     names = {c.name for c in db.query(Category)}
     assert not names & {"Dining", "Fast Food", "Rent & Housing", "Shopping", "Transfer"}
     assert len(names) == 49  # the 16 primaries, Cash & ATM, Payments to People and 31 subcategories
@@ -99,14 +97,14 @@ def test_nothing_is_left_on_a_group(db, user):
     and trackers stay: they're meant to cover the whole group."""
     sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
     categories = seed_default_categories(db)
-    food, shopping = categories["Food & Drink"], categories["General Merchandise"]
+    food, shopping = categories["food_and_drink"], categories["general_merchandise"]
     ramen = _txn(db, "txn_dining")
     ramen.bankr_category_id, ramen.category_overridden = food.id, True  # the user's pick, back when it was allowed
     plaid_only = _txn(db, "txn_groceries")
     plaid_only.bankr_category_id = shopping.id
     db.add(Rule(user_id=user.id, merchant_contains="nowhere", set_category_id=shopping.id))
     db.add(Budget(user_id=user.id, category_id=food.id, amount=500, group="flex", rollover=False, start_month=date(2026, 8, 1)))
-    db.add(Goal(user_id=user.id, type="track_spending", target_amount=0, starting_amount=0, category="Food & Drink", window="this_month"))
+    db.add(Goal(user_id=user.id, type="track_spending", target_amount=0, starting_amount=0, category_id=food.id, window="this_month"))
     db.commit()
 
     move_off_groups(db)
@@ -117,7 +115,7 @@ def test_nothing_is_left_on_a_group(db, user):
     assert _name(db, _txn(db, "txn_groceries").bankr_category_id) == "Groceries"  # re-mapped from Plaid
     assert _name(db, db.query(Rule).one().set_category_id) == "Other Shopping"
     assert _name(db, db.query(Budget).one().category_id) == "Food & Drink"
-    assert db.query(Goal).one().category == "Food & Drink"
+    assert db.query(Goal).one().category_id == food.id
     groups = {c.parent_category_id for c in db.query(Category) if c.parent_category_id}
     assert not db.query(Transaction).filter(Transaction.bankr_category_id.in_(groups)).count()
 
@@ -130,8 +128,8 @@ def test_a_re_map_only_trusts_the_guesses_a_sync_would(db, user):
         _txn(db, txn_id).aggregator_category_confidence = "LOW"
     db.add_all(
         [
-            MerchantCategoryGuess(merchant_key="ramen spot", category_id=categories["Coffee"].id, source="jev", model="m", confidence=0.95),
-            MerchantCategoryGuess(merchant_key="trader joe's", category_id=categories["Pets"].id, source="jev", model="m", confidence=0.5),
+            MerchantCategoryGuess(merchant_key="ramen spot", category_id=categories["coffee"].id, source="jev", model="m", confidence=0.95),
+            MerchantCategoryGuess(merchant_key="trader joe's", category_id=categories["pets"].id, source="jev", model="m", confidence=0.5),
         ]
     )
     db.commit()

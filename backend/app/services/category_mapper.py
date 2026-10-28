@@ -1,4 +1,6 @@
-"""Maps a raw aggregator category string to one of Bankr's default categories.
+"""Maps a raw aggregator category string to one of Bankr's default
+categories, by key (seed_categories.DEFAULT_CATEGORIES: "restaurants",
+"transfer_out"), so renaming a category never changes where anything lands.
 
 Two-tier lookup against Plaid's PFCv2 taxonomy (verified against
 https://plaid.com/documents/transactions-personal-finance-category-taxonomy.csv,
@@ -31,82 +33,82 @@ needs to change, per the adapter boundary in app/integrations/bank_aggregator.py
 import re
 
 DETAILED_CATEGORY_MAP: dict[str, str] = {
-    "food_and_drink_groceries": "Groceries",
-    "food_and_drink_restaurant": "Restaurants",
-    "food_and_drink_fast_food": "Restaurants",
-    "food_and_drink_coffee": "Coffee",
-    "food_and_drink_beer_wine_and_liquor": "Alcohol & Bars",
-    "general_merchandise_clothing_and_accessories": "Clothing",
-    "general_merchandise_electronics": "Electronics",
-    "general_merchandise_online_marketplaces": "Online Marketplaces",
-    "general_merchandise_superstores": "Superstores",
-    "general_merchandise_pet_supplies": "Pets",
+    "food_and_drink_groceries": "groceries",
+    "food_and_drink_restaurant": "restaurants",
+    "food_and_drink_fast_food": "restaurants",
+    "food_and_drink_coffee": "coffee",
+    "food_and_drink_beer_wine_and_liquor": "alcohol_and_bars",
+    "general_merchandise_clothing_and_accessories": "clothing",
+    "general_merchandise_electronics": "electronics",
+    "general_merchandise_online_marketplaces": "online_marketplaces",
+    "general_merchandise_superstores": "superstores",
+    "general_merchandise_pet_supplies": "pets",
     # The vet is the pet's doctor: counting it as Medical inflates what the
     # user spends on their own health.
-    "medical_veterinary_services": "Pets",
-    "general_services_insurance": "Insurance",
-    "general_services_childcare": "Childcare",
-    "general_services_education": "Education",
+    "medical_veterinary_services": "pets",
+    "general_services_insurance": "insurance",
+    "general_services_childcare": "childcare",
+    "general_services_education": "education",
     # Repairs belong with the rest of what the car costs, not with postage.
-    "general_services_automotive": "Car Maintenance",
-    "government_and_non_profit_tax_payment": "Taxes",
-    "government_and_non_profit_donations": "Donations",
+    "general_services_automotive": "car_maintenance",
+    "government_and_non_profit_tax_payment": "taxes",
+    "government_and_non_profit_donations": "donations",
     # Gas *for the car*. The utility gas bill is
     # rent_and_utilities_gas_and_electricity -> Utilities, and must never
     # land here, or "how much did I spend on gas" includes the heating bill.
-    "transportation_gas": "Gas",
-    "transportation_taxis_and_ride_shares": "Rideshare & Taxis",
-    "transportation_public_transit": "Public Transit",
-    "transportation_parking": "Parking & Tolls",
-    "transportation_tolls": "Parking & Tolls",
-    "loan_payments_mortgage_payment": "Mortgage",
-    "loan_payments_car_payment": "Car Payment",
-    "loan_payments_student_loan_payment": "Student Loans",
-    "rent_and_utilities_rent": "Rent",
-    "rent_and_utilities_gas_and_electricity": "Utilities",
-    "rent_and_utilities_internet_and_cable": "Utilities",
-    "rent_and_utilities_sewage_and_waste_management": "Utilities",
-    "rent_and_utilities_telephone": "Utilities",
-    "rent_and_utilities_water": "Utilities",
-    "rent_and_utilities_other_utilities": "Utilities",
+    "transportation_gas": "gas",
+    "transportation_taxis_and_ride_shares": "rideshare_and_taxis",
+    "transportation_public_transit": "public_transit",
+    "transportation_parking": "parking_and_tolls",
+    "transportation_tolls": "parking_and_tolls",
+    "loan_payments_mortgage_payment": "mortgage",
+    "loan_payments_car_payment": "car_payment",
+    "loan_payments_student_loan_payment": "student_loans",
+    "rent_and_utilities_rent": "rent",
+    "rent_and_utilities_gas_and_electricity": "utilities",
+    "rent_and_utilities_internet_and_cable": "utilities",
+    "rent_and_utilities_sewage_and_waste_management": "utilities",
+    "rent_and_utilities_telephone": "utilities",
+    "rent_and_utilities_water": "utilities",
+    "rent_and_utilities_other_utilities": "utilities",
     # Paying a credit card moves money between the user's own accounts; the
     # spending already happened as the card purchases. Other loan payments
     # (mortgage, car, student) are real outflows and stay under LOAN_PAYMENTS.
-    "loan_payments_credit_card_payment": "Transfer Out",
+    "loan_payments_credit_card_payment": "transfer_out",
     # Cash out of an ATM or over the counter, and money sent to someone
     # through Zelle, Venmo, Cash App: it has left the user's accounts, so it's
     # spending, not a transfer -- otherwise rent paid to a roommate over Zelle
     # never shows up anywhere. Money to the user's own savings or brokerage
     # has its own tags (TRANSFER_OUT_SAVINGS, ..._INVESTMENT_...) and stays a
     # transfer; a user can mark any of these as one by hand.
-    "transfer_out_withdrawal": "Cash & ATM",
-    "transfer_out_transfer_out_from_apps": "Payments to People",
+    "transfer_out_withdrawal": "cash_and_atm",
+    "transfer_out_transfer_out_from_apps": "payments_to_people",
 }
 
 # Detailed values that only describe money going out: the same tag on money
 # coming in (a card payment landing, a deposit) is a transfer in.
-_OUTFLOW_ONLY = {"Transfer Out", "Cash & ATM", "Payments to People"}
+_OUTFLOW_ONLY = {"transfer_out", "cash_and_atm", "payments_to_people"}
 
 # A primary that's a group in seed_categories lands on its "Other ..."
 # child: transactions never sit on a group. Every non-rent RENT_AND_UTILITIES
 # value is a utility, so that one's catch-all is Utilities.
 PRIMARY_CATEGORY_MAP: dict[str, str] = {
-    "income": "Income",
-    "transfer_in": "Transfer In",
-    "transfer_out": "Transfer Out",
-    "loan_payments": "Other Loan Payments",
-    "bank_fees": "Bank Fees",
-    "entertainment": "Entertainment",
-    "food_and_drink": "Other Food & Drink",
-    "general_merchandise": "Other Shopping",
-    "home_improvement": "Home Improvement",
-    "medical": "Medical",
-    "personal_care": "Personal Care",
-    "general_services": "Other Services",
-    "government_and_non_profit": "Government Fees",
-    "transportation": "Other Transportation",
-    "travel": "Travel",
-    "rent_and_utilities": "Utilities",
+    "income": "income",
+    "transfer_in": "transfer_in",
+    "transfer_out": "transfer_out",
+    "loan_payments": "other_loan_payments",
+    "bank_fees": "bank_fees",
+    "entertainment": "entertainment",
+    "food_and_drink": "other_food_and_drink",
+    "general_merchandise": "other_shopping",
+    "home_improvement": "home_improvement",
+    "medical": "medical",
+    "personal_care": "personal_care",
+    "general_services": "other_services",
+    "government_and_non_profit": "government_fees",
+    "transportation": "other_transportation",
+    "travel": "travel",
+    "rent_and_utilities": "utilities",
 }
 
 
@@ -152,7 +154,7 @@ _SOFTWARE = re.compile(r"(?<![@.])\b(" + "|".join(re.escape(m) for m in SOFTWARE
 def merchant_category(merchant_name: str | None) -> str | None:
     """A category known from the merchant alone, whatever Plaid tagged it."""
     if merchant_name and _SOFTWARE.search(merchant_name.lower()):
-        return "Software"
+        return "software"
     return None
 
 
@@ -181,7 +183,9 @@ def map_raw_category(
     INCOME_CONTRACTOR (also seen in sandbox) is a payment, not income.
 
     `merchant_name` is the bank's name for the merchant: spending at a
-    known software merchant is Software whatever Plaid tagged it."""
+    known software merchant is Software whatever Plaid tagged it.
+
+    Returns a category key."""
     category = _map_plaid_category(raw_category, amount, account_type)
     # Only where Plaid's answer was a purchase (a refund nets against it too):
     # a paycheck, card payment or Zelle from a software company stays what it is.
@@ -191,8 +195,8 @@ def map_raw_category(
 
 
 _NOT_PURCHASES = {
-    "Income", "Transfer In", "Transfer Out", "Mortgage", "Car Payment", "Student Loans", "Other Loan Payments",
-    "Cash & ATM", "Payments to People",
+    "income", "transfer_in", "transfer_out", "mortgage", "car_payment", "student_loans", "other_loan_payments",
+    "cash_and_atm", "payments_to_people",
 }
 
 
@@ -201,17 +205,17 @@ def _map_plaid_category(raw_category: str | None, amount: float, account_type: s
         normalized = raw_category.strip().lower()
 
         if account_type in _LIABILITY_ACCOUNT_TYPES and normalized.startswith(("loan_payments", "income")):
-            return "Transfer In"
+            return "transfer_in"
 
         if normalized in DETAILED_CATEGORY_MAP:
             category = DETAILED_CATEGORY_MAP[normalized]
             # e.g. a card payment seen from the side the money lands on.
-            return "Transfer In" if category in _OUTFLOW_ONLY and amount > 0 else category
+            return "transfer_in" if category in _OUTFLOW_ONLY and amount > 0 else category
 
         for primary, category in PRIMARY_CATEGORY_MAP.items():
             if normalized == primary or normalized.startswith(primary + "_"):
                 return category
 
     if amount > 0:
-        return "Transfer In" if account_type in _LIABILITY_ACCOUNT_TYPES else "Income"
-    return "Other Shopping"
+        return "transfer_in" if account_type in _LIABILITY_ACCOUNT_TYPES else "income"
+    return "other_shopping"

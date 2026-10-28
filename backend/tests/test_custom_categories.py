@@ -114,7 +114,8 @@ def test_renaming_carries_the_tracker_along(client, db, user):
     assert r.status_code == 200, r.text
 
     assert client.patch(f"/categories/{hobbies['id']}", json={"name": "Crafts"}).json()["name"] == "Crafts"
-    assert db.query(Goal).one().category == "Crafts"
+    assert str(db.query(Goal).one().category_id) == hobbies["id"]
+    assert client.get("/dashboard/goal-progress").json()["goals"][0]["category"] == "Crafts"
     # A tracker follows it, so it can't simply vanish.
     assert client.delete(f"/categories/{hobbies['id']}").status_code == 422
 

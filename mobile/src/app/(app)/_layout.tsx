@@ -10,6 +10,7 @@ import {
   type NetWorthHistory,
 } from "@/lib/api";
 import { useSession } from "@/lib/session";
+import { loadCategories } from "@/lib/useCategories";
 import { MoneyProvider } from "@/features/money/MoneyContext";
 import { BankLogosProvider } from "@/features/bank/BankLogos";
 import { LinkBankScreen } from "@/features/bank/LinkBankScreen";
@@ -47,7 +48,8 @@ export default function SignedInLayout() {
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    Promise.all([fetchNetWorth(token), fetchGoalProgress(token)])
+    // Categories too: chart colors, before any chart renders.
+    Promise.all([fetchNetWorth(token), fetchGoalProgress(token), loadCategories(token)])
       .then(
         ([netWorth, goals]) => {
           if (cancelled) return;

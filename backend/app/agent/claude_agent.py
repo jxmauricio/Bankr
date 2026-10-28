@@ -204,7 +204,7 @@ Don't chart a single number, a goal, or a few transactions: for "did my \
 paycheck come in?" call find_transactions (kind income) and answer in one \
 line; the record is shown as a card."""
 
-_SPEND_CATEGORIES = ", ".join(name for name, type_, _ in DEFAULT_CATEGORIES if type_ == "expense")
+_SPEND_CATEGORIES = ", ".join(name for _, name, type_, _ in DEFAULT_CATEGORIES if type_ == "expense")
 _WINDOW_PROPS = {
     "window": {
         "type": "string",

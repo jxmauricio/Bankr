@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ApiError, createGoal } from "../lib/api";
-import { GOAL_KIND_HINTS, GOAL_KIND_LABELS, GOAL_KINDS, SPEND_CATEGORIES, TRACKING_WINDOWS } from "../lib/format";
+import { GOAL_KIND_HINTS, GOAL_KIND_LABELS, GOAL_KINDS, TRACKING_WINDOWS } from "../lib/format";
+import { categoryName, spendCategoryNames, useCategories } from "../lib/useCategories";
 import { GoalNameField } from "./GoalNameField";
 
 export function CreateGoalModal({
@@ -18,7 +19,8 @@ export function CreateGoalModal({
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [targetDate, setTargetDate] = useState("");
-  const [category, setCategory] = useState("Food & Drink");
+  const categories = useCategories(token);
+  const [category, setCategory] = useState(() => categoryName(categories, "food_and_drink"));
   const [windowName, setWindowName] = useState("this_month");
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -148,7 +150,7 @@ export function CreateGoalModal({
                 }}
                 className="w-full min-h-11 rounded-[14px] border border-control bg-surface px-3.5 py-2 text-sm text-ink outline-none focus:border-accent cursor-pointer"
               >
-                {SPEND_CATEGORIES.map((item) => (
+                {spendCategoryNames(categories).map((item) => (
                   <option key={item} value={item}>
                     {item}
                   </option>

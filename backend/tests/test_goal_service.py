@@ -116,7 +116,7 @@ def test_track_spending_goal_progress_is_category_spend_this_month(db, user, mon
     goal = create_goal(
         db, user.id, "track_spending", target_amount=0, target_date=None, category="eating out", window="this_month"
     )
-    assert goal.category == "Eating Out"
+    assert (goal.category_slice, goal.category_id) == ("eating_out", None)
     assert goal.window == "this_month"
     assert goal.name == "Eating Out"
     assert float(goal.current_progress_amount) == 45.0  # Ramen Spot; Trader Joe's is groceries
