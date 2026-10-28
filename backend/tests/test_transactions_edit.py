@@ -32,11 +32,11 @@ def _cat(db, name):
 def test_recategorize_survives_resync(client, db, user):
     fake = _sync(db, user)
     txn = _txn(db, "txn_dining")
-    shopping = _cat(db, "Other Shopping")
+    shopping = _cat(db, "Shopping")
 
     r = client.patch(f"/transactions/{txn.id}", json={"category_id": str(shopping.id), "merchant_name": "Ramen!"})
     assert r.status_code == 200, r.text
-    assert r.json()["category"] == "Other Shopping"
+    assert r.json()["category"] == "Shopping"
     assert r.json()["merchant_name"] == "Ramen!"
 
     _sync(db, user, fake)  # the fake re-reports every row, like Plaid's "modified"
@@ -70,7 +70,7 @@ def test_excluded_rows_drop_out_of_spending(client, db, user):
 def test_split_moves_spending_between_categories(client, db, user):
     _sync(db, user)
     txn = _txn(db, "txn_groceries")  # -120.50 Food & Drink, beside Ramen Spot's -45
-    shopping = _cat(db, "Other Shopping")
+    shopping = _cat(db, "Shopping")
     groceries = _cat(db, "Groceries")
 
     r = client.put(
@@ -90,8 +90,8 @@ def test_split_moves_spending_between_categories(client, db, user):
     spend = mq.spend_query(db, user.id, AUG, group_by="category")
     assert spend["total_spent"] == 165.50  # unchanged overall
     groups = {g["name"]: g["amount"] for g in spend["groups"]}
-    assert groups["Food & Drink"] == 145.50
-    assert groups["General Merchandise"] == 20.00
+    assert groups["Food & Dining"] == 145.50
+    assert groups["Shopping"] == 20.00
 
     # Children nest under the parent instead of being listed twice.
     rows = mq.list_transactions(db, user.id, AUG)["transactions"]
@@ -106,7 +106,7 @@ def test_split_moves_spending_between_categories(client, db, user):
     r = client.put(f"/transactions/{txn.id}/splits", json={"splits": []})
     assert r.json()["is_split"] is False
     groups = {g["name"]: g["amount"] for g in mq.spend_query(db, user.id, AUG, group_by="category")["groups"]}
-    assert groups["Food & Drink"] == 165.50
+    assert groups["Food & Dining"] == 165.50
 
 
 def test_split_must_add_up(client, db, user):
@@ -131,7 +131,7 @@ def test_edits_follow_a_pending_charge_when_it_posts(client, db, user):
     pending = AggregatorTransaction("p1", "acc_credit", -30.0, date(2026, 8, 6), "Cafe", "food_and_drink_coffee", True)
     fake = FakeAggregatorClient(transactions_by_account={"acc_credit": [pending]})
     _sync(db, user, fake)
-    shopping = _cat(db, "Other Shopping")
+    shopping = _cat(db, "Shopping")
     client.patch(f"/transactions/{_txn(db, 'p1').id}", json={"category_id": str(shopping.id)})
 
     posted = AggregatorTransaction(
@@ -166,8 +166,8 @@ def test_cannot_edit_someone_elses_transaction(client, db, user):
 def test_categories_tree(client, db, user):
     _sync(db, user)
     cats = client.get("/categories").json()["categories"]
-    food = next(c for c in cats if c["name"] == "Food & Drink")
-    assert {c["name"] for c in food["children"]} == {"Groceries", "Restaurants", "Coffee", "Alcohol & Bars", "Other Food & Drink"}
+    food = next(c for c in cats if c["name"] == "Food & Dining")
+    assert {c["name"] for c in food["children"]} == {"Groceries", "Restaurants & Bars", "Coffee Shops"}
     assert cats[0]["type"] == "expense"
 
 
@@ -175,7 +175,7 @@ def test_backfill_leaves_manual_categories_alone(client, db, user):
     from app.services.category_backfill import recategorize_all_transactions
 
     _sync(db, user)
-    shopping = _cat(db, "Other Shopping")
+    shopping = _cat(db, "Shopping")
     client.patch(f"/transactions/{_txn(db, 'txn_dining').id}", json={"category_id": str(shopping.id)})
     recategorize_all_transactions(db)
     db.commit()
@@ -187,7 +187,7 @@ def test_a_group_is_not_a_category_a_transaction_can_have(client, db, user):
     # A group's total is the sum of its subcategories, so nothing sits on it.
     _sync(db, user)
     txn = _txn(db, "txn_dining")
-    food = _cat(db, "Food & Drink")
+    food = _cat(db, "Food & Dining")
 
     r = client.patch(f"/transactions/{txn.id}", json={"category_id": str(food.id)})
     assert r.status_code == 422

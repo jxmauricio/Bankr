@@ -35,7 +35,7 @@ from app.agent import tools
 from app.agent.agent_client import ToolSpec, build_agent_client
 from app.agent.reply_text import clip_reply
 from app.db.models import LinkedAccount
-from app.db.seed_categories import DEFAULT_CATEGORIES
+from app.db.seed_categories import DEFAULT_CATEGORIES, DEFAULT_GROUPS
 from app.integrations.web_search import build_web_search_client
 from app.services import money_query as mq
 
@@ -93,8 +93,8 @@ going, call get_goal_progress instead.
 When the user wants to track, watch, budget, or cap spending in a category \
 -- "I'm spending too much on eating out", "track groceries this month", \
 "keep an eye on coffee" -- you MUST call propose_goal with type \
-track_spending. Pick the most specific category (Food & Drink for eating \
-out, Coffee for coffee shops) and a window (this_month if they didn't name one). \
+track_spending. Pick the most specific category (Eating Out for eating \
+out, Coffee Shops for coffee) and a window (this_month if they didn't name one). \
 They can name the tracker; default name to the category. A dollar amount \
 is an optional cap, not required. The confirm card asks them to pick the \
 category and time window; still call the tool so the card appears. A \
@@ -107,14 +107,15 @@ last_month, last_week, ...) or explicit start/end dates to the tool, and \
 state the resolved dates it returns in your answer ("Sep 7–13"), so the \
 user knows exactly what period the number covers.
 - Pick the most specific category that matches what they said. Gas for the \
-car is "Gas", not "Transportation" and never "Utilities". Groceries are \
-"Groceries"; eating out is "Eating Out" (all of Food & Drink except \
-groceries: restaurants, coffee, bars). "Restaurants" is only restaurants and \
-fast food, and "Food & Drink" includes the groceries, so say so if you use it. \
-Cash taken out is "Cash & ATM" and Zelle/Venmo/Cash App sent to people is \
-"Payments to People": both count as spending, since what the money paid for \
-is unknown; say so if either is a big share. Users can make categories of \
-their own; any category name they use is worth trying. \
+car is "Gas", not "Auto & Transport" and never "Gas & Electric" (the utility \
+bill). Groceries are "Groceries"; eating out is "Eating Out" (all of Food & \
+Dining except groceries: restaurants, bars and coffee shops). "Restaurants & \
+Bars" leaves out coffee shops, and "Food & Dining" includes the groceries, so \
+say so if you use it. Cash taken out is "Cash & ATM", and Zelle/Venmo/Cash \
+App sent to people lands in "Miscellaneous": both count as spending, since \
+what the money paid for is unknown; say so if either is a big share. Users \
+can make categories of their own and rename the built-in ones; any category \
+name they use is worth trying. \
 For "what am I spending on", use get_spending with group_by="category".
 - For "this month vs last month", use compare_spending. When the result \
 includes previous_to_same_point, the current month isn't over yet: lead \
@@ -157,9 +158,9 @@ shape that fits the question:
 - One number (a total, a balance): 1-3 sentences of plain prose with the \
 numbers woven in.
 - A breakdown ("what am I spending on"): one intro line with the date range, \
-then up to 5 lines like "- Food & Drink — $412", largest first. If there are more, \
+then up to 5 lines like "- Food & Dining — $412", largest first. If there are more, \
 say the card shows the rest.
-- A comparison: one line per item, like "- Food & Drink: $412 vs $380 (up $32, +8%)".
+- A comparison: one line per item, like "- Food & Dining: $412 vs $380 (up $32, +8%)".
 - Transactions: one line each, like "- Sep 14 · Shell · $54.20 · Gas · pending".
 - A goal or status: amount out of target with the percent, then one sentence \
 on pace or the next step.
@@ -204,7 +205,11 @@ Don't chart a single number, a goal, or a few transactions: for "did my \
 paycheck come in?" call find_transactions (kind income) and answer in one \
 line; the record is shown as a card."""
 
-_SPEND_CATEGORIES = ", ".join(name for _, name, type_, _ in DEFAULT_CATEGORIES if type_ == "expense")
+# Groups first ("Food & Dining"), then their categories ("Coffee Shops").
+_SPEND_CATEGORIES = ", ".join(
+    [name for _, name, type_ in DEFAULT_GROUPS if type_ == "expense"]
+    + [name for _, name, type_, _, _ in DEFAULT_CATEGORIES if type_ == "expense"]
+)
 _WINDOW_PROPS = {
     "window": {
         "type": "string",
@@ -229,8 +234,8 @@ _QUERY_WINDOW_PROPS = {
 _CATEGORY_PROP = {
     "type": "string",
     "description": f"Spending category: one of {_SPEND_CATEGORIES}. Everyday words also work "
-    "(\"eating out\", \"fuel\"). A parent category includes its subcategories (Food & Drink includes Groceries "
-    "and Restaurants); \"Eating Out\" is Food & Drink without Groceries. "
+    "(\"eating out\", \"fuel\"). A group includes its categories (Food & Dining includes Groceries "
+    "and Restaurants & Bars); \"Eating Out\" is Food & Dining without Groceries. "
     "Omit for all spending.",
 }
 
@@ -382,7 +387,7 @@ TOOL_DEFINITIONS = [
                 "category": {
                     "type": "string",
                     "description": "Required for track_spending. Canonical or everyday name "
-                    '(Food & Drink, "eating out", Travel).',
+                    '(Food & Dining, "eating out", Travel & Vacation).',
                 },
                 "window": {
                     "type": "string",
@@ -429,7 +434,7 @@ TOOL_DEFINITIONS = [
             "type": "object",
             "properties": {
                 "from_line": {"type": "string", "description": "Line with room, e.g. Shopping or Flexible."},
-                "to_line": {"type": "string", "description": "Line to top up, e.g. Food & Drink."},
+                "to_line": {"type": "string", "description": "Line to top up, e.g. Food & Dining."},
                 "amount": {"type": "number"},
                 "month": {"type": "string", "description": "YYYY-MM. Default this month."},
             },
@@ -450,7 +455,7 @@ TOOL_DEFINITIONS = [
                     "type": "string",
                     "description": "Text to match in the merchant name, as it appears on transactions (\"Costco\").",
                 },
-                "category": {"type": "string", "description": "Category to assign, any type (Food & Drink, Income, Transfer Out)."},
+                "category": {"type": "string", "description": "Category to assign, any type (Coffee Shops, Paychecks, Transfer)."},
                 "rename_to": {"type": "string", "description": "Optional cleaner merchant name to show."},
             },
             "required": ["merchant", "category"],

@@ -20,7 +20,7 @@ export function CreateGoalModal({
   const [targetAmount, setTargetAmount] = useState("");
   const [targetDate, setTargetDate] = useState("");
   const categories = useCategories(token);
-  const [category, setCategory] = useState(() => categoryName(categories, "food_and_drink"));
+  const [category, setCategory] = useState(() => categoryName(categories, "food_and_dining"));
   const [windowName, setWindowName] = useState("this_month");
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);

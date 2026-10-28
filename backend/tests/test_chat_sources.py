@@ -27,7 +27,7 @@ from tests.fake_agent_client import FakeAgentClient, ScriptedTurn
         ("propose_goal", {"type": "save", "target_amount": 5000}, "Proposed a savings goal"),
         ("propose_goal", {"type": "save", "name": "Paying off debt", "target_amount": 2000}, "Proposed a savings goal"),
         ("propose_goal", {"type": "save", "name": "Emergency fund", "target_amount": 8000}, "Proposed a savings goal"),
-        ("propose_goal", {"type": "track_spending", "category": "Food & Drink"}, "Proposed a spending tracker"),
+        ("propose_goal", {"type": "track_spending", "category": "Food & Dining"}, "Proposed a spending tracker"),
     ],
 )
 def test_describe_tool_call(name, tool_input, expected):

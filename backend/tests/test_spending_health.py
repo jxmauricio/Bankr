@@ -30,14 +30,16 @@ def test_health_uses_complete_months_and_scores_rent_food_saving(db, ledger):
     assert health["spending"] == spend["total_spent"]
     assert health["saved"] == pytest.approx(income - spend["total_spent"], abs=0.01)
 
-    # Aug rent 1800 + PG&E 85 is 31.4% of income: just over the 30% bar.
-    rent = next(c for c in health["categories"] if c["name"] == "Rent & Utilities")
-    assert rent["amount"] == 1885.00
+    # Aug rent 1800 alone is 30.0% of income: right at the bar. (PG&E's 85 is
+    # Bills & Utilities; the Housing metric below adds it back.)
+    rent = next(c for c in health["categories"] if c["name"] == "Housing")
+    assert rent["amount"] == 1800.00
     assert rent["recommended_pct"] == 30
     assert rent["source"] == "HUD / CFPB"
-    assert rent["tone"] == "ok"
+    assert rent["tone"] == "good"
+    assert next(c for c in health["categories"] if c["name"] == "Bills & Utilities")["amount"] == 85.00
 
-    food = next(c for c in health["categories"] if c["name"] == "Food & Drink")
+    food = next(c for c in health["categories"] if c["name"] == "Food & Dining")
     assert food["amount"] == EXPECTED["food_last_month"]
     assert food["recommended_pct"] == 15
     assert food["tone"] == "good"
@@ -54,7 +56,7 @@ def test_health_uses_complete_months_and_scores_rent_food_saving(db, ledger):
     assert needs["recommended_pct"] == 50
     assert wants["recommended_pct"] == 30
     assert saved_b["amount"] == health["saved"]
-    assert {c["name"] for c in health["categories"]}.isdisjoint({"Transfer In", "Transfer Out"})
+    assert {c["name"] for c in health["categories"]}.isdisjoint({"Transfers"})
 
 
 def test_spend_under_the_guideline_is_healthy():
@@ -77,17 +79,19 @@ def test_saving_in_a_reasonable_range_is_healthy():
 def test_health_endpoint_returns_the_same_shape(client, db, ledger):
     body = client.get("/dashboard/health").json()
     assert body["snapshots"][0]["id"] == "saved"
-    assert body["snapshots"][1]["name"] == "Rent & Utilities"
-    assert body["snapshots"][2]["name"] == "Food & Drink"
+    assert body["snapshots"][1]["name"] == "Housing"
+    assert body["snapshots"][2]["name"] == "Food & Dining"
     assert "as_of" in body
 
 
 def test_score_averages_four_metrics(db, ledger):
     health = spending_health(db, ledger.id)
     metrics = {m["id"]: m for m in health["metrics"]}
-    assert list(metrics) == ["saved", "emergency_fund", "loan_payments", "rent_and_utilities"]
+    assert list(metrics) == ["saved", "emergency_fund", "debt", "housing"]
     assert metrics["saved"]["value"] == health["saved_pct"]
-    assert metrics["rent_and_utilities"]["value"] == next(c["pct"] for c in health["categories"] if c["name"] == "Rent & Utilities")
+    # Housing is the home and its bills: Aug rent 1800 + PG&E 85 is 31.4% of income.
+    assert metrics["housing"]["value"] == 31.4
+    assert metrics["debt"]["value"] == 0.0  # no loan payments in the ledger
     assert metrics["emergency_fund"]["unit"] == "months"
     scored = [m["points"] for m in health["metrics"] if m["points"] is not None]
     assert scored and health["score"] == round(sum(scored) / len(scored))

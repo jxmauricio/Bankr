@@ -79,8 +79,8 @@ class LinkedAccount(Base):
 
 
 class CategoryGroup(Base):
-    """A heading over categories: Food & Drink over Groceries, Restaurants,
-    Coffee. Only categories hold transactions, splits and rules; a group is
+    """A heading over categories: Food & Dining over Groceries, Restaurants & Bars,
+    Coffee Shops. Only categories hold transactions, splits and rules; a group is
     what totals roll up to, and what a budget can cover as one line (see
     CategoryPref.budget_mode). Every category is in exactly one group, and a
     category that stands alone (Travel) is the only one in its group."""

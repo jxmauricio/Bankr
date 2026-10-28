@@ -33,7 +33,7 @@ MODES = ("flex", "category")
 GROUPS = ("fixed", "flex")
 MAX_ROLLOVER_MONTHS = 12
 # Usually fixed: suggest these groups as their own lines in flex mode.
-FIXED_BY_DEFAULT = {"rent_and_utilities", "loan_payments"}
+FIXED_BY_DEFAULT = {"housing", "bills_and_utilities"}
 # Don't call a line "on pace to go over" from the first few days of spending.
 MIN_ELAPSED_FOR_PACE = 0.2
 

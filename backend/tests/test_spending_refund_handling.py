@@ -65,7 +65,7 @@ def test_refund_does_not_get_reported_as_spending(db, user):
     # Only the $50 Uber ride counts as spending -- the $500 refund must not
     # flip the total into a bogus "-$450 spent", and it's surfaced, not hidden.
     assert spending["total_spent"] == 50.0
-    assert [(g["name"], g["amount"]) for g in spending["groups"]] == [("Transportation", 50.0)]
+    assert [(g["name"], g["amount"]) for g in spending["groups"]] == [("Auto & Transport", 50.0)]
     assert spending["refunds_exceeding_spend"] == 500.0
 
 

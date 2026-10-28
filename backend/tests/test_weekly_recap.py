@@ -52,8 +52,8 @@ def test_recap_numbers_match_the_ledger(db, ledger):
     assert facts["money_out"] == 238.45
     assert facts["kept"] == -198.45
     assert [(c["name"], c["amount"]) for c in facts["categories"]] == [
-        ("Food & Drink", 188.45),
-        ("Transportation", 50.00),
+        ("Food & Dining", 188.45),
+        ("Auto & Transport", 50.00),
     ]
     # Usual = Aug 10 – Sep 6 food: groceries (95.25 + 60 + 88.40) and
     # dining (60 + 25), over 4 weeks.
@@ -69,8 +69,9 @@ def test_recap_numbers_match_the_ledger(db, ledger):
 
 
 def _august_categories(db, user, *extra):
-    """August of the golden ledger (Rent & Utilities, Food & Drink, Travel,
-    Transportation) plus extra August charges on the checking account."""
+    """August of the golden ledger (Housing, Food & Dining, Travel &
+    Lifestyle, Auto & Transport, Bills & Utilities) plus extra August
+    charges on the checking account."""
     aggregator = golden_aggregator()
     aggregator.transactions_by_account["chk"] += [
         AggregatorTransaction(f"extra-{raw}", "chk", amount, date(2026, 8, 14), merchant, raw, False)
@@ -83,28 +84,30 @@ def _august_categories(db, user, *extra):
 
 _PHARMACY = ("Walgreens", -40.00, "MEDICAL_PHARMACIES_AND_SUPPLEMENTS")
 _GYM = ("Equinox", -30.00, "PERSONAL_CARE_GYMS_AND_FITNESS_CENTERS")
-_MOVIES = ("AMC", -15.00, "ENTERTAINMENT_TV_AND_MOVIES")
+_GIFT = ("Paper Source", -25.00, "GENERAL_MERCHANDISE_GIFTS_AND_NOVELTIES")
 
 
 def test_one_category_past_the_top_five_keeps_its_name(db, ledger):
+    # Rent 1800; PG&E 85; flight 420 - 120 refund; gas 146 + Uber 35;
+    # pharmacy 40 + gym 30.
     assert _august_categories(db, ledger, _PHARMACY, _GYM) == [
-        ("Rent & Utilities", 1885.00),
-        ("Food & Drink", 335.75),
-        ("Travel", 300.00),
-        ("Transportation", 181.00),
-        ("Medical", 40.00),
-        ("Personal Care", 30.00),
+        ("Housing", 1800.00),
+        ("Food & Dining", 335.75),
+        ("Travel & Lifestyle", 300.00),
+        ("Auto & Transport", 181.00),
+        ("Bills & Utilities", 85.00),
+        ("Health & Wellness", 70.00),
     ]
 
 
 def test_two_or_more_past_the_top_five_are_summed(db, ledger):
-    assert _august_categories(db, ledger, _PHARMACY, _GYM, _MOVIES) == [
-        ("Rent & Utilities", 1885.00),
-        ("Food & Drink", 335.75),
-        ("Travel", 300.00),
-        ("Transportation", 181.00),
-        ("Medical", 40.00),
-        ("2 others", 45.00),
+    assert _august_categories(db, ledger, _PHARMACY, _GYM, _GIFT) == [
+        ("Housing", 1800.00),
+        ("Food & Dining", 335.75),
+        ("Travel & Lifestyle", 300.00),
+        ("Auto & Transport", 181.00),
+        ("Bills & Utilities", 85.00),
+        ("2 others", 95.00),  # Health & Wellness 70 + Gifts & Donations 25
     ]
 
 
@@ -126,7 +129,7 @@ def test_goal_impact(db, ledger):
     db.commit()
     # Starts from the latest snapshot (Sep 19 sync: 14200 in assets).
     create_goal(db, ledger.id, "save", target_amount=5000.0, target_date=date(2027, 9, 1), name="Emergency fund")
-    create_goal(db, ledger.id, "track_spending", target_amount=400.0, target_date=None, category="Food & Drink", window="this_month")
+    create_goal(db, ledger.id, "track_spending", target_amount=400.0, target_date=None, category="Food & Dining", window="this_month")
 
     goals = job.compute_recap_facts(db, ledger.id, job.week_starting(date(2026, 9, 7)))["goals"]
     save, dining = goals

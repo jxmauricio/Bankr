@@ -34,7 +34,7 @@ def _turn(db, user, monkeypatch, reply, tool_calls):
 
 
 def test_figures_are_numbered_to_the_source_that_holds_them(db, ledger, monkeypatch):
-    reply = "You've spent $235.80 on groceries (about $236), $45.10 of it pending. Rent and utilities were $1,890.00."
+    reply = "You've spent $235.80 on groceries (about $236), $45.10 of it pending. Housing was $1,800.00."
     sources = _turn(
         db,
         ledger,
@@ -49,7 +49,7 @@ def test_figures_are_numbered_to_the_source_that_holds_them(db, ledger, monkeypa
         {"text": "$235.80", "source": 1},
         {"text": "$236", "source": 1},  # rounded, no cents
         {"text": "$45.10", "source": 1},
-        {"text": "$1,890.00", "source": 2},  # only the breakdown holds rent
+        {"text": "$1,800.00", "source": 2},  # only the breakdown holds rent
     ]
 
 
@@ -62,12 +62,12 @@ def test_a_figure_no_tool_returned_stays_uncited(db, ledger, monkeypatch):
 def test_counts_never_back_a_dollar_figure(db, ledger, monkeypatch):
     # Food & Drink last week has 6 transactions; "$6" must not cite it.
     reply = "Food was $188.45 across 6 charges -- not $6."
-    sources = _turn(db, ledger, monkeypatch, reply, [("get_spending", {"window": "last_week", "category": "Food & Drink"})])
+    sources = _turn(db, ledger, monkeypatch, reply, [("get_spending", {"window": "last_week", "category": "Food & Dining"})])
     assert _citations(reply, sources) == [{"text": "$188.45", "source": 1}]
 
 
 def test_charts_are_sources_but_questions_and_links_are_not(db, ledger, monkeypatch):
-    reply = "Rent and utilities are $1,890.00 of it; you average $71.60 a month at Shell."
+    reply = "Housing is $1,800.00 of it; you average $71.60 a month at Shell."
     sources = _turn(
         db,
         ledger,
@@ -84,7 +84,7 @@ def test_charts_are_sources_but_questions_and_links_are_not(db, ledger, monkeypa
     assert [s["tool"] for s in parts["sources"]] == ["get_spending", "show_chart"]
     assert parts["sources"][1]["label"] == "Chart · Shell by month"
     # The average is only in the chart.
-    assert parts["citations"] == [{"text": "$1,890.00", "source": 1}, {"text": "$71.60", "source": 2}]
+    assert parts["citations"] == [{"text": "$1,800.00", "source": 1}, {"text": "$71.60", "source": 2}]
 
 
 def test_citations_come_back_on_the_api_and_with_history(client, db, user, monkeypatch):
@@ -244,13 +244,13 @@ def test_the_model_sees_what_was_searched_too(db, ledger, monkeypatch):
 
     class Client(FakeAgentClient):
         def run_turn(self, system, tools, history, call_tool):
-            seen.append(call_tool("get_spending", {"window": "last_year", "category": "Food & Drink"}))
+            seen.append(call_tool("get_spending", {"window": "last_year", "category": "Food & Dining"}))
             return "$0"
 
     monkeypatch.setattr(claude_agent, "_client", Client())
     run_agent_turn(db, ledger.id, [{"role": "user", "content": "?"}])
     assert seen[0]["transaction_count"] == 0
-    assert seen[0]["searched"]["what"] == "Food & Drink" and len(seen[0]["searched"]["accounts"]) == 3
+    assert seen[0]["searched"]["what"] == "Food & Dining" and len(seen[0]["searched"]["accounts"]) == 3
 
 
 def test_a_search_that_found_rows_has_no_searched_box(db, ledger, monkeypatch):
@@ -266,24 +266,24 @@ def test_breakdown_has_a_headline_and_a_vs_last_month_column(db, ledger):
     assert chart["headline"] == {
         "eyebrow": "THIS MONTH · SEP 1–19",
         "value": EXPECTED["this_month_spending"],
-        "detail": "across 4 categories",
+        "detail": "across 5 categories",
         "tone": None,
     }
     assert chart["previous_label"] == "vs Aug 1–19"
     previous = {p["label"]: p["previous"] for p in chart["points"]}
     # Aug 1–19 food (same point last month) -- the like-for-like number.
-    assert previous["Food & Drink"] == EXPECTED["food_last_month_to_date"]
-    assert previous["General Merchandise"] == 0.0  # nothing on Amazon by Aug 19
+    assert previous["Food & Dining"] == EXPECTED["food_last_month_to_date"]
+    assert previous["Shopping"] == 0.0  # nothing on Amazon by Aug 19
 
 
 def test_daily_bars_add_up_to_the_range(db, ledger):
-    chart = tools.show_chart(db, ledger.id, kind="daily", start="2026-09-07", end="2026-09-13", category="Food & Drink")["chart"]
+    chart = tools.show_chart(db, ledger.id, kind="daily", start="2026-09-07", end="2026-09-13", category="Food & Dining")["chart"]
     assert [p["label"] for p in chart["points"]][:2] == ["Sep 7", "Sep 8"]
     assert chart["points"][0]["weekday"] == "Mon"
     assert round(sum(p["value"] for p in chart["points"]), 2) == EXPECTED["food_last_week"]
     assert chart["headline"]["value"] == EXPECTED["food_last_week"]
     assert chart["headline"]["detail"] == f"spent across {EXPECTED['food_last_week_count']} transactions"
-    assert chart["points"][0]["query"] == {"start": "2026-09-07", "end": "2026-09-07", "category": "Food & Drink", "merchant": None}
+    assert chart["points"][0]["query"] == {"start": "2026-09-07", "end": "2026-09-07", "category": "Food & Dining", "merchant": None}
 
 
 def test_daily_refuses_a_range_that_is_too_long(db, ledger):

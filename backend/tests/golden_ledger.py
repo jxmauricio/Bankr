@@ -87,7 +87,7 @@ TRANSACTIONS = [
     _t("gas-aug28", "cc", date(2026, 8, 28), -45.00, "Shell", "TRANSPORTATION_GAS"),
     _t("gas-sep8", "cc", date(2026, 9, 8), -50.00, "Shell", "TRANSPORTATION_GAS"),
     _t("uber-aug22", "cc", date(2026, 8, 22), -35.00, "Uber", "TRANSPORTATION_TAXIS_AND_RIDE_SHARES"),
-    # TRAP: a flight is Travel, not Transportation.
+    # TRAP: a flight is Travel & Vacation, not Auto & Transport.
     _t("flight-aug22", "cc", date(2026, 8, 22), -420.00, "United", "TRAVEL_FLIGHTS"),
     _t("flight-refund", "cc", date(2026, 8, 30), 120.00, "United", "TRAVEL_FLIGHTS"),
     # --- shopping ----------------------------------------------------------------
@@ -121,12 +121,13 @@ EXPECTED = {
     # Q5 (Sep 1–19), biggest first; sums to this_month_spending. Dining =
     # 25 + 42 + 5.75 + 12.40 - 10 + 36 + 18.
     "this_month_by_category": [
-        ("Rent & Utilities", 1890.00),
-        ("Food & Drink", 364.95),
-        ("General Merchandise", 64.99),
-        ("Transportation", 50.00),
+        ("Housing", 1800.00),
+        ("Food & Dining", 364.95),
+        ("Bills & Utilities", 90.00),
+        ("Shopping", 64.99),
+        ("Auto & Transport", 50.00),
     ],
-    # Food & Drink is groceries + dining. Sep: 235.80 + 129.15.
+    # Food & Dining is groceries + dining. Sep: 235.80 + 129.15.
     # Aug: 275.75 + 60. Aug 1–19: groceries only (Nopa is Aug 20).
     # Last week (Sep 7–13): dining 86.15 + Trader Joe's 102.30.
     "food_this_month": 364.95,

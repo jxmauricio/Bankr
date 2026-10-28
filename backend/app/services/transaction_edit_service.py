@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.db.models import Category, CategoryGroup, LinkedAccount, Transaction
-from app.db.seed_categories import BY_GROUP, budget_modes, category_color, display_names, user_categories, user_groups, visible_to
+from app.db.seed_categories import BY_GROUP, budget_modes, category_color, category_emoji, display_names, user_categories, user_groups, visible_to
 
 MAX_SPLITS = 10
 
@@ -142,6 +142,7 @@ def category_tree(db: Session, user_id: UUID) -> list[dict]:
             "name": names.get(item.id, item.name),
             "type": item.type,
             "color": category_color(item),
+            "emoji": category_emoji(item),
             "custom": item.user_id is not None,
             "renamed": item.id in names,
             "group_id": str(group.id),

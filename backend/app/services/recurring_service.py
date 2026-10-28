@@ -39,8 +39,8 @@ MAX_VARIATION = 0.25
 MAX_VARIATION_UTILITIES = 0.6
 PRICE_CHANGE_THRESHOLD = 0.05
 
-SUBSCRIPTION_CATEGORIES = {"entertainment", "software"}
-UTILITY_CATEGORIES = {"rent_and_utilities"}
+SUBSCRIPTION_CATEGORIES = {"entertainment_and_recreation", "general_shopping"}
+UTILITY_CATEGORIES = {"bills_and_utilities"}
 
 _NOISE = re.compile(r"[^a-z ]+")
 

@@ -34,7 +34,7 @@ def _ramen(txn_id, day, amount=-45.0):
 def test_rule_applies_to_history_and_new_syncs(client, db, user):
     fake = FakeAggregatorClient(transactions_by_account={"acc_credit": [_ramen("r1", date(2026, 8, 1))]})
     _sync(db, user, fake)
-    entertainment = _cat(db, "Entertainment")
+    entertainment = _cat(db, "Entertainment & Recreation")
 
     preview = client.get("/rules/preview", params={"merchant_contains": "ramen", "category_id": str(entertainment.id)})
     assert preview.json() == {"would_change": 1}
@@ -50,7 +50,7 @@ def test_rule_applies_to_history_and_new_syncs(client, db, user):
     )
     assert r.status_code == 201, r.text
     assert r.json()["applied_to"] == 1
-    assert r.json()["set_category"] == "Entertainment"
+    assert r.json()["set_category"] == "Entertainment & Recreation"
     db.expire_all()
     assert _txn(db, "r1").bankr_category_id == entertainment.id
     assert _txn(db, "r1").merchant_name == "Ramen"
@@ -68,7 +68,7 @@ def test_rule_applies_to_history_and_new_syncs(client, db, user):
 def test_rule_never_overrides_a_manual_category(client, db, user):
     fake = FakeAggregatorClient(transactions_by_account={"acc_credit": [_ramen("r1", date(2026, 8, 1))]})
     _sync(db, user, fake)
-    shopping, entertainment = _cat(db, "Other Shopping"), _cat(db, "Entertainment")
+    shopping, entertainment = _cat(db, "Shopping"), _cat(db, "Entertainment & Recreation")
     client.patch(f"/transactions/{_txn(db, 'r1').id}", json={"category_id": str(shopping.id)})
 
     r = client.post(
@@ -84,7 +84,7 @@ def test_amount_bounds_and_priority(client, db, user):
         transactions_by_account={"acc_credit": [_ramen("small", date(2026, 8, 1), -12.0), _ramen("big", date(2026, 8, 2), -200.0)]}
     )
     _sync(db, user, fake)
-    entertainment, travel = _cat(db, "Entertainment"), _cat(db, "Travel")
+    entertainment, travel = _cat(db, "Entertainment & Recreation"), _cat(db, "Travel & Vacation")
     client.post("/rules", json={"merchant_contains": "ramen", "set_category_id": str(entertainment.id)})
     client.post(
         "/rules",
@@ -97,7 +97,7 @@ def test_amount_bounds_and_priority(client, db, user):
 
 def test_rule_crud_and_validation(client, db, user):
     _sync(db, user, FakeAggregatorClient())
-    entertainment = _cat(db, "Entertainment")
+    entertainment = _cat(db, "Entertainment & Recreation")
     assert client.post("/rules", json={"merchant_contains": "x", "set_category_id": str(entertainment.id)}).status_code == 422
     rule = client.post("/rules", json={"merchant_contains": "Trader", "set_category_id": str(entertainment.id)}).json()
     assert client.get("/rules").json()["rules"][0]["id"] == rule["id"]
@@ -112,7 +112,7 @@ def test_propose_rule_tool_drafts_without_creating(db, user):
     result = tools.propose_rule(db, user.id, merchant="Ramen", category="fun")
     assert result["status"] == "proposed"
     assert result["action"]["kind"] == "rule"
-    assert result["action"]["category"] == "Entertainment"
+    assert result["action"]["category"] == "Entertainment & Recreation"
     assert result["action"]["would_change"] == 1
     assert tools.propose_rule(db, user.id, merchant="Ramen", category="nope").get("error")
 
@@ -120,6 +120,6 @@ def test_propose_rule_tool_drafts_without_creating(db, user):
 def test_a_rule_cannot_put_a_merchant_on_a_group(client, db, user):
     seed_default_categories(db)
     db.commit()
-    r = client.post("/rules", json={"merchant_contains": "ramen", "set_category_id": str(_cat(db, "Food & Drink").id)})
+    r = client.post("/rules", json={"merchant_contains": "ramen", "set_category_id": str(_cat(db, "Food & Dining").id)})
     assert r.status_code == 422
     assert "categories" in r.json()["detail"]

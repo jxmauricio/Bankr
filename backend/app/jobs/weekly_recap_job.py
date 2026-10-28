@@ -182,7 +182,7 @@ def compute_recap_facts(db: Session, user_id: UUID, week: mq.Window) -> dict:
             {"merchant": t["merchant_name"] or "Income", "amount": t["amount"], "date": t["date"], "category": t["category"]}
             for t in incoming
         ]
-        + [{"merchant": s["name"], "amount": s["amount"], "date": None, "category": "Transfer In"} for s in flow["transfer_in_sources"]],
+        + [{"merchant": s["name"], "amount": s["amount"], "date": None, "category": "Transfers"} for s in flow["transfer_in_sources"]],
         "goals": _goal_facts(db, user_id, week),
         "data_as_of": mq.data_freshness(db, user_id),
     }
