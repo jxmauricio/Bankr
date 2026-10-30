@@ -10,6 +10,7 @@ import { DEFAULT_FILTERS } from "@/features/transactions/filtering";
 import { fetchCashFlow, fetchSpendingPace } from "@/lib/api";
 import { PERIOD_OPTIONS, periodInfo } from "@/lib/period";
 import { useResource } from "@/lib/useResource";
+import { useFloatingTabInset } from "@/theme/tabBar";
 import { radius, space } from "@/theme/tokens";
 import { makeStyles, useColors } from "@/theme/theme";
 import { Card, ErrorState, Loading, Screen, SegmentedControl, Text } from "@/ui";
@@ -17,6 +18,7 @@ import { Card, ErrorState, Loading, Screen, SegmentedControl, Text } from "@/ui"
 /** Where money came from and went for the period, then this month's spending pace. Mirrors the web CashFlowView. */
 export default function CashFlowScreen() {
   const styles = useStyles();
+  const tabInset = useFloatingTabInset();
   const kindColors = useKindColors();
   const colors = useColors();
   const { period, setPeriod } = usePeriod();
@@ -46,7 +48,7 @@ export default function CashFlowScreen() {
     // The tab bar above owns the top inset.
     <Screen padded={false} edges={[]}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: tabInset + space.md }]}
         refreshControl={<RefreshControl refreshing={isSyncing} onRefresh={syncFromBank} tintColor={colors.accent} />}
       >
         <SegmentedControl label="Period" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />

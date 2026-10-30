@@ -1,7 +1,7 @@
 """MCP connector: OAuth clients, grants, authorization codes, and proposals
 
 Revision ID: f2a9c6e1b754
-Revises: e8b1d4f2a690
+Revises: c3a9f1e8b247
 Create Date: 2026-10-30 12:00:00.000000
 
 Lets Claude/ChatGPT connect over OAuth 2.1 (app/mcp_oauth.py) with a read
@@ -17,7 +17,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 # revision identifiers, used by Alembic.
 revision: str = "f2a9c6e1b754"
-down_revision: Union[str, None] = "e8b1d4f2a690"
+down_revision: Union[str, None] = "c3a9f1e8b247"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

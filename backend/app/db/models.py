@@ -40,6 +40,21 @@ class User(Base):
     goals: Mapped[list["Goal"]] = relationship(back_populates="user")
 
 
+class DevicePushToken(Base):
+    """One iOS (or later Android) device that's allowed to receive pushes
+    for this user. The same physical phone re-registers the same token;
+    a token that shows up under a new user is reassigned, because APNs
+    tokens are per-install, not per-account."""
+
+    __tablename__ = "device_push_tokens"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token: Mapped[str] = mapped_column(String, unique=True)
+    platform: Mapped[str] = mapped_column(String, default="ios")  # ios | android
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
 class LinkedAccount(Base):
     __tablename__ = "linked_accounts"
 

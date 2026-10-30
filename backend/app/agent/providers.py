@@ -38,6 +38,14 @@ FINAL_ROUND_NUDGE = (
     "You've used all your tool calls for this question. Answer the user now from the tool results above."
 )
 
+# One silent extra call when the model used its output budget on reasoning
+# (or otherwise returned no visible text). The chat UI never sees this; it
+# only gets the retry's answer, or the empty-reply fallback if that is empty too.
+EMPTY_RETRY_NUDGE = (
+    "You returned no visible answer. Reply to the user now from the tool results above. "
+    "Do not call tools."
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -144,6 +152,8 @@ class AnthropicAgentClient:
             if response.stop_reason != "tool_use" or final_round:
                 _log_round(round_number, model_seconds, 0.0, usage, None)
                 text = "".join(block.text for block in response.content if block.type == "text")
+                if not text.strip():
+                    text = self._retry_empty_reply(system, anthropic_tools, messages, on_usage)
                 # Not streamed token by token here (OpenRouter is the default
                 # provider); the listener gets the whole answer in one piece.
                 if on_text and text:
@@ -161,6 +171,34 @@ class AnthropicAgentClient:
                 tool_results.append({"type": "text", "text": FINAL_ROUND_NUDGE})
             messages.append({"role": "user", "content": tool_results})
             _log_round(round_number, model_seconds, time.monotonic() - started, usage, None)
+
+    def _retry_empty_reply(
+        self,
+        system: str,
+        anthropic_tools: list[dict],
+        messages: list[dict],
+        on_usage: Callable[[dict], None] | None,
+    ) -> str:
+        """One more Messages call, tools off, no thinking budget. Hidden from the user."""
+        logger.info("agent empty reply, retrying once")
+        messages.append({"role": "user", "content": EMPTY_RETRY_NUDGE})
+        started = time.monotonic()
+        response = self._client.messages.create(
+            model=self._model,
+            system=system,
+            tools=anthropic_tools,
+            messages=messages,
+            **({"tool_choice": {"type": "none"}} if anthropic_tools else {}),
+            max_tokens=1024,
+        )
+        usage = {
+            "input": getattr(getattr(response, "usage", None), "input_tokens", None),
+            "output": getattr(getattr(response, "usage", None), "output_tokens", None),
+        }
+        if on_usage:
+            on_usage(usage)
+        _log_round(MAX_TOOL_ROUNDS + 1, time.monotonic() - started, 0.0, usage, None)
+        return "".join(block.text for block in response.content if block.type == "text")
 
     def complete(self, system: str, user_message: str) -> str:
         response = self._client.messages.create(
@@ -306,7 +344,10 @@ class OpenAICompatibleAgentClient:
 
             if not tool_calls or final_round:
                 _log_round(round_number, model_seconds, 0.0, usage, served_by)
-                return message.get("content") or ""
+                content = message.get("content") or ""
+                if not content.strip():
+                    content = self._retry_empty_reply(messages, openai_tools, on_text, on_usage)
+                return content
 
             if on_text and message.get("content"):
                 # Text the model wrote before deciding to call a tool isn't the
@@ -320,6 +361,37 @@ class OpenAICompatibleAgentClient:
             if round_number == MAX_TOOL_ROUNDS - 1:
                 messages.append({"role": "user", "content": FINAL_ROUND_NUDGE})
             _log_round(round_number, model_seconds, time.monotonic() - started, usage, served_by)
+
+    def _retry_extra_body(self) -> dict | None:
+        return self._extra_body
+
+    def _retry_empty_reply(
+        self,
+        messages: list[dict],
+        openai_tools: list[dict],
+        on_text: Callable[[str | None], None] | None,
+        on_usage: Callable[[dict], None] | None,
+    ) -> str:
+        """One more completion, tools off. The first attempt streamed nothing,
+        so the listener only sees this call's tokens."""
+        logger.info("agent empty reply, retrying once")
+        messages.append({"role": "user", "content": EMPTY_RETRY_NUDGE})
+        started = time.monotonic()
+        message, usage, served_by = self._create_round(
+            {
+                "model": self._model,
+                "max_tokens": self._max_tokens,
+                "messages": messages,
+                "tools": openai_tools,
+                **({"tool_choice": "none"} if openai_tools else {}),
+                "extra_body": self._retry_extra_body(),
+            },
+            on_text,
+        )
+        if on_usage:
+            on_usage(usage)
+        _log_round(MAX_TOOL_ROUNDS + 1, time.monotonic() - started, 0.0, usage, served_by)
+        return message.get("content") or ""
 
     def complete(self, system: str, user_message: str) -> str:
         response = self._client.chat.completions.create(
@@ -374,3 +446,10 @@ class OpenRouterAgentClient(OpenAICompatibleAgentClient):
             extra_body=extra_body,
             max_output_tokens=max_output_tokens,
         )
+
+    def _retry_extra_body(self) -> dict:
+        """The blank replies are DeepSeek spending the whole max_tokens on
+        hidden reasoning. Turn that off for the retry so the budget is text."""
+        extra = dict(self._extra_body or {})
+        extra["reasoning"] = {"enabled": False}
+        return extra

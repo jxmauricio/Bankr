@@ -3,11 +3,10 @@
  * font: they go through these tokens (usually via the primitives in src/ui),
  * so the coming redesign is a change to this file and src/ui, not to screens.
  *
- * The dark palette is the web app's night mode ([data-theme="dark"] in
- * web/src/index.css). The light palette is the "Light mode" row of the
- * Bankr iOS Redesign canvas (https://claude.ai/artifact/LMSyVZe6cymbvqQN6D2HZD).
+ * Palettes match the web app (web/src/index.css): light is cool gray-white
+ * with money green; night is the navy surfaces with the same green and red.
  *
- * Colors follow the system appearance: read them with useColors() or
+ * Colors follow the current appearance: read them with useColors() or
  * makeStyles() from ./theme, never from a palette directly.
  */
 import type { TextStyle } from "react-native";
@@ -32,9 +31,11 @@ export const darkColors = {
   onAccent: "#0B1426",
   /** The user's own chat bubbles. */
   userBubble: "#0D7A54",
+  /** Text on a user bubble (light on the dark-green fill). */
+  onUser: "#F2F5FA",
 
-  /** Money going out, in charts. */
-  spend: "#B79CFF",
+  /** Money going out, in charts. Same red as the web night theme. */
+  spend: "#FF4D4F",
   positive: "#2DD48A",
   positiveWash: "rgba(45, 212, 138, 0.12)",
   negative: "#FF4D4F",
@@ -50,33 +51,34 @@ export const darkColors = {
 
 export type Colors = typeof darkColors;
 
-/** Soft gray-white page, white cards, navy ink and a blue accent. */
+/** Cool gray-white page, white cards, money green. Same tokens as web light. */
 export const lightColors: Colors = {
-  bg: "#F3F5F9",
+  bg: "#F3F5F8",
   surface: "#FFFFFF",
-  raised: "#E9EDF3",
-  line: "#E2E7EF",
-  lineStrong: "#D3DAE5",
+  raised: "#E8ECF1",
+  line: "#E2E6EC",
+  lineStrong: "#CDD4DE",
 
-  ink: "#0E1A2B",
-  inkSoft: "#5A6678",
-  inkFaint: "#667085",
+  ink: "#12151C",
+  inkSoft: "#4B5565",
+  inkFaint: "#7B8494",
 
-  accent: "#2F6FE0",
-  accentStrong: "#1D4ED8",
-  accentWash: "rgba(47, 111, 224, 0.08)",
-  accentBorder: "rgba(47, 111, 224, 0.35)",
+  accent: "#00A36C",
+  accentStrong: "#00875A",
+  accentWash: "rgba(0, 163, 108, 0.1)",
+  accentBorder: "rgba(0, 163, 108, 0.35)",
   onAccent: "#FFFFFF",
-  userBubble: "#DCE7FB",
+  userBubble: "#00A36C",
+  onUser: "#FFFFFF",
 
-  spend: "#7C5CE0",
-  positive: "#15803D",
-  positiveWash: "rgba(21, 128, 61, 0.1)",
-  negative: "#C93A2B",
-  negativeWash: "rgba(201, 58, 43, 0.08)",
-  warn: "#B45309",
-  warnWash: "rgba(180, 83, 9, 0.1)",
-  scrim: "rgba(16, 24, 40, 0.4)",
+  spend: "#E4252D",
+  positive: "#00A36C",
+  positiveWash: "rgba(0, 163, 108, 0.12)",
+  negative: "#E4252D",
+  negativeWash: "rgba(228, 37, 45, 0.1)",
+  warn: "#E59A12",
+  warnWash: "rgba(229, 154, 18, 0.14)",
+  scrim: "rgba(15, 23, 42, 0.4)",
   chartLabel: "rgba(255, 255, 255, 0.88)",
   logoBacking: "#FFFFFF",
 };
@@ -115,7 +117,7 @@ export const type = {
   /** Secondary lines under a row's title: category, date, account. */
   meta: { fontSize: 13, fontWeight: "400" },
   /** Tab bar labels. */
-  tab: { fontSize: 15, fontWeight: "600" },
+  tab: { fontSize: 11, fontWeight: "500" },
   /** The app's name, centered in the top bar. */
   brand: { fontSize: 26, fontWeight: "700", letterSpacing: -0.6 },
   /** Uppercase label over a group of cards or rows ("ASK BANKR", "TODAY"). */
@@ -149,6 +151,7 @@ export function tones(colors: Colors) {
     negative: colors.negative,
     warn: colors.warn,
     onAccent: colors.onAccent,
+    onUser: colors.onUser,
   };
 }
 

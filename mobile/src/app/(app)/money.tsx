@@ -126,7 +126,7 @@ export default function MoneySheet() {
         <Text variant="heading">Appearance</Text>
         <SegmentedControl label="Appearance" options={APPEARANCE_OPTIONS} value={appearance} onChange={setAppearance} />
         <Text variant="meta" tone="faint">
-          System follows your phone’s light and dark setting.
+          Light and dark match the web app. The sun/moon in the top bar switches them; System follows the phone.
         </Text>
       </Card>
     </ScrollView>

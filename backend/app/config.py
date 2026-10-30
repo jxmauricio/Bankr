@@ -162,11 +162,16 @@ class Settings(BaseSettings):
     # whose client hasn't reported a timezone yet (see User.timezone).
     default_timezone: str = "America/New_York"
 
+    # Auth-key (.p8) credentials for alert pushes. Blank = the weekly recap
+    # cron still writes the in-app bell row, it just doesn't hit APNs.
     apns_key_id: str = ""
     apns_team_id: str = ""
     apns_auth_key_path: str = ""
-    apns_topic: str = ""
+    apns_topic: str = "com.jxmauricio.bankr"
     apns_use_sandbox: bool = True
+
+    # Sunday-evening recap job inside the API process. Tests turn this off.
+    enable_recap_cron: bool = True
 
 
     @property
