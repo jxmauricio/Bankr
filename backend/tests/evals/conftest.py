@@ -4,6 +4,7 @@ unless RUN_EVALS=1 and never run in normal `pytest` or CI.
   RUN_EVALS=1 pytest tests/evals -q -s
   EVAL_TRIALS=5            trials per task (default 3)
   EVAL_TASKS=net_worth,... only these task ids
+  EVAL_SUITE=regression    only this suite (the nightly job's setting)
 
 Every trial lands in tests/evals/results/<timestamp>_<model>.json with the
 full reply and tool-call transcript -- read the failures there.
