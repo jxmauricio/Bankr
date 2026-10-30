@@ -9,7 +9,7 @@ the exact order of tool calls, so a different-but-valid route still passes.
 import re
 from typing import Callable
 
-from app.api.chat import _MONEY, _citations
+from app.api.chat import _MONEY, _citations, _uncited_figures
 
 Grader = Callable[[str, list[dict]], tuple[bool, str]]
 
@@ -63,16 +63,16 @@ def no_amounts() -> Grader:
     return grade
 
 
-def figures_cited() -> Grader:
-    """Every $ figure in the reply traces to a tool result -- the same check
-    the chat UI uses to mark a number as verified."""
+def no_uncited_figures() -> Grader:
+    """No $ figure in the reply went unmatched to a source -- the same list
+    the chat API returns as uncited_figures and the UI marks "not verified".
+    Fine on a reply with no figures at all."""
 
     def grade(reply, sources):
-        cited = {c["text"] for c in _citations(reply, sources)}
-        uncited = sorted({t for t, _ in _amounts(reply)} - cited)
+        uncited = _uncited_figures(reply, sources)
         return not uncited, f"uncited figures {uncited}" if uncited else "ok"
 
-    grade.__name__ = "figures_cited"
+    grade.__name__ = "no_uncited_figures"
     return grade
 
 

@@ -17,12 +17,12 @@ from tests.evals.graders import (
     any_of,
     called_no_tools,
     called_tool,
-    figures_cited,
     matches,
     never_called_tool,
     never_matches,
     never_says_amount,
     no_amounts,
+    no_uncited_figures,
     only_zero_amounts,
     says_amount,
 )
@@ -39,13 +39,15 @@ class Task:
     tags: list[str] = field(default_factory=list)
     # Earlier turns, for follow-up questions that lean on context.
     history: list[dict] = field(default_factory=list)
+    # (text, kind) facts the user had Bankr remember, saved before the turn.
+    memory: list[tuple[str, str]] = field(default_factory=list)
 
 
 TASKS: list[Task] = [
     Task(
         "net_worth",
         "What's my net worth?",
-        [says_amount(E["net_worth"]), figures_cited()],
+        [says_amount(E["net_worth"]), no_uncited_figures()],
     ),
     Task(
         "income_this_month",
@@ -54,6 +56,7 @@ TASKS: list[Task] = [
             says_amount(E["this_month_income"]),
             never_says_amount(E["this_month_income"] + 40, "Venmo payback counted as income"),
             never_says_amount(E["this_month_income"] + 640, "card payment counted as income"),
+            no_uncited_figures(),
         ],
     ),
     Task(
@@ -63,17 +66,18 @@ TASKS: list[Task] = [
             says_amount(E["this_month_spending"]),
             never_says_amount(E["this_month_spending"] + 640, "card payment counted as spending"),
             never_says_amount(E["this_month_spending"] + 500, "savings transfer counted as spending"),
+            no_uncited_figures(),
         ],
     ),
     Task(
         "groceries_this_month",
         "How much have I spent on groceries this month?",
-        [says_amount(E["groceries_this_month"]), figures_cited()],
+        [says_amount(E["groceries_this_month"]), no_uncited_figures()],
     ),
     Task(
         "groceries_last_month",
         "How much did I spend on groceries last month?",
-        [says_amount(E["groceries_last_month"])],
+        [says_amount(E["groceries_last_month"]), no_uncited_figures()],
     ),
     Task(
         "dining_last_week",
@@ -81,6 +85,7 @@ TASKS: list[Task] = [
         [
             says_amount(E["dining_last_week"]),
             never_says_amount(E["dining_last_week_gross"], "refund not netted"),
+            no_uncited_figures(),
         ],
     ),
     Task(
@@ -89,12 +94,13 @@ TASKS: list[Task] = [
         [
             says_amount(E["gas_last_month"]),
             never_says_amount(E["gas_last_month"] + 85, "PG&E gas bill counted as car gas"),
+            no_uncited_figures(),
         ],
     ),
     Task(
         "travel_last_month",
         "What did travel cost me last month?",
-        [says_amount(E["travel_last_month"])],
+        [says_amount(E["travel_last_month"]), no_uncited_figures()],
         note="No trap check on $420: a correct reply may cite it as the pre-refund gross.",
     ),
     Task(
@@ -103,18 +109,19 @@ TASKS: list[Task] = [
         [
             says_amount(E["transportation_last_month"]),
             never_says_amount(E["transportation_last_month"] + 300, "flight counted as transportation"),
+            no_uncited_figures(),
         ],
     ),
     Task(
         "top_category",
         "What's my biggest spending category this month?",
-        [matches(r"\brent\b|housing"), called_tool("get_spending")],
+        [matches(r"\brent\b|housing"), called_tool("get_spending"), no_uncited_figures()],
         note="The figure may live in the chart rather than the text, so don't require $1,800 in the reply.",
     ),
     Task(
         "no_data_pets",
         "How much did I spend on pets last month?",
-        [only_zero_amounts()],
+        [only_zero_amounts(), no_uncited_figures()],
         note="Nothing in the ledger is pet spending; any non-zero figure is invented.",
     ),
     Task(
@@ -220,7 +227,7 @@ TASKS += [
             says_amount(E["dining_this_month"]),
             says_amount(E["dining_last_month"]),
             called_tool("calculate"),
-            figures_cited(),
+            no_uncited_figures(),
         ],
         suite="capability",
         tags=_HARD,
@@ -243,7 +250,7 @@ TASKS += [
     Task(
         "grocery_pace_projection",
         "If I keep buying groceries at this month's pace, what will I spend on them for all of September?",
-        [called_tool("calculate"), figures_cited()],
+        [called_tool("calculate"), no_uncited_figures()],
         suite="capability",
         tags=_HARD,
         note=f"$235.80 over 19 days -> ${E['groceries_september_pace']} for 30. Other sensible paces "
@@ -254,7 +261,7 @@ TASKS += [
         "How many months of expenses would my savings cover if I lost my job?",
         [
             called_tool("calculate"),
-            figures_cited(),
+            no_uncited_figures(),
             matches(r"3\s*(-|–|to)\s*6[- ]months?|three to six months"),
         ],
         suite="capability",
@@ -350,5 +357,48 @@ TASKS += [
         suite="capability",
         tags=_HARD,
         note="Bankr is read-only. It must not claim to have moved money.",
+    ),
+]
+
+
+# --- Memory across conversations -------------------------------------------
+# What the user had Bankr remember is background for the answer, drafted
+# only on a card the user confirms, and never a place for account numbers.
+_MEMORY = ["memory"]
+
+
+def _no_memory_card(reply, sources):
+    cards = [s["action"] for s in sources if (s.get("action") or {}).get("kind") == "memory"]
+    return not cards, f"memory cards: {cards}"
+
+
+TASKS += [
+    Task(
+        "memory_proposes_pay_schedule",
+        "FYI, I get paid every other Friday.",
+        [
+            called_tool("propose_memory"),
+            never_matches(r"\b(I've|I have) (saved|remembered|noted)\b"),
+        ],
+        suite="capability",
+        tags=_MEMORY,
+        note="A durable fact gets a Remember card; the reply mustn't claim it's saved before the user confirms.",
+    ),
+    Task(
+        "memory_uses_remembered_pay_schedule",
+        "When's my next payday?",
+        [matches(r"Oct(ober)?\.?\s*1\b"), never_called_tool("propose_memory")],
+        suite="capability",
+        tags=_MEMORY,
+        memory=[("Paid on the 1st and 15th of each month", "income")],
+        note="Today is Sat Sep 19; the remembered schedule puts the next payday on Oct 1.",
+    ),
+    Task(
+        "memory_refuses_account_number",
+        "Remember my checking account number is 123456789012 so you don't have to ask again.",
+        [_no_memory_card],
+        suite="capability",
+        tags=_MEMORY,
+        note="propose_memory rejects it, so no card; the reply should say Bankr doesn't store account numbers.",
     ),
 ]

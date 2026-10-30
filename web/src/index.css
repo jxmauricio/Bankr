@@ -219,6 +219,16 @@ body {
   text-underline-offset: 4px;
 }
 
+/* A figure no source holds: same digits, greyed, with a faint dashed line. */
+.fig-unverified {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.94em;
+  color: var(--color-ink-soft);
+  text-decoration: underline dashed var(--color-ink-faint);
+  text-underline-offset: 4px;
+}
+
 /* Pace-gap hatching: colour is never the only signal. */
 .hatch-warn {
   background: repeating-linear-gradient(135deg, var(--color-warn) 0 2px, transparent 2px 5px);

@@ -2,11 +2,21 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { openSource } from "@/features/source/openSource";
-import type { ChartHeadline, ChatSource, SourceQuery, TransactionRecord, ViewLink } from "@/lib/api";
+import {
+  clearMessageRating,
+  rateMessage,
+  type ChartHeadline,
+  type ChatSource,
+  type Rating,
+  type SourceQuery,
+  type TransactionRecord,
+  type ViewLink,
+} from "@/lib/api";
 import { formatDate, formatMoney } from "@/lib/format";
+import { useSession } from "@/lib/session";
 import { radius, space } from "@/theme/tokens";
-import { makeStyles } from "@/theme/theme";
-import { Text } from "@/ui";
+import { makeStyles, useColors } from "@/theme/theme";
+import { Icon, Text } from "@/ui";
 
 // The pieces the web app's StreamEntry draws around a reply
 // (web/src/pages/HomePage.tsx and web/src/components/ChatChart.tsx).
@@ -141,6 +151,50 @@ export function SourceTrail({ sources }: { sources: ChatSource[] }) {
   );
 }
 
+/** Thumbs up/down on a reply (the web app's ReplyFeedback, without the
+ * reason box). Tapping the chosen thumb again takes the rating back. */
+export function ReplyFeedback({ messageId, initial }: { messageId: string; initial: Rating | null }) {
+  const styles = useStyles();
+  const colors = useColors();
+  const { token } = useSession();
+  const [rating, setRating] = useState<Rating | null>(initial);
+
+  async function rate(next: Rating) {
+    if (!token) return;
+    const previous = rating;
+    const clearing = previous === next;
+    setRating(clearing ? null : next);
+    try {
+      if (clearing) await clearMessageRating(token, messageId);
+      else await rateMessage(token, messageId, next);
+    } catch {
+      setRating(previous);
+    }
+  }
+
+  return (
+    <View style={styles.thumbs}>
+      {(["up", "down"] as const).map((value) => (
+        <Pressable
+          key={value}
+          accessibilityRole="button"
+          accessibilityLabel={value === "up" ? "Good answer" : "Bad answer"}
+          accessibilityState={{ selected: rating === value }}
+          onPress={() => rate(value)}
+          hitSlop={6}
+          style={({ pressed }) => [styles.thumb, pressed && styles.pressed]}
+        >
+          <Icon
+            name={value === "up" ? "thumbUp" : "thumbDown"}
+            color={rating === value ? colors.accent : colors.inkFaint}
+            size={18}
+          />
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 /** "See them in Transactions →" and friends: pictures that didn't fit in the answer's one chart. */
 export function ViewLinks({ links }: { links: ViewLink[] }) {
   const styles = useStyles();
@@ -207,6 +261,8 @@ const useStyles = makeStyles((colors) =>
       borderColor: colors.lineStrong,
     },
     trail: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: space.sm },
+    thumbs: { flexDirection: "row", gap: space.xs },
+    thumb: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: radius.pill },
     chip: {
       flexDirection: "row",
       alignItems: "center",

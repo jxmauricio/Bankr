@@ -1,7 +1,7 @@
 """daily briefings, what users did about their items, cancel links and notification prefs
 
 Revision ID: b7d2e9f4a183
-Revises: c3a9f1e8b247
+Revises: d3a8f1c6b927, f2d6a9c1e384
 Create Date: 2026-10-30 12:00:00.000000
 """
 from typing import Sequence, Union
@@ -13,7 +13,8 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "b7d2e9f4a183"
-down_revision: Union[str, None] = "c3a9f1e8b247"
+# Also joins main's two heads (chat_feedback and memory_facts) back into one.
+down_revision: Union[str, Sequence[str], None] = ("d3a8f1c6b927", "f2d6a9c1e384")
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
