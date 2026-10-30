@@ -9,6 +9,7 @@ import time
 import pytest
 
 from app.agent.claude_agent import run_agent_turn
+from app.services.memory_service import add_fact
 from tests.evals.conftest import RESULTS, trials
 from tests.evals.tasks import TASKS
 
@@ -18,6 +19,9 @@ _SELECTED = [t for t in TASKS if not _ONLY or t.id in _ONLY]
 
 @pytest.mark.parametrize("task", _SELECTED, ids=lambda t: t.id)
 def test_task(task, db, ledger):
+    for text, kind in task.memory:
+        add_fact(db, ledger.id, text, kind)
+    db.commit()
     k = trials()
     failures = 0
     for trial in range(1, k + 1):
