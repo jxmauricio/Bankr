@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from "react";
-import { ApiError, createRule, moveBudgetMoney, type ActionProposal } from "../lib/api";
+import { ApiError, createMemoryFact, createRule, moveBudgetMoney, type ActionProposal } from "../lib/api";
 import { formatMoney } from "../lib/format";
 
 type Status = "pending" | "busy" | "done" | "dismissed";
 
 /**
- * A change the assistant drafted in chat (a rule, a budget move). Nothing
+ * A change the assistant drafted in chat (a rule, a budget move, a fact to
+ * remember). Nothing
  * happens until the user taps Confirm.
  */
 export function ActionProposalCard({
@@ -105,6 +106,16 @@ function describe(p: ActionProposal): { eyebrow: string; title: ReactNode; detai
         confirm: "Move it",
         done: `Moved ${formatMoney(p.amount)} to ${p.to_name}.`,
       };
+    case "memory":
+      return {
+        eyebrow: p.replaces_id ? "UPDATE WHAT BANKR REMEMBERS?" : "REMEMBER THIS?",
+        title: p.text,
+        detail: p.replaces_text
+          ? `Replaces “${p.replaces_text}”. You can change this anytime in Settings.`
+          : `${p.fact_kind_label}. Bankr will keep this in mind across chats; change it anytime in Settings.`,
+        confirm: p.replaces_id ? "Update" : "Remember",
+        done: "Got it — Bankr will remember that.",
+      };
   }
 }
 
@@ -120,5 +131,8 @@ async function perform(token: string, p: ActionProposal): Promise<void> {
       return;
     case "budget_move":
       await moveBudgetMoney(token, { month: p.month, from_key: p.from_key, to_key: p.to_key, amount: p.amount });
+      return;
+    case "memory":
+      await createMemoryFact(token, { text: p.text, kind: p.fact_kind, source: "agent", replaces_id: p.replaces_id });
   }
 }

@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNotifications } from "@/features/notifications/NotificationsContext";
-import { fetchRecap, type RecapCategory, type RecapGoal, type RecapLine, type WeeklyRecap } from "@/lib/api";
+import { fetchLatestRecap, fetchRecap, type RecapCategory, type RecapGoal, type RecapLine, type WeeklyRecap } from "@/lib/api";
 import { colorForCategory } from "@/lib/chartColors";
 import { formatMoney } from "@/lib/format";
 import { useResource } from "@/lib/useResource";
@@ -19,9 +19,16 @@ import { Button, Card, ErrorState, groupPosition, Icon, Initial, ListRow, Loadin
 export default function RecapScreen() {
   const styles = useStyles();
   const { week } = useLocalSearchParams<{ week: string }>();
-  const { status, data, error, retry, reload, refreshing } = useResource((token) => fetchRecap(token, week), [week]);
+  const { status, data, error, retry, reload, refreshing } = useResource(
+    (token) => (week === "latest" ? fetchLatestRecap(token) : fetchRecap(token, week)),
+    [week]
+  );
   const { markRecapRead } = useNotifications();
-  const recap = data?.recap.week_start === week ? data.recap : null;
+  const recap = week === "latest" ? (data?.recap ?? null) : data?.recap?.week_start === week ? data.recap : null;
+
+  useEffect(() => {
+    if (week === "latest" && recap?.week_start) router.replace(`/recap/${recap.week_start}`);
+  }, [week, recap?.week_start]);
 
   useEffect(() => {
     if (recap && !recap.read) markRecapRead(recap.week_start);
@@ -106,7 +113,7 @@ function Recap({ recap }: { recap: WeeklyRecap }) {
       <View style={styles.actions}>
         <Button
           label="Ask Bankr about this week"
-          onPress={() => router.dismissTo({ pathname: "/", params: { ask: `How did my week of ${recap.label} go?` } })}
+          onPress={() => router.dismissTo({ pathname: "/chat", params: { ask: `How did my week of ${recap.label} go?` } })}
         />
       </View>
     </>

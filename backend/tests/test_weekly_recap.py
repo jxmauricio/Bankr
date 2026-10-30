@@ -12,7 +12,8 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from app.db.models import InsightLog, NetWorthSnapshot, WeeklyRecap
+from app.db.models import DevicePushToken, InsightLog, NetWorthSnapshot, WeeklyRecap
+from app.integrations import apns
 from app.jobs import weekly_recap_job as job
 from app.services import money_query as mq
 from app.services.goal_service import create_goal
@@ -203,3 +204,63 @@ def test_recap_without_the_model_still_has_its_numbers(client, ledger, monkeypat
 
 def test_no_recap_before_any_history(client):
     assert client.get("/recaps/latest").json() == {"recap": None}
+
+
+def test_opening_the_app_does_not_push(client, db, ledger, monkeypatch):
+    sent = []
+    monkeypatch.setattr(apns, "send_alert", lambda *a, **k: sent.append(a) or apns.SENT)
+    db.add(DevicePushToken(user_id=ledger.id, token="aaaaaaaaaaaaaaaa", platform="ios"))
+    db.commit()
+
+    client.get("/recaps/latest")
+
+    assert sent == []
+    assert db.query(InsightLog).filter(InsightLog.type == "weekly_recap").one().delivered_via == "in_app"
+
+
+def test_cron_makes_the_latest_recap_and_pushes(db, ledger, monkeypatch):
+    sent = []
+
+    def fake_send(device_token, title, body, data=None):
+        sent.append({"token": device_token, "title": title, "body": body, "data": data})
+        return apns.SENT
+
+    monkeypatch.setattr(apns, "send_alert", fake_send)
+    db.add(DevicePushToken(user_id=ledger.id, token="aaaaaaaaaaaaaaaa", platform="ios"))
+    db.commit()
+
+    # Saturday: the Sunday-evening cron is quiet.
+    assert job.run_due_recaps(db) == []
+    assert sent == []
+
+    recaps = job.run_due_recaps(db, ignore_schedule=True)
+    assert [r.week_start for r in recaps] == [date(2026, 9, 7)]
+    assert sent[0]["title"] == "Your weekly recap is ready"
+    assert sent[0]["body"] == (
+        "Sep 7–13: $198.45 more went out than came in. Spent $238.45, 62% under usual."
+    )
+    assert sent[0]["data"] == {"type": "weekly_recap", "week_start": "2026-09-07"}
+    assert db.query(InsightLog).one().delivered_via == "push"
+
+    sent.clear()
+    assert job.run_due_recaps(db, ignore_schedule=True) == []
+    assert sent == []
+
+
+def test_sunday_evening_cron_makes_this_weeks_recap(db, ledger, monkeypatch):
+    monkeypatch.setattr(mq, "_now", lambda: datetime(2026, 9, 20, 23, tzinfo=timezone.utc))
+    monkeypatch.setattr(apns, "send_alert", lambda *a, **k: apns.SKIPPED)
+
+    recaps = job.run_due_recaps(db)
+    assert [r.week_start for r in recaps] == [date(2026, 9, 14)]
+    assert db.query(InsightLog).one().delivered_via == "in_app"
+
+
+def test_cron_drops_a_gone_device_token(db, ledger, monkeypatch):
+    monkeypatch.setattr(apns, "send_alert", lambda *a, **k: apns.GONE)
+    db.add(DevicePushToken(user_id=ledger.id, token="aaaaaaaaaaaaaaaa", platform="ios"))
+    db.commit()
+
+    job.run_due_recaps(db, ignore_schedule=True)
+    assert db.query(DevicePushToken).count() == 0
+    assert db.query(InsightLog).one().delivered_via == "in_app"

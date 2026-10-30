@@ -549,6 +549,41 @@ export const updateRule = (token: string, id: string, patch: Partial<NewRule>) =
 
 export const deleteRule = (token: string, id: string) => request<void>(`/rules/${id}`, { method: "DELETE", token });
 
+/** income | priority | household | preference | other */
+export type MemoryKind = string;
+
+/** Something the user had Bankr remember about them; the agent sees these on every turn. */
+export interface MemoryFact {
+  id: string;
+  kind: MemoryKind;
+  text: string;
+  /** "agent" when the user confirmed a card the assistant drafted. */
+  source: "user" | "agent";
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface MemoryList {
+  facts: MemoryFact[];
+  /** kind -> label, in display order. */
+  kinds: Record<MemoryKind, string>;
+  max_facts: number;
+  max_chars: number;
+}
+
+export const fetchMemory = (token: string) => request<MemoryList>("/memory", { token });
+
+export const createMemoryFact = (
+  token: string,
+  fact: { text: string; kind: MemoryKind; source?: "user" | "agent"; replaces_id?: string | null },
+) => request<MemoryFact>("/memory", { method: "POST", token, body: fact });
+
+export const updateMemoryFact = (token: string, id: string, patch: { text?: string; kind?: MemoryKind }) =>
+  request<MemoryFact>(`/memory/${id}`, { method: "PATCH", token, body: patch });
+
+export const deleteMemoryFact = (token: string, id: string) =>
+  request<void>(`/memory/${id}`, { method: "DELETE", token });
+
 export type RecurringKind = "bill" | "subscription" | "income";
 export type RecurringStatus = "suggested" | "confirmed" | "dismissed";
 
@@ -786,6 +821,8 @@ export interface Clarify {
 export interface AnswerParts {
   sources: ChatSource[];
   citations?: Citation[];
+  /** Dollar figures in the reply that no source holds; shown as "not verified". */
+  uncited_figures?: string[];
   goal_proposal: GoalProposal | null;
   action_proposal?: ActionProposal | null;
   charts?: ChartSpec[];
@@ -880,8 +917,18 @@ export interface BudgetMoveProposal {
   amount: number;
 }
 
+export interface MemoryProposal {
+  kind: "memory";
+  text: string;
+  fact_kind: MemoryKind;
+  fact_kind_label: string;
+  /** Set when this updates a fact Bankr already remembers. */
+  replaces_id: string | null;
+  replaces_text: string | null;
+}
+
 /** A confirm card the assistant drafted; nothing is changed until the user confirms. */
-export type ActionProposal = RuleProposal | BudgetMoveProposal;
+export type ActionProposal = RuleProposal | BudgetMoveProposal | MemoryProposal;
 
 /** Token usage and cost of one chat turn. Only sent when the backend runs with AGENT_DEBUG on. */
 export interface TurnUsage {
@@ -911,6 +958,8 @@ export function formatTurnUsage(u: TurnUsage): string {
 
 export interface ChatResponse extends AnswerParts {
   conversation_id: string;
+  /** The saved reply, for rateMessage. */
+  message_id: string;
   reply: string;
   usage?: TurnUsage | null;
 }
@@ -977,10 +1026,25 @@ export interface ConversationSummary {
 }
 
 export interface ConversationMessage extends AnswerParts {
+  id: string;
   role: string;
   content: string;
   created_at: string;
+  feedback?: Rating | null;
 }
+
+export type Rating = "up" | "down";
+
+/** Thumbs up or down on a reply; rating it again replaces the earlier one. */
+export const rateMessage = (token: string, messageId: string, rating: Rating, reason?: string) =>
+  request<{ message_id: string; rating: Rating; reason: string | null }>(`/chat/messages/${messageId}/feedback`, {
+    method: "POST",
+    token,
+    body: { rating, reason: reason || null },
+  });
+
+export const clearMessageRating = (token: string, messageId: string) =>
+  request<void>(`/chat/messages/${messageId}/feedback`, { method: "DELETE", token });
 
 export const fetchConversations = (token: string) =>
   request<ConversationSummary[]>("/chat/conversations", { token });

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { AddBankButton } from "./AddBankButton";
 import { BankLogo, BankName } from "./BankLogo";
 import { CategoriesSettings } from "./CategoriesSettings";
+import { MemorySettings } from "./MemorySettings";
 import { RulesSettings } from "./RulesSettings";
 import { ApiError, deleteAccount, disconnectBank, fetchLinkedBanks, type LinkedBank } from "../lib/api";
 
@@ -187,6 +188,8 @@ export function SettingsModal({
             await onBanksChanged(updated.length);
           }}
         />
+
+        <MemorySettings token={token} />
 
         <CategoriesSettings token={token} />
 

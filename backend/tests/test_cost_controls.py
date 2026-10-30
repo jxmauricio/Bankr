@@ -6,7 +6,13 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from app.agent.agent_client import ToolSpec
-from app.agent.providers import FINAL_ROUND_NUDGE, MAX_TOOL_ROUNDS, AnthropicAgentClient, OpenRouterAgentClient
+from app.agent.providers import (
+    EMPTY_RETRY_NUDGE,
+    FINAL_ROUND_NUDGE,
+    MAX_TOOL_ROUNDS,
+    AnthropicAgentClient,
+    OpenRouterAgentClient,
+)
 from app.db.models import ChatMessage, Goal, InsightLog
 from app.jobs import insights_job
 from app.services import chat_service
@@ -85,6 +91,106 @@ def test_anthropic_tool_loop_stops_at_the_cap(monkeypatch):
     # Each round sends its own copy of the messages (see _with_cache_marker),
     # so the nudge is the last message of the final call.
     assert calls[-1]["messages"][-1]["content"][-1]["text"] == FINAL_ROUND_NUDGE
+
+
+def _openai_message(content, tool_calls=None):
+    message = SimpleNamespace(
+        content=content,
+        tool_calls=tool_calls,
+        model_dump=lambda exclude_none=True: {
+            "role": "assistant",
+            "content": content or "",
+            **(
+                {
+                    "tool_calls": [
+                        {
+                            "id": c.id,
+                            "type": "function",
+                            "function": {"name": c.function.name, "arguments": c.function.arguments},
+                        }
+                        for c in tool_calls
+                    ]
+                }
+                if tool_calls
+                else {}
+            ),
+        },
+    )
+    return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+
+def test_an_empty_openai_reply_is_retried_once_with_reasoning_off(monkeypatch):
+    client = OpenRouterAgentClient(api_key="key", model="some/model")
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        return _openai_message("" if len(calls) == 1 else "You spent **$12** on coffee.")
+
+    monkeypatch.setattr(client._client.chat.completions, "create", create)
+
+    reply = client.run_turn("system", _TOOLS, [{"role": "user", "content": "coffee?"}], call_tool=lambda n, a: {})
+
+    assert reply == "You spent **$12** on coffee."
+    assert len(calls) == 2
+    assert calls[1]["tool_choice"] == "none"
+    assert calls[1]["extra_body"]["reasoning"] == {"enabled": False}
+    assert calls[1]["messages"][-1] == {"role": "user", "content": EMPTY_RETRY_NUDGE}
+
+
+def test_a_normal_openai_reply_is_not_retried(monkeypatch):
+    client = OpenRouterAgentClient(api_key="key", model="some/model")
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        return _openai_message("You spent **$12** on coffee.")
+
+    monkeypatch.setattr(client._client.chat.completions, "create", create)
+
+    reply = client.run_turn("system", _TOOLS, [{"role": "user", "content": "coffee?"}], call_tool=lambda n, a: {})
+
+    assert reply == "You spent **$12** on coffee."
+    assert len(calls) == 1
+
+
+def test_a_second_empty_openai_reply_stays_empty(monkeypatch):
+    client = OpenRouterAgentClient(api_key="key", model="some/model")
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        return _openai_message("")
+
+    monkeypatch.setattr(client._client.chat.completions, "create", create)
+
+    reply = client.run_turn("system", _TOOLS, [{"role": "user", "content": "coffee?"}], call_tool=lambda n, a: {})
+
+    assert reply == ""
+    assert len(calls) == 2
+
+
+def test_an_empty_anthropic_reply_is_retried_once(monkeypatch):
+    client = AnthropicAgentClient(api_key="key", model="claude-sonnet-5")
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        text = "" if len(calls) == 1 else "You spent $12 on coffee."
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text=text)] if text else [],
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=10, output_tokens=4),
+        )
+
+    monkeypatch.setattr(client._client.messages, "create", create)
+
+    reply = client.run_turn("system", _TOOLS, [{"role": "user", "content": "coffee?"}], call_tool=lambda n, a: {})
+
+    assert reply == "You spent $12 on coffee."
+    assert len(calls) == 2
+    assert calls[1]["tool_choice"] == {"type": "none"}
+    assert calls[1]["messages"][-1] == {"role": "user", "content": EMPTY_RETRY_NUDGE}
 
 
 def test_history_sent_to_the_model_is_capped_and_starts_on_a_user_turn(db, user):

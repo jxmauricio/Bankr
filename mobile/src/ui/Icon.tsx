@@ -33,8 +33,34 @@ const ICONS = {
   ),
   chevronLeft: <Path d="m15 6-6 6 6 6" />,
   chevronRight: <Path d="m9 6 6 6-6 6" />,
+  chevronDown: <Path d="m6 9 6 6 6-6" />,
   check: <Path d="m5 12 5 5 9-10" />,
+  home: (
+    <>
+      <Path d="M4 11.5 12 4l8 7.5V20H4z" />
+      <Path d="M9 20v-7h6v7" />
+    </>
+  ),
+  sun: (
+    <>
+      <Circle cx="12" cy="12" r="4" />
+      <Path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </>
+  ),
+  moon: <Path d="M21 14.3A8.5 8.5 0 1 1 9.7 3 7 7 0 0 0 21 14.3Z" />,
   chat: <Path d="M4 5h16v11H9l-5 4V5Z" />,
+  thumbUp: (
+    <>
+      <Path d="M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3Z" />
+      <Path d="M7 10l4-7a2.5 2.5 0 0 1 3 2.6L13.5 10H19a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 17.8 21H7" />
+    </>
+  ),
+  thumbDown: (
+    <>
+      <Path d="M17 14V3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3Z" />
+      <Path d="M17 14l-4 7a2.5 2.5 0 0 1-3-2.6l.5-4.4H5a2 2 0 0 1-2-2.3l1.2-7A2 2 0 0 1 6.2 3H17" />
+    </>
+  ),
   list: (
     <>
       <Path d="M8 6h12M8 12h12M8 18h12" />

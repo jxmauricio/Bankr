@@ -11,7 +11,7 @@ export default function HistorySheet() {
   const { status, data, error, retry } = useResource(fetchConversations);
 
   function pick(conversation: string) {
-    router.dismissTo({ pathname: "/", params: { conversation } });
+    router.dismissTo({ pathname: "/chat", params: { conversation } });
   }
 
   if (status === "loading" && !data) return <Loading />;

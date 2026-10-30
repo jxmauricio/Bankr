@@ -40,6 +40,21 @@ class User(Base):
     goals: Mapped[list["Goal"]] = relationship(back_populates="user")
 
 
+class DevicePushToken(Base):
+    """One iOS (or later Android) device that's allowed to receive pushes
+    for this user. The same physical phone re-registers the same token;
+    a token that shows up under a new user is reassigned, because APNs
+    tokens are per-install, not per-account."""
+
+    __tablename__ = "device_push_tokens"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token: Mapped[str] = mapped_column(String, unique=True)
+    platform: Mapped[str] = mapped_column(String, default="ios")  # ios | android
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
 class LinkedAccount(Base):
     __tablename__ = "linked_accounts"
 
@@ -281,6 +296,24 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
+class ChatFeedback(Base):
+    """A user's thumbs up or down on one assistant reply, so bad answers can
+    be pulled out (app/scripts/export_feedback.py) and turned into eval
+    tasks. One per message: rating it again replaces the earlier one."""
+
+    __tablename__ = "chat_feedback"
+    __table_args__ = (CheckConstraint("rating IN ('up', 'down')", name="chat_feedback_rating"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    message_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("chat_messages.id", ondelete="CASCADE"), unique=True
+    )
+    rating: Mapped[str] = mapped_column(String)  # up | down
+    reason: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
 class MerchantCategoryGuess(Base):
     """A classifier's answer for one merchant, shared by every user: a
     merchant's name says the same thing whoever shops there. Cached so each
@@ -425,3 +458,22 @@ class BudgetMove(Base):
     to_group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("category_groups.id"), nullable=True)
     amount: Mapped[float] = mapped_column(Numeric(12, 2))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class MemoryFact(Base):
+    """Something durable the user told Bankr about themselves ("paid every
+    other Friday", "saving for a wedding next June"), shown to the agent on
+    every turn so it outlives the chat's history window. Written only by the
+    user: in Settings, or by confirming a card the agent drafted (see
+    app/services/memory_service.py, which also keeps these short and free
+    of account numbers and credentials)."""
+
+    __tablename__ = "memory_facts"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String)  # income | priority | household | preference | other
+    text: Mapped[str] = mapped_column(String)
+    source: Mapped[str] = mapped_column(String, default="user")  # user | agent (drafted by the agent, confirmed by the user)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
