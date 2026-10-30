@@ -4,6 +4,7 @@ import { BankLogo, BankName } from "./BankLogo";
 import { CategoriesSettings } from "./CategoriesSettings";
 import { MemorySettings } from "./MemorySettings";
 import { NotificationSettings } from "./NotificationSettings";
+import { ConnectedAppsSettings } from "./ConnectedAppsSettings";
 import { RulesSettings } from "./RulesSettings";
 import { ApiError, deleteAccount, disconnectBank, fetchLinkedBanks, type LinkedBank } from "../lib/api";
 
@@ -197,6 +198,8 @@ export function SettingsModal({
         <RulesSettings token={token} />
 
         <NotificationSettings token={token} />
+
+        <ConnectedAppsSettings token={token} />
 
         <p className="mt-6 text-sm">
           <a href="/privacy" target="_blank" rel="noreferrer" className="text-ink-soft underline hover:text-ink">

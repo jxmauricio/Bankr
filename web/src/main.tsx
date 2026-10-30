@@ -9,6 +9,7 @@ import { SessionProvider } from './lib/session.tsx'
 import { ThemeProvider } from './lib/theme.tsx'
 import { PrivacyPage } from './pages/PrivacyPage.tsx'
 import { ProfilePage } from './pages/ProfilePage.tsx'
+import { ConsentPage } from './pages/ConsentPage.tsx'
 
 initMonitoring()
 
@@ -16,6 +17,8 @@ initMonitoring()
 // outside the session and onboarding gate. No router library: one static page.
 const isPrivacyPage = window.location.pathname === '/privacy'
 const isProfilePage = window.location.pathname === '/profile'
+// Where /oauth/authorize sends the browser when Claude or ChatGPT connects.
+const isConsentPage = window.location.pathname === '/oauth/consent'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -25,7 +28,7 @@ createRoot(document.getElementById('root')!).render(
           <PrivacyPage />
         ) : (
           <SessionProvider>
-            {isProfilePage ? <ProfilePage /> : <App />}
+            {isProfilePage ? <ProfilePage /> : isConsentPage ? <ConsentPage /> : <App />}
           </SessionProvider>
         )}
       </ErrorBoundary>

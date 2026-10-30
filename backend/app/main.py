@@ -16,12 +16,14 @@ from app.api.goals import router as goals_router
 from app.api.insights import router as insights_router
 from app.api.memory import router as memory_router
 from app.api.notifications import router as notifications_router
+from app.api.proposals import router as proposals_router
 from app.api.recaps import router as recaps_router
 from app.api.recurring import router as recurring_router
 from app.api.rules import router as rules_router
 from app.api.transactions import router as transactions_router
 from app.api.webhooks import router as webhooks_router
 from app.config import settings
+from app.mcp_oauth import router as mcp_oauth_router
 from app.mcp_server import McpEndpoint
 from app.observability import init_sentry
 
@@ -67,6 +69,8 @@ app.include_router(recurring_router)
 app.include_router(budgets_router)
 app.include_router(insights_router)
 app.include_router(devices_router)
+app.include_router(proposals_router)
+app.include_router(mcp_oauth_router)
 app.include_router(recaps_router)
 app.include_router(briefing_router)
 app.include_router(notifications_router)

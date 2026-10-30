@@ -117,7 +117,9 @@ def get_current_user(
     except (JWTError, ExpiredSignatureError) as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired session") from exc
 
-    if payload.get("scope") == MCP_SCOPE:
+    # Session tokens carry no scope; minted MCP tokens ("mcp") and OAuth
+    # connector tokens ("read" / "read write") all do.
+    if "scope" in payload:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "MCP tokens cannot be used for the REST API")
 
     user = db.get(User, UUID(payload["sub"]))

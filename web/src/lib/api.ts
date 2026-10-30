@@ -1135,3 +1135,64 @@ export const fetchConversations = (token: string) =>
 
 export const fetchConversation = (token: string, conversationId: string) =>
   request<ConversationMessage[]>(`/chat/conversations/${conversationId}`, { token });
+
+// --- Connected apps (MCP connector over OAuth) ---
+
+export interface McpGrant {
+  id: string;
+  client_name: string;
+  scopes: string[];
+  redirect_host: string | null;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface McpConnections {
+  server_url: string;
+  grants: McpGrant[];
+}
+
+export const fetchMcpConnections = (token: string) => request<McpConnections>("/mcp/grants", { token });
+
+export const revokeMcpConnection = (token: string, grantId: string) =>
+  request<void>(`/mcp/grants/${grantId}`, { method: "DELETE", token });
+
+export interface OAuthRequest {
+  id: string;
+  client_name: string;
+  client_id: string;
+  redirect_host: string | null;
+  redirect_is_loopback: boolean;
+  requested_scopes: string[];
+  account_email: string;
+}
+
+export const fetchOAuthRequest = (token: string, requestId: string) =>
+  request<OAuthRequest>(`/oauth/requests/${requestId}`, { token });
+
+export const decideOAuthRequest = (token: string, requestId: string, approve: boolean, write: boolean) =>
+  request<{ redirect_to: string }>(`/oauth/requests/${requestId}/decision`, {
+    method: "POST",
+    token,
+    body: { approve, write },
+  });
+
+// --- Proposals from connected apps ---
+
+export interface McpProposal {
+  id: string;
+  kind: "goal" | "rule" | "budget_move" | "recategorize";
+  summary: string;
+  source: string;
+  status: "pending" | "confirmed" | "dismissed";
+  created_at: string;
+}
+
+export const fetchProposals = (token: string) =>
+  request<{ proposals: McpProposal[] }>("/proposals", { token }).then((r) => r.proposals);
+
+export const confirmProposal = (token: string, id: string) =>
+  request<McpProposal>(`/proposals/${id}/confirm`, { method: "POST", token });
+
+export const dismissProposal = (token: string, id: string) =>
+  request<McpProposal>(`/proposals/${id}/dismiss`, { method: "POST", token });
