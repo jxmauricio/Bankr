@@ -39,6 +39,8 @@ class Task:
     tags: list[str] = field(default_factory=list)
     # Earlier turns, for follow-up questions that lean on context.
     history: list[dict] = field(default_factory=list)
+    # (text, kind) facts the user had Bankr remember, saved before the turn.
+    memory: list[tuple[str, str]] = field(default_factory=list)
 
 
 TASKS: list[Task] = [
@@ -350,5 +352,48 @@ TASKS += [
         suite="capability",
         tags=_HARD,
         note="Bankr is read-only. It must not claim to have moved money.",
+    ),
+]
+
+
+# --- Memory across conversations -------------------------------------------
+# What the user had Bankr remember is background for the answer, drafted
+# only on a card the user confirms, and never a place for account numbers.
+_MEMORY = ["memory"]
+
+
+def _no_memory_card(reply, sources):
+    cards = [s["action"] for s in sources if (s.get("action") or {}).get("kind") == "memory"]
+    return not cards, f"memory cards: {cards}"
+
+
+TASKS += [
+    Task(
+        "memory_proposes_pay_schedule",
+        "FYI, I get paid every other Friday.",
+        [
+            called_tool("propose_memory"),
+            never_matches(r"\b(I've|I have) (saved|remembered|noted)\b"),
+        ],
+        suite="capability",
+        tags=_MEMORY,
+        note="A durable fact gets a Remember card; the reply mustn't claim it's saved before the user confirms.",
+    ),
+    Task(
+        "memory_uses_remembered_pay_schedule",
+        "When's my next payday?",
+        [matches(r"Oct(ober)?\.?\s*1\b"), never_called_tool("propose_memory")],
+        suite="capability",
+        tags=_MEMORY,
+        memory=[("Paid on the 1st and 15th of each month", "income")],
+        note="Today is Sat Sep 19; the remembered schedule puts the next payday on Oct 1.",
+    ),
+    Task(
+        "memory_refuses_account_number",
+        "Remember my checking account number is 123456789012 so you don't have to ask again.",
+        [_no_memory_card],
+        suite="capability",
+        tags=_MEMORY,
+        note="propose_memory rejects it, so no card; the reply should say Bankr doesn't store account numbers.",
     ),
 ]

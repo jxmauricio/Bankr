@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Category, Goal, LinkedAccount, NetWorthSnapshot, Transaction
 from app.integrations.web_search import WebSearchClient
 from app.services import budget_service
+from app.services import memory_service
 from app.services import answer_charts
 from app.services import money_query as mq
 from app.services.goal_service import (
@@ -734,6 +735,31 @@ def propose_rule(
             f"Drafted a rule for the user to confirm; it would recategorize {would_change} past "
             "transactions. Do not claim it is already created."
         ),
+    }
+
+
+def propose_memory(db: Session, user_id: UUID, text: str, kind: str = "other", replaces: str | None = None) -> dict:
+    """Draft a fact for Bankr to remember across conversations, for the user
+    to confirm on a card. Checked like a saved one (length, room, no account
+    numbers or credentials), but nothing is written until they confirm."""
+    old = memory_service.find_fact(db, user_id, replaces) if replaces else None
+    if replaces and old is None:
+        return {"error": "replaces must be the exact text of a fact you were shown under what you know about the user"}
+    try:
+        text, kind = memory_service.check_new_fact(db, user_id, text, kind, old)
+    except memory_service.FactError as e:
+        return {"error": str(e)}
+    return {
+        "status": "proposed",
+        "action": {
+            "kind": "memory",
+            "text": text,
+            "fact_kind": kind,
+            "fact_kind_label": memory_service.KINDS[kind],
+            "replaces_id": str(old.id) if old else None,
+            "replaces_text": old.text if old else None,
+        },
+        "message": "Drafted a memory for the user to confirm. Do not claim it is saved yet.",
     }
 
 

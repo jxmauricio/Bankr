@@ -425,3 +425,22 @@ class BudgetMove(Base):
     to_group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("category_groups.id"), nullable=True)
     amount: Mapped[float] = mapped_column(Numeric(12, 2))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class MemoryFact(Base):
+    """Something durable the user told Bankr about themselves ("paid every
+    other Friday", "saving for a wedding next June"), shown to the agent on
+    every turn so it outlives the chat's history window. Written only by the
+    user: in Settings, or by confirming a card the agent drafted (see
+    app/services/memory_service.py, which also keeps these short and free
+    of account numbers and credentials)."""
+
+    __tablename__ = "memory_facts"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String)  # income | priority | household | preference | other
+    text: Mapped[str] = mapped_column(String)
+    source: Mapped[str] = mapped_column(String, default="user")  # user | agent (drafted by the agent, confirmed by the user)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
