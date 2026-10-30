@@ -21,13 +21,16 @@ import { Text } from "@/ui";
 export function AssistantText({
   text,
   citations = [],
+  uncited = [],
   sources = [],
 }: {
   text: string;
   citations?: Citation[];
+  /** Figures no source holds (ChatResponse.uncited_figures): greyed with a "?". */
+  uncited?: string[];
   sources?: ChatSource[];
 }) {
-  const figures = { citations, sources };
+  const figures = { citations, uncited, sources };
   const lines = text.split(/\n+/).filter((line) => line.trim());
 
   // Group consecutive "- " lines into one list; everything else is a paragraph.
@@ -66,10 +69,11 @@ export function AssistantText({
 }
 
 // Same pattern the server cites figures with (app/api/chat.py _MONEY).
-const MONEY = /(-?\$[\d,]+(?:\.\d+)?)/g;
+const MONEY = /(-?\$\d+(?:,\d{3})*(?:\.\d+)?)/g;
 
 interface Figures {
   citations: Citation[];
+  uncited: string[];
   sources: ChatSource[];
 }
 
@@ -77,6 +81,16 @@ function Figure({ text, figures }: { text: string; figures: Figures }) {
   const number = figures.citations.find((c) => c.text === text)?.source;
   const source = number ? figures.sources[number - 1] : undefined;
   const query = source?.query;
+  if (!number && figures.uncited.includes(text)) {
+    return (
+      <Text variant="money" tone="soft" accessibilityLabel={`${text} (not verified)`}>
+        {text}
+        <Text variant="citation" tone="faint">
+          {" ?"}
+        </Text>
+      </Text>
+    );
+  }
   return (
     <Text
       variant="money"

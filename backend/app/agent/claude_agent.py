@@ -15,9 +15,10 @@ Guardrails are enforced two ways, not just by prompting:
    trade-execution tool, so there is nothing for the model to recommend
    buying. Transfers from linked bank accounts to a brokerage are still
    banking data and find_transactions can list them. web_search can
-   surface arbitrary web content, so it's the one tool where guardrail (1)
-   -- prompting -- is load-bearing rather than backed by (2); see the
-   system prompt for how that's constrained.
+   surface arbitrary web content, so it's the one tool not backed by (2).
+3. For that one: its results reach the model marked untrusted, and after
+   a turn that searched, app/agent/search_guard.py removes any ticker or
+   named fund/stock that came only from the search results.
 
 Which LLM actually runs this loop is decided by AGENT_PROVIDER (see
 app/agent/agent_client.py) -- this module never touches a vendor SDK
@@ -26,6 +27,7 @@ touch this file.
 """
 
 import json
+import logging
 from typing import Callable
 from uuid import UUID
 
@@ -34,10 +36,13 @@ from sqlalchemy.orm import Session
 from app.agent import tools
 from app.agent.agent_client import ToolSpec, build_agent_client
 from app.agent.reply_text import clip_reply
+from app.agent.search_guard import redact_search_picks
 from app.db.models import LinkedAccount
 from app.db.seed_categories import DEFAULT_CATEGORIES, DEFAULT_GROUPS
 from app.integrations.web_search import build_web_search_client
 from app.services import money_query as mq
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are Bankr's financial insights assistant. You help young \
 professionals understand their spending, income, and progress toward up to \
@@ -905,6 +910,10 @@ def run_agent_turn(
     AgentClient.run_turn)."""
     sources: list[dict] = []
     seen_calls: set[str] = set()
+    # What the search results said vs. what the user and their own data did,
+    # for redact_search_picks once the reply is in.
+    search_text: list[str] = []
+    trusted_text: list[str] = [m["content"] for m in messages if m["role"] == "user" and isinstance(m["content"], str)]
 
     def check_cancelled() -> None:
         if is_cancelled and is_cancelled():
@@ -920,6 +929,10 @@ def run_agent_turn(
         if on_status:
             on_status(_progress_label(name, tool_input))
         result = _TOOL_DISPATCH[name](db, user_id, **tool_input)
+        if name == "web_search":
+            search_text.extend(f"{r['title']}\n{r['snippet']}" for r in (result or {}).get("results", []))
+        else:
+            trusted_text.append(json.dumps(result, default=str))
         if (
             name in _WINDOWED_TOOLS
             and isinstance(result, dict)
@@ -988,6 +1001,11 @@ def run_agent_turn(
         streaming["on_usage"] = on_usage
     reply = clip_reply(_client.run_turn(system, TOOL_DEFINITIONS, messages, call_tool, **streaming))
     check_cancelled()
+    if search_text:
+        reply, removed = redact_search_picks(reply, "\n".join(search_text), "\n".join(trusted_text))
+        if removed:
+            # A count, not the terms or the reply: chat text stays out of logs.
+            logger.warning("Removed %d search-only product name(s) from a reply", len(removed))
     if not reply.strip():
         reply = EMPTY_REPLY_FALLBACK
     return reply, sources

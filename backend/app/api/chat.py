@@ -7,11 +7,12 @@ import re
 import threading
 import time
 from datetime import datetime
+from typing import Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.agent.claude_agent import TurnCancelled
@@ -199,6 +200,9 @@ class AnswerParts(BaseModel):
 
     sources: list[ChatSource] = []
     citations: list[Citation] = []
+    # Dollar figures in the reply that no source holds (see _uncited_figures);
+    # the client marks them "not verified" instead of numbering them.
+    uncited_figures: list[str] = []
     goal_proposal: GoalProposal | None = None
     # A confirm card for something other than a goal: {"kind": "rule" | "budget_move", ...}.
     action_proposal: dict | None = None
@@ -224,6 +228,8 @@ class TurnUsage(BaseModel):
 
 class ChatResponse(AnswerParts):
     conversation_id: UUID
+    # The saved reply, for POST /chat/messages/{id}/feedback.
+    message_id: UUID
     reply: str
     usage: TurnUsage | None = None
 
@@ -271,9 +277,23 @@ class ConversationSummary(BaseModel):
 
 
 class ConversationMessage(AnswerParts):
+    id: UUID
     role: str
     content: str
     created_at: datetime
+    # The user's thumbs on an assistant reply: up | down | None.
+    feedback: str | None = None
+
+
+class FeedbackRequest(BaseModel):
+    rating: Literal["up", "down"]
+    reason: str | None = Field(default=None, max_length=280)
+
+
+class FeedbackResponse(BaseModel):
+    message_id: UUID
+    rating: str
+    reason: str | None = None
 
 
 def _public_entries(raw: list[dict] | None) -> list[dict]:
@@ -300,7 +320,7 @@ def _public_sources(raw: list[dict] | None) -> list[dict]:
 
 # Same pattern the web client splits figures out of the text with
 # (AssistantText.tsx), so both sides agree on what one figure is.
-_MONEY = re.compile(r"-?\$[\d,]+(?:\.\d+)?")
+_MONEY = re.compile(r"-?\$\d+(?:,\d{3})*(?:\.\d+)?")
 
 
 def _citations(reply: str, raw: list[dict] | None) -> list[dict]:
@@ -333,6 +353,25 @@ def _citations(reply: str, raw: list[dict] | None) -> list[dict]:
                 citations.append({"text": text, "source": number})
                 break
     return citations
+
+
+def _uncited_figures(reply: str, raw: list[dict] | None, citations: list[dict] | None = None) -> list[str]:
+    """Dollar figures in the reply that matched no source, in reply order:
+    a number the model wrote without a tool result behind it."""
+    cited = {c["text"] for c in (citations if citations is not None else _citations(reply, raw))}
+    uncited: list[str] = []
+    for match in _MONEY.finditer(reply or ""):
+        if match.group() not in cited and match.group() not in uncited:
+            uncited.append(match.group())
+    return uncited
+
+
+def _log_uncited(message_id: UUID, parts: dict) -> None:
+    """Count only, never the figures or the reply: chat text stays out of logs."""
+    if parts["uncited_figures"]:
+        logger.warning(
+            "Chat turn %s has %d uncited dollar figure(s)", message_id, len(parts["uncited_figures"])
+        )
 
 
 def _goal_proposal(raw: list[dict] | None) -> dict | None:
@@ -385,9 +424,11 @@ def _clarify(raw: list[dict] | None) -> dict | None:
 
 
 def _answer_parts(reply: str, raw: list[dict] | None) -> dict:
+    citations = _citations(reply, raw)
     return {
         "sources": _public_sources(raw),
-        "citations": _citations(reply, raw),
+        "citations": citations,
+        "uncited_figures": _uncited_figures(reply, raw, citations),
         "goal_proposal": _goal_proposal(raw),
         "action_proposal": _action_proposal(raw),
         "charts": _charts(raw),
@@ -405,14 +446,17 @@ def chat(
 ) -> ChatResponse:
     conversation_id = body.conversation_id or uuid4()
     totals = _UsageTotals() if settings.agent_debug else None
-    reply, sources = chat_service.send_message(
+    reply, sources, message_id = chat_service.send_message(
         db, user.id, conversation_id, body.message, on_usage=totals.add if totals else None
     )
+    parts = _answer_parts(reply, sources)
+    _log_uncited(message_id, parts)
     return ChatResponse(
         conversation_id=conversation_id,
+        message_id=message_id,
         reply=reply,
         usage=totals.result() if totals else None,
-        **_answer_parts(reply, sources),
+        **parts,
     )
 
 
@@ -453,7 +497,7 @@ def chat_stream(
     def run_turn() -> None:
         try:
             with session_factory() as db:
-                reply, sources = chat_service.send_message(
+                reply, sources, message_id = chat_service.send_message(
                     db,
                     user_id,
                     conversation_id,
@@ -463,11 +507,14 @@ def chat_stream(
                     on_text=lambda text: events.put(("delta", {"text": text}) if text is not None else ("reset", {})),
                     on_usage=totals.add if totals else None,
                 )
+            parts = _answer_parts(reply, sources)
+            _log_uncited(message_id, parts)
             response = ChatResponse(
                 conversation_id=conversation_id,
+                message_id=message_id,
                 reply=reply,
                 usage=totals.result() if totals else None,
-                **_answer_parts(reply, sources),
+                **parts,
             )
             events.put(("done", response.model_dump(mode="json")))
         except TurnCancelled:
@@ -529,10 +576,39 @@ def get_conversation(
         raise HTTPException(status_code=404, detail="Conversation not found")
     return [
         {
+            "id": row["id"],
             "role": row["role"],
             "content": row["content"],
             "created_at": row["created_at"],
+            "feedback": row["feedback"],
             **_answer_parts(row["content"], row.get("sources")),
         }
         for row in messages
     ]
+
+
+@router.post("/messages/{message_id}/feedback", response_model=FeedbackResponse)
+def rate_message(
+    message_id: UUID,
+    body: FeedbackRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FeedbackResponse:
+    """Thumbs up or down on one of the user's assistant replies. Rating it
+    again replaces the earlier rating; app/scripts/export_feedback.py dumps
+    them with their sources so bad answers can become eval tasks."""
+    feedback = chat_service.set_feedback(db, user.id, message_id, body.rating, body.reason)
+    if feedback is None:
+        raise HTTPException(status_code=404, detail="Message not found")
+    return FeedbackResponse(message_id=message_id, rating=feedback.rating, reason=feedback.reason)
+
+
+@router.delete("/messages/{message_id}/feedback", status_code=204)
+def clear_message_rating(
+    message_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    if not chat_service.clear_feedback(db, user.id, message_id):
+        raise HTTPException(status_code=404, detail="No feedback on that message")
+    return Response(status_code=204)

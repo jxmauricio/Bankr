@@ -1,11 +1,29 @@
 import { useCallback, useRef, useState } from "react";
-import { ApiError, fetchConversation, streamChatMessage, type AnswerParts, type GoalProposal, type TurnUsage } from "@/lib/api";
+import {
+  ApiError,
+  fetchConversation,
+  streamChatMessage,
+  type AnswerParts,
+  type GoalProposal,
+  type Rating,
+  type TurnUsage,
+} from "@/lib/api";
 import { resolveGoalProposal } from "@/lib/goalProposal";
 import { useSession } from "@/lib/session";
 
 export type ChatItem =
   | { kind: "user"; id: string; text: string }
-  | { kind: "assistant"; id: string; text: string; parts: AnswerParts; goalProposal: GoalProposal | null; usage?: TurnUsage | null };
+  | {
+      kind: "assistant";
+      id: string;
+      text: string;
+      parts: AnswerParts;
+      goalProposal: GoalProposal | null;
+      usage?: TurnUsage | null;
+      // The saved reply, for thumbs up/down, and the rating it already has.
+      messageId: string;
+      feedback?: Rating | null;
+    };
 
 let nextId = 0;
 const makeId = () => `m${++nextId}`;
@@ -20,6 +38,7 @@ function partsOf(m: AnswerParts): AnswerParts {
   return {
     sources: m.sources ?? [],
     citations: m.citations,
+    uncited_figures: m.uncited_figures,
     goal_proposal: m.goal_proposal ?? null,
     action_proposal: m.action_proposal,
     charts: m.charts,
@@ -60,7 +79,15 @@ export function useChat() {
         const parts = partsOf(response);
         setItems((prev) => [
           ...prev,
-          { kind: "assistant", id: makeId(), text: response.reply, parts, goalProposal: goalCard(text, response.reply, parts), usage: response.usage },
+          {
+            kind: "assistant",
+            id: makeId(),
+            text: response.reply,
+            parts,
+            goalProposal: goalCard(text, response.reply, parts),
+            usage: response.usage,
+            messageId: response.message_id,
+          },
         ]);
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) return signOut();
@@ -118,6 +145,8 @@ export function useChat() {
               text: m.content,
               parts,
               goalProposal: goalCard(previous?.role === "user" ? previous.content : "", m.content, parts),
+              messageId: m.id,
+              feedback: m.feedback,
             };
           })
         );

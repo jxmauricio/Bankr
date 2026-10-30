@@ -20,7 +20,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.db.models import Category, Goal, LinkedAccount, NetWorthSnapshot, Transaction
-from app.integrations.web_search import WebSearchClient
+from app.integrations.web_search import WebSearchClient, as_untrusted
 from app.services import budget_service
 from app.services import answer_charts
 from app.services import money_query as mq
@@ -968,7 +968,4 @@ def web_search(query: str, max_results: int = 5, *, client: WebSearchClient | No
     except Exception as e:
         # A flaky search API/network blip shouldn't fail the whole chat turn.
         return {"query": query, "error": f"Search failed: {e}"}
-    return {
-        "query": query,
-        "results": [{"title": r.title, "url": r.url, "snippet": r.snippet} for r in results],
-    }
+    return as_untrusted(query, results)
