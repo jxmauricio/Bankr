@@ -156,6 +156,15 @@ class Settings(BaseSettings):
     apns_topic: str = ""
     apns_use_sandbox: bool = True
 
+    # Push notifications to the mobile app through Expo's push service (see
+    # app/integrations/push.py). Off by default: the jobs still run and log
+    # what they'd send. EXPO_ACCESS_TOKEN is only needed when "enhanced push
+    # security" is on for the Expo project.
+    expo_push_enabled: bool = False
+    expo_access_token: str = ""
+    # Days ahead a subscription renewal (or a trial's first charge) shows up
+    # in the daily briefing.
+    renewal_reminder_days: int = 3
 
     @property
     def cors_origins(self) -> list[str]:

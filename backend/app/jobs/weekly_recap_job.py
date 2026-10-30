@@ -5,10 +5,10 @@ from money_query and the goal helpers, and Claude only writes the short
 "Bankr's take" paragraph from those numbers. If the model can't be reached
 the recap is still saved, without the paragraph.
 
-Recaps are made on demand (the app asks for the latest one) rather than by
-a scheduler, so they exist before push delivery does. The week is
-Monday-Sunday in the user's time zone; Sunday's own week counts from
-RECAP_READY_HOUR, when the push will go out.
+Recaps are made on demand (the app asks for the latest one), or by
+app/jobs/notifications_job.py when it pushes one. The week is Monday-Sunday
+in the user's time zone; Sunday's own week counts from RECAP_READY_HOUR,
+when the push goes out.
 """
 
 import json
@@ -255,7 +255,7 @@ def get_or_create_recap(db: Session, user_id: UUID, week: mq.Window, notify: boo
             db.rollback()
             recap = _find(db, user_id, week.start)
     if notify:
-        _log_notification(db, recap)
+        log_notification(db, recap)
     return recap
 
 
@@ -279,7 +279,7 @@ def _find(db: Session, user_id: UUID, week_start: date) -> WeeklyRecap | None:
     )
 
 
-def _log_notification(db: Session, recap: WeeklyRecap) -> None:
+def log_notification(db: Session, recap: WeeklyRecap, delivered_via: str = "in_app") -> None:
     if notification_for(db, recap) is not None:
         return
     label = mq.format_range(recap.week_start, recap.week_end).rsplit(", ", 1)[0]
@@ -289,7 +289,7 @@ def _log_notification(db: Session, recap: WeeklyRecap) -> None:
             type="weekly_recap",
             message=f"{label}: {recap.headline[0].lower()}{recap.headline[1:]}. {teaser_for(recap.facts)}",
             dedupe_key=dedupe_key(recap.week_start),
-            delivered_via="in_app",  # TODO: push once push delivery exists
+            delivered_via=delivered_via,
         )
     )
     db.commit()

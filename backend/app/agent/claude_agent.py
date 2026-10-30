@@ -337,6 +337,15 @@ TOOL_DEFINITIONS = [
         parameters={"type": "object", "properties": {}},
     ),
     ToolSpec(
+        name="get_daily_briefing",
+        description=(
+            "Get today's daily briefing: charges waiting for a category, unusual or possibly duplicate charges, "
+            "subscription price changes and renewals in the next few days. Use when the user asks what needs "
+            "their attention, about their briefing, or what's renewing soon."
+        ),
+        parameters={"type": "object", "properties": {}},
+    ),
+    ToolSpec(
         name="calculate",
         description=(
             "Evaluate a precise arithmetic expression. Use this for any financial math beyond restating a single "
@@ -569,6 +578,7 @@ _TOOL_DISPATCH = {
     "get_goal_progress": lambda db, user_id, **kwargs: tools.get_goal_progress(db, user_id),
     "get_recent_transactions": tools.get_recent_transactions,
     "get_unusual_transactions": lambda db, user_id, **kwargs: tools.get_unusual_transactions(db, user_id),
+    "get_daily_briefing": lambda db, user_id, **kwargs: tools.get_daily_briefing(db, user_id),
     "calculate": lambda db, user_id, **kwargs: tools.calculate(**kwargs),
     "propose_goal": tools.propose_goal,
     "propose_rule": tools.propose_rule,
@@ -589,6 +599,7 @@ _STATIC_TOOL_LABELS = {
     "get_goal_progress": "Goal progress",
     "get_recent_transactions": "Recent transactions",
     "get_unusual_transactions": "Unusual transactions",
+    "get_daily_briefing": "Today's briefing",
     "get_recurring": "Recurring bills & subscriptions",
     "get_budget_status": "Budget",
 }
@@ -678,6 +689,8 @@ def _progress_label(name: str, tool_input: dict) -> str:
         return "Pulling your recent transactions…"
     if name == "get_unusual_transactions":
         return "Scanning for unusual charges…"
+    if name == "get_daily_briefing":
+        return "Checking today's briefing…"
     if name == "calculate":
         return "Running the numbers…"
     if name == "web_search":
@@ -765,6 +778,7 @@ _CITABLE_TOOLS = frozenset(
         "get_recent_transactions",
         "get_spending",
         "get_unusual_transactions",
+        "get_daily_briefing",
     }
 )
 
