@@ -126,7 +126,7 @@ def run_insights_job(db: Session, user_id: UUID) -> list[InsightLog]:
                 [candidate.data["transaction_id"]] if candidate.type == "unusual_transaction" else None
             ),
             dedupe_key=key,
-            delivered_via="in_app",  # TODO: also dispatch via APNs once app/integrations/apns.py exists
+            delivered_via="in_app",  # weekly recaps push via APNs; other insight types stay in-app for now
         )
         db.add(log)
         logs.append(log)

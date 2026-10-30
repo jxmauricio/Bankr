@@ -16,6 +16,7 @@ import {
 import { useChat, type ChatItem } from "@/features/chat/useChat";
 import { formatTurnUsage } from "@/lib/api";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
+import { useFloatingTabInset } from "@/theme/tabBar";
 import { radius, space, type } from "@/theme/tokens";
 import { makeStyles, useColors } from "@/theme/theme";
 import { Chip, groupPosition, Icon, IconButton, ListRow, Screen, SectionHeader, Text } from "@/ui";
@@ -36,6 +37,7 @@ export default function ChatScreen() {
   const nearBottom = useRef(true);
   const body = useRef<View>(null);
   const keyboardInset = useKeyboardInset(body);
+  const tabInset = useFloatingTabInset();
 
   const jumpToLatest = useCallback(() => {
     nearBottom.current = true;
@@ -67,7 +69,7 @@ export default function ChatScreen() {
 
   return (
     <Screen padded={false} edges={[]}>
-      <View ref={body} style={[styles.fill, { paddingBottom: keyboardInset }]}>
+      <View ref={body} style={[styles.fill, { paddingBottom: Math.max(keyboardInset, tabInset) }]}>
         <View style={styles.fill}>
           <FlatList
             ref={list}

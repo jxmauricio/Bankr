@@ -10,7 +10,10 @@
     "ios": {
       "bundleIdentifier": "com.jxmauricio.bankr",
       "appleTeamId": "C8XQ9B9W25",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "entitlements": {
+        "aps-environment": "development"
+      }
     },
     "android": {
       "package": "com.bankr.app",
@@ -34,6 +37,12 @@
       ],
       "expo-secure-store",
       "expo-font",
+      [
+        "expo-notifications",
+        {
+          "enableBackgroundRemoteNotifications": false
+        }
+      ],
       [
         "expo-build-properties",
         {

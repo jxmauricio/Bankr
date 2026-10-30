@@ -5,15 +5,19 @@ from money_query and the goal helpers, and Claude only writes the short
 "Bankr's take" paragraph from those numbers. If the model can't be reached
 the recap is still saved, without the paragraph.
 
-Recaps are made on demand (the app asks for the latest one) rather than by
-a scheduler, so they exist before push delivery does. The week is
-Monday-Sunday in the user's time zone; Sunday's own week counts from
-RECAP_READY_HOUR, when the push will go out.
+A Sunday-evening cron (`run_due_recaps`) makes the latest week and pushes
+to the phone. Opening the app still makes it on demand if the cron hasn't
+run yet — that path only writes the in-app bell, so we don't push at
+someone already looking at Home. The week is Monday-Sunday in the user's
+time zone; Sunday's own week counts from RECAP_READY_HOUR, when the push
+goes out.
+
+    python -m app.jobs.weekly_recap_job --now
 """
 
 import json
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
@@ -21,7 +25,8 @@ from sqlalchemy.orm import Session
 
 from app.agent import tools
 from app.agent.agent_client import build_agent_client
-from app.db.models import InsightLog, NetWorthSnapshot, User, WeeklyRecap
+from app.db.models import DevicePushToken, InsightLog, NetWorthSnapshot, User, WeeklyRecap
+from app.integrations import apns
 from app.services import money_query as mq
 from app.services.goal_service import SAVE, TRACK_SPENDING
 
@@ -279,17 +284,122 @@ def _find(db: Session, user_id: UUID, week_start: date) -> WeeklyRecap | None:
     )
 
 
-def _log_notification(db: Session, recap: WeeklyRecap) -> None:
-    if notification_for(db, recap) is not None:
-        return
-    label = mq.format_range(recap.week_start, recap.week_end).rsplit(", ", 1)[0]
-    db.add(
-        InsightLog(
-            user_id=recap.user_id,
-            type="weekly_recap",
-            message=f"{label}: {recap.headline[0].lower()}{recap.headline[1:]}. {teaser_for(recap.facts)}",
-            dedupe_key=dedupe_key(recap.week_start),
-            delivered_via="in_app",  # TODO: push once push delivery exists
-        )
+def recap_is_due(user: User) -> bool:
+    """Sunday evening in this user's zone — the hour the push is meant to fire."""
+    now = mq._now().astimezone(mq.user_zone(user.timezone))
+    return now.weekday() == 6 and now.hour >= RECAP_READY_HOUR
+
+
+def run_due_recaps(
+    db: Session, *, ignore_schedule: bool = False, force: bool = False
+) -> list[WeeklyRecap]:
+    """Make this week's recap for anyone whose Sunday evening has arrived,
+    log it on the bell, and push to their phones. `ignore_schedule` is
+    `--now`: still the latest finished week, just don't wait for Sunday.
+    `force` re-pushes even if the bell row already exists (re-testing)."""
+    delivered: list[WeeklyRecap] = []
+    for user in db.query(User).all():
+        if not ignore_schedule and not recap_is_due(user):
+            continue
+        week = latest_week(db, user.id)
+        if not has_history_for(db, user.id, week):
+            continue
+        recap = get_or_create_recap(db, user.id, week, notify=False)
+        existing = notification_for(db, recap)
+        if existing is not None and not force:
+            continue
+        log = _log_notification(db, recap)
+        _push_recap(db, recap, log)
+        delivered.append(recap)
+    return delivered
+
+
+def start_scheduler():
+    """Hourly tick inside the API process, plus one run shortly after boot
+    so a Sunday-evening restart doesn't wait until the next hour."""
+    from apscheduler.schedulers.background import BackgroundScheduler
+
+    scheduler = BackgroundScheduler(timezone="UTC")
+    scheduler.add_job(_cron_tick, "interval", hours=1, id="weekly_recaps")
+    scheduler.add_job(
+        _cron_tick,
+        "date",
+        run_date=datetime.now(timezone.utc) + timedelta(seconds=20),
+        id="weekly_recaps_startup",
     )
+    scheduler.start()
+    logger.info("weekly recap cron started")
+    return scheduler
+
+
+def _cron_tick() -> None:
+    from app.db.base import get_session_factory
+
+    db = get_session_factory()()
+    try:
+        delivered = run_due_recaps(db)
+        if delivered:
+            logger.info("weekly recap cron delivered %s recap(s)", len(delivered))
+    except Exception:
+        logger.exception("weekly recap cron failed")
+    finally:
+        db.close()
+
+
+def notification_message(recap: WeeklyRecap) -> str:
+    label = mq.format_range(recap.week_start, recap.week_end).rsplit(", ", 1)[0]
+    return f"{label}: {recap.headline[0].lower()}{recap.headline[1:]}. {teaser_for(recap.facts)}"
+
+
+def _log_notification(db: Session, recap: WeeklyRecap) -> InsightLog:
+    existing = notification_for(db, recap)
+    if existing is not None:
+        return existing
+    log = InsightLog(
+        user_id=recap.user_id,
+        type="weekly_recap",
+        message=notification_message(recap),
+        dedupe_key=dedupe_key(recap.week_start),
+        delivered_via="in_app",
+    )
+    db.add(log)
     db.commit()
+    db.refresh(log)
+    return log
+
+
+def _push_recap(db: Session, recap: WeeklyRecap, log: InsightLog) -> None:
+    tokens = db.query(DevicePushToken).filter(DevicePushToken.user_id == recap.user_id).all()
+    if not tokens:
+        return
+    title = "Your weekly recap is ready"
+    body = log.message
+    data = {"type": "weekly_recap", "week_start": recap.week_start.isoformat()}
+    sent = False
+    for row in tokens:
+        result = apns.send_alert(row.token, title, body, data)
+        if result == apns.GONE:
+            db.delete(row)
+        elif result == apns.SENT:
+            sent = True
+    if sent:
+        log.delivered_via = "push"
+    db.commit()
+
+
+if __name__ == "__main__":
+    import argparse
+
+    from app.db.base import get_session_factory
+
+    parser = argparse.ArgumentParser(description="Make due weekly recaps and push them")
+    parser.add_argument("--now", action="store_true", help="Don't wait for Sunday evening")
+    parser.add_argument("--force", action="store_true", help="Push even if the bell row already exists")
+    args = parser.parse_args()
+    db = get_session_factory()()
+    try:
+        recaps = run_due_recaps(db, ignore_schedule=args.now, force=args.force)
+        print(f"delivered {len(recaps)} recap(s)")
+    finally:
+        db.close()
+
