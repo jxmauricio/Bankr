@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { AddBankButton } from "./AddBankButton";
 import { BankLogo, BankName } from "./BankLogo";
 import { CategoriesSettings } from "./CategoriesSettings";
+import { NotificationSettings } from "./NotificationSettings";
 import { RulesSettings } from "./RulesSettings";
 import { ApiError, deleteAccount, disconnectBank, fetchLinkedBanks, type LinkedBank } from "../lib/api";
 
@@ -191,6 +192,8 @@ export function SettingsModal({
         <CategoriesSettings token={token} />
 
         <RulesSettings token={token} />
+
+        <NotificationSettings token={token} />
 
         <p className="mt-6 text-sm">
           <a href="/privacy" target="_blank" rel="noreferrer" className="text-ink-soft underline hover:text-ink">
