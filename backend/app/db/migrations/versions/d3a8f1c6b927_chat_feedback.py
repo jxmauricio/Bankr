@@ -1,7 +1,7 @@
 """thumbs up/down on chat replies
 
 Revision ID: d3a8f1c6b927
-Revises: e8b1d4f2a690
+Revises: c3a9f1e8b247
 Create Date: 2026-10-30 12:00:00.000000
 
 One row per rated assistant message (see models.ChatFeedback), exported by
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "d3a8f1c6b927"
-down_revision: Union[str, None] = "e8b1d4f2a690"
+down_revision: Union[str, None] = "c3a9f1e8b247"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
