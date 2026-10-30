@@ -1,0 +1,120 @@
+# Nightly regression run of the agent evals (backend/tests/evals), against
+# the real model, so a drop shows up the morning after the change that
+# caused it. Costs money on every run, so it's manual-only until enabled:
+#
+#   1. Add the repo secret OPENROUTER_API_KEY (Settings > Secrets and
+#      variables > Actions).
+#   2. Run it once by hand (Actions > Nightly evals > Run workflow).
+#   3. Uncomment `schedule:` below.
+#
+# Each run uploads its transcripts and a history file (one line per run,
+# carried over from the previous run's artifact), writes a previous-vs-latest
+# table to the job summary, and fails if a task that passed every trial last
+# time doesn't now (tests/evals/regression_history.py).
+
+name: Nightly evals
+
+on:
+  workflow_dispatch:
+    inputs:
+      trials:
+        description: Trials per task
+        default: "3"
+  # schedule:
+  #   - cron: "0 9 * * *" # 09:00 UTC, 2am Pacific
+
+permissions:
+  contents: read
+  actions: read # to download the previous run's history artifact
+
+concurrency:
+  group: nightly-evals
+  cancel-in-progress: false
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+        shell: bash # -eo pipefail, so `compare | tee` still fails on a regression
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bankr
+          POSTGRES_PASSWORD: bankr
+          POSTGRES_DB: bankr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      RUN_EVALS: "1"
+      EVAL_SUITE: regression
+      EVAL_TRIALS: ${{ inputs.trials || '3' }}
+      # Pinned, so a score change means the code changed, not the model.
+      # Bump it on purpose, in its own commit.
+      AGENT_PROVIDER: openrouter
+      OPENROUTER_MODEL: deepseek/deepseek-v4-flash-0731
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      DATABASE_URL: postgresql://bankr:bankr@localhost:5432/bankr_test
+    steps:
+      - name: Check the API key secret is set
+        run: |
+          if [ -z "$OPENROUTER_API_KEY" ]; then
+            echo "::error::Add the OPENROUTER_API_KEY repository secret to run the evals."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install -r requirements-dev.txt
+
+      - name: Restore the eval history from the previous run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p tests/evals/results
+          for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow nightly-evals.yml \
+              --status completed --limit 20 --json databaseId --jq '.[].databaseId'); do
+            if gh run download "$id" --repo "$GITHUB_REPOSITORY" --name eval-history \
+                --dir tests/evals/results 2>/dev/null; then
+              echo "history from run $id: $(wc -l < tests/evals/results/history.jsonl) lines"
+              exit 0
+            fi
+          done
+          echo "no previous history: this run starts it"
+
+      - name: Run the regression suite
+        id: evals
+        run: pytest tests/evals -q -s -p no:cacheprovider
+
+      - name: Record and compare with the previous run
+        if: ${{ !cancelled() }}
+        run: |
+          python -m tests.evals.regression_history record
+          python -m tests.evals.regression_history compare | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the history
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-history
+          path: backend/tests/evals/results/history.jsonl
+          retention-days: 90
+
+      - name: Upload transcripts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-transcripts-${{ github.run_id }}
+          path: |
+            backend/tests/evals/results/*.json
+          retention-days: 30

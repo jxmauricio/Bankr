@@ -13,7 +13,8 @@ from tests.evals.conftest import RESULTS, trials
 from tests.evals.tasks import TASKS
 
 _ONLY = {t.strip() for t in os.environ.get("EVAL_TASKS", "").split(",") if t.strip()}
-_SELECTED = [t for t in TASKS if not _ONLY or t.id in _ONLY]
+_SUITE = os.environ.get("EVAL_SUITE", "").strip()  # regression | capability; empty = both
+_SELECTED = [t for t in TASKS if (not _ONLY or t.id in _ONLY) and (not _SUITE or t.suite == _SUITE)]
 
 
 @pytest.mark.parametrize("task", _SELECTED, ids=lambda t: t.id)
