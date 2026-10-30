@@ -33,6 +33,7 @@ class FakeAgentClient:
         call_tool: Callable[[str, dict], dict],
         on_text: Callable[[str | None], None] | None = None,
         on_usage: Callable[[dict], None] | None = None,
+        system_context: str = "",
     ) -> str:
         turn = self._turns.pop(0)
         if on_usage:

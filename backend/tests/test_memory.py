@@ -20,9 +20,12 @@ class RecordingAgentClient(FakeAgentClient):
         self.tool_calls = list(tool_calls)
         self.results: list[dict] = []
         self.system = ""
+        self.static_system = ""
 
-    def run_turn(self, system, tools, history, call_tool, **_):
-        self.system = system
+    def run_turn(self, system, tools, history, call_tool, system_context="", **_):
+        # The whole prompt as the model reads it, and the cacheable part alone.
+        self.system = system + system_context
+        self.static_system = system
         for name, tool_input in self.tool_calls:
             self.results.append(call_tool(name, tool_input))
         return "ok"
@@ -135,6 +138,7 @@ def test_facts_come_after_the_static_prompt_and_date(db, user, monkeypatch):
     client, _ = _turn(db, user, monkeypatch)
 
     # The static prefix is untouched, so a cached prompt still matches.
+    assert client.static_system == SYSTEM_PROMPT
     assert client.system.startswith(SYSTEM_PROMPT)
     tail = client.system[len(SYSTEM_PROMPT):]
     assert tail.index("Today is") < tail.index("What you know about the user")

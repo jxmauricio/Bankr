@@ -61,7 +61,7 @@ def test_openai_compatible_usage_reads_cost_and_cached_tokens():
             prompt_tokens=900,
             completion_tokens=40,
             completion_tokens_details=SimpleNamespace(reasoning_tokens=12),
-            prompt_tokens_details=SimpleNamespace(cached_tokens=300),
+            prompt_tokens_details=SimpleNamespace(cached_tokens=300, cache_write_tokens=120),
             cost=0.0042,
         )
     )
@@ -71,5 +71,6 @@ def test_openai_compatible_usage_reads_cost_and_cached_tokens():
         "output": 40,
         "reasoning": 12,
         "cached": 300,
+        "cache_write": 120,
         "cost": 0.0042,
     }

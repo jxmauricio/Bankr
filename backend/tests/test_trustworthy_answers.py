@@ -243,7 +243,7 @@ def test_the_model_sees_what_was_searched_too(db, ledger, monkeypatch):
     seen = []
 
     class Client(FakeAgentClient):
-        def run_turn(self, system, tools, history, call_tool):
+        def run_turn(self, system, tools, history, call_tool, system_context=""):
             seen.append(call_tool("get_spending", {"window": "last_year", "category": "Food & Dining"}))
             return "$0"
 

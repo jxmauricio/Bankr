@@ -88,7 +88,9 @@ def test_anthropic_tool_loop_stops_at_the_cap(monkeypatch):
     assert reply == "partial answer"
     assert len(calls) == MAX_TOOL_ROUNDS + 1
     assert calls[-1]["tool_choice"] == {"type": "none"}
-    assert calls[-1]["messages"][-2]["content"][-1] == {"type": "text", "text": FINAL_ROUND_NUDGE}
+    # Each round sends its own copy of the messages (see _with_cache_marker),
+    # so the nudge is the last message of the final call.
+    assert calls[-1]["messages"][-1]["content"][-1]["text"] == FINAL_ROUND_NUDGE
 
 
 def _openai_message(content, tool_calls=None):

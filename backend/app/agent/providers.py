@@ -53,18 +53,48 @@ def _log_round(round_number: int, model_seconds: float, tool_seconds: float, usa
     """One line per model round so production logs show where a slow chat
     turn spent its time: waiting on the model, or running tools. Reasoning
     tokens are counted separately because a model that reasons by default
-    spends most of a round's time on output the user never sees."""
+    spends most of a round's time on output the user never sees. cached /
+    cache_write show whether prompt caching is landing: rounds after the
+    first should read most of the input from the cache."""
     logger.info(
-        "agent round %d: model %.2fs, tools %.2fs, tokens in=%s out=%s reasoning=%s, cost=%s, served_by=%s",
+        "agent round %d: model %.2fs, tools %.2fs, tokens in=%s out=%s reasoning=%s cached=%s cache_write=%s, "
+        "cost=%s, served_by=%s",
         round_number,
         model_seconds,
         tool_seconds,
         usage.get("input"),
         usage.get("output"),
         usage.get("reasoning"),
+        usage.get("cached"),
+        usage.get("cache_write"),
         usage.get("cost"),
         served_by,
     )
+
+
+# Prompt caching breakpoint for Claude models. Anthropic only caches up to a
+# marked block, so without these every round of a tool loop pays full price
+# for the system prompt and tool schemas again. Providers that cache on
+# their own (DeepSeek, OpenAI, Gemini) never see it.
+CACHE_CONTROL = {"type": "ephemeral"}
+
+
+def _with_cache_marker(message: dict) -> dict:
+    """A copy of message whose last content block carries CACHE_CONTROL, so
+    the whole conversation up to it -- tool results included -- is read
+    from the cache on the next round. A copy, because a marker left on an
+    earlier message would add a breakpoint each round, and Anthropic allows
+    only four."""
+    content = message["content"]
+    if isinstance(content, str):
+        if not content:
+            return message
+        content = [{"type": "text", "text": content}]
+    else:
+        content = [block if isinstance(block, dict) else block.model_dump(exclude_none=True) for block in content]
+    if not content:
+        return message
+    return {**message, "content": content[:-1] + [{**content[-1], "cache_control": CACHE_CONTROL}]}
 
 
 
@@ -89,15 +119,46 @@ class AnthropicAgentClient:
         model: str,
         extended_thinking: bool = False,
         thinking_budget_tokens: int = 2048,
+        prompt_caching: bool = True,
     ):
         self._client = anthropic.Anthropic(api_key=api_key)
         self._model = model
         self._extended_thinking = extended_thinking
         self._thinking_budget_tokens = thinking_budget_tokens
+        self._prompt_caching = prompt_caching
+
+    def _to_anthropic_tools(self, tool_specs: list[ToolSpec]) -> list[dict]:
+        tools = [{"name": t.name, "description": t.description, "input_schema": t.parameters} for t in tool_specs]
+        if self._prompt_caching and tools:
+            # Tools render first, so this caches every tool schema.
+            tools[-1] = {**tools[-1], "cache_control": CACHE_CONTROL}
+        return tools
+
+    def _system_blocks(self, system: str, system_context: str) -> str | list[dict]:
+        """The static prompt as one cached block, then the per-turn context
+        (today's date) as its own uncached block after it, so a new day or
+        another user's timezone doesn't miss the cache."""
+        if not self._prompt_caching:
+            return system + system_context
+        blocks = [{"type": "text", "text": system, "cache_control": CACHE_CONTROL}]
+        if system_context:
+            blocks.append({"type": "text", "text": system_context})
+        return blocks
 
     @staticmethod
-    def _to_anthropic_tools(tool_specs: list[ToolSpec]) -> list[dict]:
-        return [{"name": t.name, "description": t.description, "input_schema": t.parameters} for t in tool_specs]
+    def _usage(response) -> dict:
+        # input_tokens leaves out cache reads and writes; add them back so
+        # "input" means the whole prompt, as it does for the other clients.
+        usage = getattr(response, "usage", None)
+        read = getattr(usage, "cache_read_input_tokens", None)
+        written = getattr(usage, "cache_creation_input_tokens", None)
+        uncached = getattr(usage, "input_tokens", None)
+        return {
+            "input": None if uncached is None else uncached + (read or 0) + (written or 0),
+            "output": getattr(usage, "output_tokens", None),
+            "cached": read,
+            "cache_write": written,
+        }
 
     def _thinking_kwargs(self, output_tokens: int) -> dict:
         """max_tokens covers thinking + text combined and must exceed
@@ -120,8 +181,10 @@ class AnthropicAgentClient:
         call_tool: Callable[[str, dict], dict],
         on_text: Callable[[str | None], None] | None = None,
         on_usage: Callable[[dict], None] | None = None,
+        system_context: str = "",
     ) -> str:
         anthropic_tools = self._to_anthropic_tools(tools)
+        system_blocks = self._system_blocks(system, system_context)
         messages = list(history)
 
         for round_number in range(MAX_TOOL_ROUNDS + 1):
@@ -129,19 +192,16 @@ class AnthropicAgentClient:
             started = time.monotonic()
             response = self._client.messages.create(
                 model=self._model,
-                system=system,
+                system=system_blocks,
                 tools=anthropic_tools,
-                messages=messages,
+                messages=messages[:-1] + [_with_cache_marker(messages[-1])] if self._prompt_caching else messages,
                 # tool_choice "none" postdates this pinned SDK's typed params
                 # but is a valid Messages API value either way.
                 **({"tool_choice": {"type": "none"}} if final_round and anthropic_tools else {}),
                 **self._thinking_kwargs(1024),
             )
             model_seconds = time.monotonic() - started
-            usage = {
-                "input": getattr(getattr(response, "usage", None), "input_tokens", None),
-                "output": getattr(getattr(response, "usage", None), "output_tokens", None),
-            }
+            usage = self._usage(response)
             if on_usage:
                 on_usage(usage)
             # Preserve the response's own content blocks unmodified (thinking
@@ -219,10 +279,17 @@ class OpenAICompatibleAgentClient:
         default_headers: dict | None = None,
         extra_body: dict | None = None,
         max_output_tokens: int = 1024,
+        cache_markers: bool = False,
     ):
         self._client = openai.OpenAI(api_key=api_key, base_url=base_url, default_headers=default_headers)
         self._model = model
         self._max_tokens = max_output_tokens
+        # Anthropic-style cache_control on the system prompt, for an endpoint
+        # serving a Claude model (see OpenRouterAgentClient) -- tools render
+        # before the system prompt there, so this caches them too. Off, the
+        # request is plain text messages and caching is up to the provider:
+        # DeepSeek and OpenAI cache a repeated prefix on their own.
+        self._cache_markers = cache_markers
         # Provider-specific extras (e.g. OpenRouter's `reasoning` param) that
         # aren't part of the OpenAI-compatible spec every endpoint speaks --
         # left unset for a plain /chat/completions target so this stays a
@@ -235,6 +302,18 @@ class OpenAICompatibleAgentClient:
             {"type": "function", "function": {"name": t.name, "description": t.description, "parameters": t.parameters}}
             for t in tool_specs
         ]
+
+    def _system_message(self, system: str, system_context: str) -> dict:
+        """One system message. As plain text the per-turn context is simply
+        appended -- it comes last, so the shared prefix before it still
+        matches for automatic caching. With cache markers the static prompt
+        is its own marked part and the context an unmarked one after it."""
+        if not self._cache_markers:
+            return {"role": "system", "content": system + system_context}
+        parts = [{"type": "text", "text": system, "cache_control": CACHE_CONTROL}]
+        if system_context:
+            parts.append({"type": "text", "text": system_context})
+        return {"role": "system", "content": parts}
 
     @staticmethod
     def _usage(response) -> dict:
@@ -250,6 +329,9 @@ class OpenAICompatibleAgentClient:
             "output": getattr(usage, "completion_tokens", None),
             "reasoning": getattr(details, "reasoning_tokens", None),
             "cached": getattr(prompt_details, "cached_tokens", None),
+            # Only OpenRouter reports cache writes, and only for providers
+            # that bill them (Anthropic).
+            "cache_write": getattr(prompt_details, "cache_write_tokens", None),
             # Billed dollars for the call -- only OpenRouter reports this.
             "cost": getattr(usage, "cost", None),
         }
@@ -316,9 +398,10 @@ class OpenAICompatibleAgentClient:
         call_tool: Callable[[str, dict], dict],
         on_text: Callable[[str | None], None] | None = None,
         on_usage: Callable[[dict], None] | None = None,
+        system_context: str = "",
     ) -> str:
         openai_tools = self._to_openai_tools(tools)
-        messages = [{"role": "system", "content": system}] + list(history)
+        messages = [self._system_message(system, system_context)] + list(history)
 
         for round_number in range(MAX_TOOL_ROUNDS + 1):
             final_round = round_number == MAX_TOOL_ROUNDS
@@ -414,7 +497,8 @@ class OpenRouterAgentClient(OpenAICompatibleAgentClient):
     tokens via OpenRouter's unified `reasoning` param -- normalized across
     every reasoning-capable model OpenRouter proxies, but only actually
     reasons if OPENROUTER_MODEL itself supports it; otherwise it's ignored --
-    and its `provider.sort` routing preference (OPENROUTER_PROVIDER_SORT)."""
+    its `provider.sort` routing preference (OPENROUTER_PROVIDER_SORT), and
+    cache_control markers when the model is a Claude one ("anthropic/...")."""
 
     def __init__(
         self,
@@ -426,6 +510,7 @@ class OpenRouterAgentClient(OpenAICompatibleAgentClient):
         thinking_budget_tokens: int = 2048,
         provider_sort: str = "",
         max_output_tokens: int = 1024,
+        prompt_caching: bool = True,
     ):
         headers = {"X-Title": app_name}
         if site_url:
@@ -445,6 +530,9 @@ class OpenRouterAgentClient(OpenAICompatibleAgentClient):
             default_headers=headers,
             extra_body=extra_body,
             max_output_tokens=max_output_tokens,
+            # Claude models on OpenRouter only cache with explicit markers;
+            # everything else it routes to caches automatically.
+            cache_markers=prompt_caching and model.startswith("anthropic/"),
         )
 
     def _retry_extra_body(self) -> dict:

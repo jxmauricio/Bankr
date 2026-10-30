@@ -1062,12 +1062,19 @@ def run_agent_turn(
         check_cancelled()
         on_text(text)
 
-    system = SYSTEM_PROMPT + _date_context(db, user_id) + _memory_context(db, user_id)
     # Only passed when wanted, so AgentClient stand-ins without it still work.
     streaming = {"on_text": stream_text} if on_text else {}
     if on_usage:
         streaming["on_usage"] = on_usage
-    reply = clip_reply(_client.run_turn(system, TOOL_DEFINITIONS, messages, call_tool, **streaming))
+    # The date and the user's memory go separately, after the static prompt,
+    # so the prompt and tool schemas stay a byte-identical prefix the
+    # provider can cache.
+    system_context = _date_context(db, user_id) + _memory_context(db, user_id)
+    reply = clip_reply(
+        _client.run_turn(
+            SYSTEM_PROMPT, TOOL_DEFINITIONS, messages, call_tool, system_context=system_context, **streaming
+        )
+    )
     check_cancelled()
     if search_text:
         reply, removed = redact_search_picks(reply, "\n".join(search_text), "\n".join(trusted_text))

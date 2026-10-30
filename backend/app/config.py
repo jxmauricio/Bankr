@@ -133,6 +133,12 @@ class Settings(BaseSettings):
     # finish the answer and then loop on the same closing offer.
     agent_max_output_tokens: int = 1024
     agent_thinking_budget_tokens: int = 2048
+    # Prompt caching markers (cache_control) for Claude models, natively or
+    # through OpenRouter: the system prompt and tool schemas are read from
+    # Anthropic's cache instead of billed in full on every model round.
+    # Other models cache a repeated prefix without markers, so this
+    # changes nothing for them.
+    agent_prompt_caching: bool = True
     # Debug mode: attach each chat turn's token usage and cost to the API
     # response (ChatResponse.usage) so the clients can show what a question
     # cost. Off by default -- it exposes the model name and spend.

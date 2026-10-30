@@ -21,9 +21,11 @@ class RecordingAgentClient(FakeAgentClient):
         self.tool_calls = tool_calls
         self.results: list[dict] = []
         self.system = ""
+        self.system_context = ""
 
-    def run_turn(self, system, tools, history, call_tool):
+    def run_turn(self, system, tools, history, call_tool, system_context=""):
         self.system = system
+        self.system_context = system_context
         for name, tool_input in self.tool_calls:
             self.results.append(call_tool(name, tool_input))
         return "ok"
@@ -45,7 +47,9 @@ def ask(db, user, monkeypatch, name, tool_input):
 
 def test_model_is_told_todays_date_in_the_users_timezone(db, ledger, monkeypatch):
     client, _, _ = ask(db, ledger, monkeypatch, "get_net_worth", {})
-    assert "Today is Saturday, September 19, 2026" in client.system
+    assert "Today is Saturday, September 19, 2026" in client.system_context
+    # Kept out of the static prompt, so the prompt stays cacheable across days.
+    assert "Today is" not in client.system
 
 
 def test_q1_how_much_am_i_worth(db, ledger, monkeypatch):
