@@ -75,8 +75,26 @@ OAuth banks (Chase, Capital One, ...) also need, once:
 
 Until then those banks may not link from the app; non-OAuth banks do.
 
+## Push notifications
+
+`src/features/notifications/push.ts` asks for permission once the user reaches
+home, sends the phone's Expo push token to `POST /notifications/devices`, and
+opens the recap or the notifications list when a push is tapped. Signing out
+removes the token. Per-kind switches (daily briefing, weekly recap) sit under
+the notifications list and in the web app's Settings.
+
+To actually receive pushes, once:
+- link the app to an EAS project (`npx eas-cli@latest init`), which puts
+  `extra.eas.projectId` in the app config. Without it the app skips
+  registration quietly.
+- use a development build (`npx expo run:ios`): `expo-notifications` is a
+  native module, and Expo Go can't receive remote pushes on Android.
+- set `EXPO_PUSH_ENABLED=true` on the backend and run
+  `python -m app.jobs.notifications_job` every 15 minutes or so from cron.
+
 ## Not built yet
 
 Standalone goal setup, the Health and Plan tabs, transaction editing, voice
-mode, and the OAuth universal link above. A new account sets its first goal
-on the web for now.
+mode, the daily briefing screen (a briefing push opens the notifications list;
+its fixes are on the web), and the OAuth universal link above. A new account
+sets its first goal on the web for now.

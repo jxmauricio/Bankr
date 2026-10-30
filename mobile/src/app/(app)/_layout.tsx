@@ -15,6 +15,7 @@ import { MoneyProvider } from "@/features/money/MoneyContext";
 import { BankLogosProvider } from "@/features/bank/BankLogos";
 import { LinkBankScreen } from "@/features/bank/LinkBankScreen";
 import { NotificationsProvider } from "@/features/notifications/NotificationsContext";
+import { usePushNotifications } from "@/features/notifications/push";
 import { PeriodProvider } from "@/features/period/PeriodContext";
 import { TransactionFiltersProvider } from "@/features/transactions/FiltersContext";
 import { useColors } from "@/theme/theme";
@@ -40,6 +41,7 @@ export default function SignedInLayout() {
   const colors = useColors();
   const { token, signOut } = useSession();
   const [gate, setGate] = useState<Gate>({ step: "loading" });
+  usePushNotifications(gate.step === "home" ? token : null);
 
   // Bumped to run the gate again; the effect below is the only place it runs.
   const [attempt, setAttempt] = useState(0);
