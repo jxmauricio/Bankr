@@ -170,7 +170,10 @@ def move_to_monarch(db: Session) -> None:
         db.execute(text("DELETE FROM category_groups WHERE id = :old"), {"old": old})
 
     db.flush()
-    _remap_uncategorized_by_hand(db, categories)
+    # Before e8b1d4f2a690 there's no category_source, nor the tables the
+    # pipeline reads; that migration re-maps these same rows right after.
+    if "category_source" in {c["name"] for c in inspect(db.get_bind()).get_columns("transactions")}:
+        _remap_uncategorized_by_hand(db, categories)
 
 
 def _keyed(db: Session, table: str, moves: dict) -> dict:
