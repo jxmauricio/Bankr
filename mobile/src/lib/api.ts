@@ -663,7 +663,7 @@ export const moveBudgetMoney = (token: string, move: { month?: string; from_key:
 
 export interface Insight {
   id: string;
-  type: "budget_overspend" | "goal_drift" | "unusual_transaction" | "price_change" | "weekly_recap" | string;
+  type: "budget_overspend" | "goal_drift" | "unusual_transaction" | "price_change" | "weekly_recap" | "daily_briefing" | string;
   message: string;
   transaction_ids: string[];
   /** What it's about: a budget line key, recurring series id, goal id, transaction id or a recap's week start. */
@@ -679,6 +679,19 @@ export const markInsightRead = (token: string, id: string) =>
   request<Insight>(`/insights/${id}/read`, { method: "POST", token });
 
 export const markAllInsightsRead = (token: string) => request<void>("/insights/read-all", { method: "POST", token });
+
+// --- Push notifications ---
+
+export interface NotificationSettings {
+  daily_briefing: boolean;
+  weekly_recap: boolean;
+  device_count: number;
+}
+
+export const fetchNotificationSettings = (token: string) => request<NotificationSettings>("/notifications/settings", { token });
+
+export const updateNotificationSettings = (token: string, changes: Partial<Pick<NotificationSettings, "daily_briefing" | "weekly_recap">>) =>
+  request<NotificationSettings>("/notifications/settings", { method: "PATCH", token, body: changes });
 
 // --- Weekly recap ---
 

@@ -909,6 +909,16 @@ def get_unusual_transactions(db: Session, user_id: UUID, stddev_threshold: float
     }
 
 
+@_grounded
+def get_daily_briefing(db: Session, user_id: UUID) -> dict:
+    """Today's daily briefing: charges to categorize, unusual or doubled
+    charges, price changes and renewals coming up -- the same items the app
+    shows, picked by app/jobs/daily_briefing_job.py."""
+    from app.services.briefing_actions import summarize_for_agent
+
+    return summarize_for_agent(db, user_id)
+
+
 # ---------------------------------------------------------------------------
 # Calculator: precise arithmetic for projections (compound interest, loan
 # payoff timelines, percentage changes, ...) that the model would otherwise

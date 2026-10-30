@@ -25,9 +25,9 @@ from sqlalchemy.orm import Session
 
 from app.agent import tools
 from app.agent.agent_client import build_agent_client
-from app.db.models import DevicePushToken, InsightLog, NetWorthSnapshot, User, WeeklyRecap
-from app.integrations import apns
+from app.db.models import InsightLog, NetWorthSnapshot, User, WeeklyRecap
 from app.services import money_query as mq
+from app.services import push_service
 from app.services.goal_service import SAVE, TRACK_SPENDING
 
 logger = logging.getLogger(__name__)
@@ -327,6 +327,9 @@ def start_scheduler():
         run_date=datetime.now(timezone.utc) + timedelta(seconds=20),
         id="weekly_recaps_startup",
     )
+    from app.jobs.briefing_push_job import cron_tick as briefing_tick
+
+    scheduler.add_job(briefing_tick, "interval", minutes=15, id="daily_briefings")
     scheduler.start()
     logger.info("weekly recap cron started")
     return scheduler
@@ -369,23 +372,10 @@ def _log_notification(db: Session, recap: WeeklyRecap) -> InsightLog:
 
 
 def _push_recap(db: Session, recap: WeeklyRecap, log: InsightLog) -> None:
-    tokens = db.query(DevicePushToken).filter(DevicePushToken.user_id == recap.user_id).all()
-    if not tokens:
-        return
-    title = "Your weekly recap is ready"
-    body = log.message
-    data = {"type": "weekly_recap", "week_start": recap.week_start.isoformat()}
-    sent = False
-    for row in tokens:
-        result = apns.send_alert(row.token, title, body, data)
-        if result == apns.GONE:
-            db.delete(row)
-        elif result == apns.SENT:
-            sent = True
-    if sent:
+    data = {"week_start": recap.week_start.isoformat()}
+    if push_service.push_to_user(db, recap.user_id, "weekly_recap", "Your weekly recap is ready", log.message, data):
         log.delivered_via = "push"
-    db.commit()
-
+        db.commit()
 
 if __name__ == "__main__":
     import argparse

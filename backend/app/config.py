@@ -158,6 +158,9 @@ class Settings(BaseSettings):
     apns_topic: str = "com.jxmauricio.bankr"
     apns_use_sandbox: bool = True
 
+    # Days ahead a subscription renewal (or a trial's first charge) shows up
+    # in the daily briefing.
+    renewal_reminder_days: int = 3
     # Sunday-evening recap job inside the API process. Tests turn this off.
     enable_recap_cron: bool = True
 
