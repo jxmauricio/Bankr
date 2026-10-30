@@ -60,6 +60,7 @@ import { PlanView } from "./PlanView";
 import { HealthView } from "./HealthView";
 import { UpcomingBills } from "../components/UpcomingBills";
 import { InsightsBell } from "../components/InsightsBell";
+import { DailyBriefingCard, DailyBriefingModal } from "../components/DailyBriefing";
 import { CashFlowView } from "./CashFlowView";
 import type { Citation } from "../components/TransactionDetails";
 
@@ -143,6 +144,9 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   const [txFocusId, setTxFocusId] = useState<string | null>(null);
   // Bumped by Plan edits so the rail's bills line catches up.
   const [planVersion, setPlanVersion] = useState(0);
+  const [showBriefing, setShowBriefing] = useState(false);
+  // Bumped when the briefing is closed after a fix, so its card and the bell catch up.
+  const [briefingVersion, setBriefingVersion] = useState(0);
   function openPlan(section: "budget" | "recurring" | null = null) {
     setPlanFocus(section);
     setView("plan");
@@ -467,8 +471,10 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
             <InsightsBell
               token={token}
               refreshKey={monthRollup}
+              version={briefingVersion}
               onOpenInsight={(insight) => {
-                if (insight.type === "budget_overspend") openPlan("budget");
+                if (insight.type === "daily_briefing") setShowBriefing(true);
+                else if (insight.type === "budget_overspend") openPlan("budget");
                 else if (insight.type === "price_change") openPlan("recurring");
                 else if (insight.type === "unusual_transaction" && insight.subject_id) {
                   setTxFocusId(insight.subject_id);
@@ -504,6 +510,17 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
                 <PeriodFilter period={period} onChange={changePeriod} />
               </div>
               <MoneyCard summary={summary} onNetWorthClick={openFlow} onRefresh={refreshFromBank} />
+              {token && (
+                <DailyBriefingCard
+                  token={token}
+                  refreshKey={monthRollup}
+                  version={briefingVersion}
+                  onOpen={() => {
+                    setMoneyOpen(false);
+                    setShowBriefing(true);
+                  }}
+                />
+              )}
               {goalsSection}
               <button
                 type="button"
@@ -549,6 +566,20 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
         />
       )}
 
+      {showBriefing && token && (
+        <DailyBriefingModal
+          token={token}
+          onClose={() => {
+            setShowBriefing(false);
+            setBriefingVersion((n) => n + 1);
+          }}
+          onChanged={() => {
+            refreshGoalProgress();
+            fetchRollup(token, "month").then(setMonthRollup);
+          }}
+        />
+      )}
+
       {creatingGoal && token && (
         <CreateGoalModal
           token={token}
@@ -565,6 +596,9 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
           className="hidden w-[340px] shrink-0 flex-col gap-4 overflow-y-auto border-l border-line p-5 lg:order-last lg:flex"
         >
           <MoneyCard summary={summary} onNetWorthClick={openFlow} onRefresh={refreshFromBank} />
+          {token && (
+            <DailyBriefingCard token={token} refreshKey={monthRollup} version={briefingVersion} onOpen={() => setShowBriefing(true)} />
+          )}
           {token && <UpcomingBills token={token} refreshKey={monthRollup} version={planVersion} onOpen={() => openPlan("recurring")} />}
           {goalsSection}
         </aside>

@@ -15,7 +15,7 @@ import { MoneyProvider } from "@/features/money/MoneyContext";
 import { BankLogosProvider } from "@/features/bank/BankLogos";
 import { LinkBankScreen } from "@/features/bank/LinkBankScreen";
 import { NotificationsProvider } from "@/features/notifications/NotificationsContext";
-import { consumePendingRecap, subscribeRecapOpen } from "@/features/notifications/usePush";
+import { consumePendingOpen, subscribePushOpen } from "@/features/notifications/usePush";
 import { PeriodProvider } from "@/features/period/PeriodContext";
 import { TransactionFiltersProvider } from "@/features/transactions/FiltersContext";
 import { useColors } from "@/theme/theme";
@@ -155,14 +155,14 @@ export default function SignedInLayout() {
   // last one is stale, and every 5 minutes while the app is in the foreground.
   const isHome = gate.step === "home";
 
-  // Recap isn't on the stack until Home is. A tap while we're still loading
-  // (or on the error screen) waits here, then opens `/recap/:week`.
+  // The recap and notifications screens aren't on the stack until Home is. A
+  // tap while we're still loading (or on the error screen) waits here.
   useEffect(() => {
     if (!isHome) return;
-    const go = (week: string) => router.push(`/recap/${week}` as Href);
-    const pending = consumePendingRecap();
+    const go = (target: string) => router.push(target as Href);
+    const pending = consumePendingOpen();
     if (pending) go(pending);
-    return subscribeRecapOpen(go);
+    return subscribePushOpen(go);
   }, [isHome, router]);
 
   useEffect(() => {
