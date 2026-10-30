@@ -92,33 +92,58 @@ export default function SignedInLayout() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncVersion, setSyncVersion] = useState(0);
 
-  // One sync at a time, whether it came from the button, launch, return to the app or the timer.
+  // One POST /linked-accounts/sync at a time. Extra taps wait for it instead of
+  // no-oping (the launch/return silent sync used to swallow the refresh button).
   const syncInFlight = useRef(false);
+  const syncWaiters = useRef<(() => void)[]>([]);
+  const visibleSyncs = useRef(0);
   const lastSyncAt = useRef(0);
 
   /**
-   * Same as the web app's syncFromBank: resync every bank, then re-read.
-   * Silent syncs (automatic ones) show no spinner and no error.
+   * Same as the web app's syncFromBank: POST /linked-accounts/sync (Plaid pull
+   * for every linked bank), then re-read balances, goals and transactions.
+   * Silent syncs (automatic ones) show no spinner and no error. A tap while one
+   * is already running shows the spinner and waits for that same request.
    */
   const syncFromBank = useCallback(
     async ({ silent = false }: { silent?: boolean } = {}) => {
-      if (!token || syncInFlight.current) return;
-      syncInFlight.current = true;
+      if (!token) return;
       if (!silent) {
+        visibleSyncs.current += 1;
         setIsSyncing(true);
         setSyncError(null);
       }
       try {
-        await resyncAccounts(token);
-        lastSyncAt.current = Date.now();
-        await refresh();
-        setSyncVersion((n) => n + 1);
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 401) return signOut();
-        if (!silent) setSyncError(err instanceof ApiError ? err.message : "Couldn't refresh from your bank. Try again.");
+        if (syncInFlight.current) {
+          await new Promise<void>((resolve) => {
+            syncWaiters.current.push(resolve);
+          });
+          return;
+        }
+        syncInFlight.current = true;
+        try {
+          await resyncAccounts(token);
+          lastSyncAt.current = Date.now();
+          try {
+            await refresh();
+          } finally {
+            // Transactions, cash flow and health key off this even if the
+            // net-worth re-read fails after a successful bank pull.
+            setSyncVersion((n) => n + 1);
+          }
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 401) return signOut();
+          if (!silent) setSyncError(err instanceof ApiError ? err.message : "Couldn't refresh from your bank. Try again.");
+        } finally {
+          syncInFlight.current = false;
+          const waiting = syncWaiters.current.splice(0);
+          waiting.forEach((w) => w());
+        }
       } finally {
-        syncInFlight.current = false;
-        if (!silent) setIsSyncing(false);
+        if (!silent) {
+          visibleSyncs.current -= 1;
+          if (visibleSyncs.current === 0) setIsSyncing(false);
+        }
       }
     },
     [token, refresh, signOut]

@@ -33,7 +33,21 @@ const ICONS = {
   ),
   chevronLeft: <Path d="m15 6-6 6 6 6" />,
   chevronRight: <Path d="m9 6 6 6-6 6" />,
+  chevronDown: <Path d="m6 9 6 6 6-6" />,
   check: <Path d="m5 12 5 5 9-10" />,
+  home: (
+    <>
+      <Path d="M4 11.5 12 4l8 7.5V20H4z" />
+      <Path d="M9 20v-7h6v7" />
+    </>
+  ),
+  sun: (
+    <>
+      <Circle cx="12" cy="12" r="4" />
+      <Path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </>
+  ),
+  moon: <Path d="M21 14.3A8.5 8.5 0 1 1 9.7 3 7 7 0 0 0 21 14.3Z" />,
   chat: <Path d="M4 5h16v11H9l-5 4V5Z" />,
   list: (
     <>
