@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { Stack, useRouter, type Href } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import {
@@ -15,6 +15,7 @@ import { MoneyProvider } from "@/features/money/MoneyContext";
 import { BankLogosProvider } from "@/features/bank/BankLogos";
 import { LinkBankScreen } from "@/features/bank/LinkBankScreen";
 import { NotificationsProvider } from "@/features/notifications/NotificationsContext";
+import { consumePendingRecap, subscribeRecapOpen } from "@/features/notifications/usePush";
 import { PeriodProvider } from "@/features/period/PeriodContext";
 import { TransactionFiltersProvider } from "@/features/transactions/FiltersContext";
 import { useColors } from "@/theme/theme";
@@ -38,6 +39,7 @@ type Gate =
  */
 export default function SignedInLayout() {
   const colors = useColors();
+  const router = useRouter();
   const { token, signOut } = useSession();
   const [gate, setGate] = useState<Gate>({ step: "loading" });
 
@@ -152,6 +154,17 @@ export default function SignedInLayout() {
   // Once home is up: sync right away, again on coming back to the app if the
   // last one is stale, and every 5 minutes while the app is in the foreground.
   const isHome = gate.step === "home";
+
+  // Recap isn't on the stack until Home is. A tap while we're still loading
+  // (or on the error screen) waits here, then opens `/recap/:week`.
+  useEffect(() => {
+    if (!isHome) return;
+    const go = (week: string) => router.push(`/recap/${week}` as Href);
+    const pending = consumePendingRecap();
+    if (pending) go(pending);
+    return subscribeRecapOpen(go);
+  }, [isHome, router]);
+
   useEffect(() => {
     if (!isHome) return;
     const syncIfStale = () => {

@@ -756,6 +756,13 @@ export interface WeeklyRecap {
   next_week_start: string | null;
 }
 
+export const registerPushToken = (sessionToken: string, deviceToken: string, platform: "ios" | "android" = "ios") =>
+  request<{ ok: boolean }>("/devices/push-token", {
+    method: "PUT",
+    token: sessionToken,
+    body: { token: deviceToken, platform },
+  });
+
 export const fetchLatestRecap = (token: string) => request<{ recap: WeeklyRecap | null }>("/recaps/latest", { token });
 
 export const fetchRecap = (token: string, weekStart: string) =>

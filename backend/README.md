@@ -64,7 +64,8 @@ Real-model agent evals live in `tests/evals/` and are skipped unless `RUN_EVALS=
 ## Layout
 
 - `app/db/models.py` — SQLAlchemy models (users, linked_accounts, transactions,
-  categories, goals, net_worth_snapshots, insight_logs, chat_messages)
+  categories, goals, net_worth_snapshots, insight_logs, chat_messages,
+  weekly_recaps, device_push_tokens)
 - `app/db/migrations/` — Alembic migrations
 - `app/db/seed_categories.py` — idempotently seeds Bankr's default categories
 - `app/auth.py`, `app/api/auth.py` — `POST /auth/signup` and `POST /auth/login`
@@ -271,12 +272,25 @@ your own endpoint with sandbox's `/sandbox/item/fire_webhook`
 `user_transactions_dynamic` item) -- either way `POST /webhooks/plaid`
 still verifies the real signature Plaid attaches.
 
-## Not yet wired up
+## Push notifications
 
-1. `app/integrations/apns.py` for push delivery of insights (currently
-   `InsightLog.delivered_via` is always `"in_app"`) — was iOS-specific to
-   begin with and is lower priority now that iOS is shelved; the web app has
-   no push story yet either.
+Weekly recaps go out as an iOS alert on Sunday evening (`RECAP_READY_HOUR`
+in the user's timezone). The API process runs `run_due_recaps` hourly (and
+once shortly after boot). Opening the app still makes the recap on demand
+if the cron hasn't yet — that path only writes the in-app bell, so we
+don't push at someone already looking at Home.
+
+- `PUT /devices/push-token` — the iOS app registers its APNs token after
+  the user allows notifications
+- `app/integrations/apns.py` — sends the alert when `APNS_*` is configured;
+  no-ops locally without a .p8 key
+- `python -m app.jobs.weekly_recap_job --now` — make + push the latest
+  finished week without waiting for Sunday (`--force` re-pushes)
+
+The iOS Simulator never receives real APNs. To see the banner there:
+`xcrun simctl push booted com.jxmauricio.bankr mobile/scripts/weekly-recap.push.json`
+(the app must have been granted notification permission). Other insight
+types (budget overspend, unusual spend, …) are still in-app only.
 
 Real Plaid credentials **are** wired up and verified end-to-end against the
 live Sandbox API (see `../ios/README.md` for the original verification

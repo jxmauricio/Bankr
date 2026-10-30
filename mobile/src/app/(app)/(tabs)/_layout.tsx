@@ -1,3 +1,4 @@
+import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
 import { router, usePathname } from "expo-router";
 import { TabList, TabSlot, Tabs, TabTrigger, type TabTriggerSlotProps } from "expo-router/ui";
 import { createContext, use, useEffect, useState, type ReactNode, type Ref } from "react";
@@ -5,18 +6,18 @@ import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMoney } from "@/features/money/MoneyContext";
 import { useNotifications } from "@/features/notifications/NotificationsContext";
 import { ThemeToggle } from "@/theme/ThemeToggle";
-import { space } from "@/theme/tokens";
-import { makeStyles, useColors } from "@/theme/theme";
+import { radius, space } from "@/theme/tokens";
+import { makeStyles, useColors, useScheme } from "@/theme/theme";
 import { Icon, IconButton, Text, type IconName } from "@/ui";
 
 /**
  * Five views, Chat in the middle: Home, Cash flow, Chat, Transactions, Plan.
- * Settings, a light/dark toggle and one action up top; icon+label tabs along
- * the bottom, matching the web phone bar. Swiping slides to the next tab.
+ * Settings, a light/dark toggle and one action up top; a floating Liquid
+ * Glass tab bar along the bottom. Swiping slides to the next tab.
  */
 export default function TabsLayout() {
   const styles = useStyles();
@@ -27,14 +28,10 @@ export default function TabsLayout() {
       <SafeAreaView edges={["top"]} style={styles.header}>
         <TopBar onChat={focused === 2} />
       </SafeAreaView>
-      <SwipeBetweenTabs focused={focused} />
-      <SafeAreaView edges={["bottom"]} style={styles.tabBar}>
-        {TABS.map((t) => (
-          <TabTrigger key={t.name} name={t.name} asChild>
-            <TabIcon icon={t.icon} label={t.label} emphasized={t.name === "chat"} />
-          </TabTrigger>
-        ))}
-      </SafeAreaView>
+      <View style={styles.stage}>
+        <SwipeBetweenTabs focused={focused} />
+        <FloatingTabBar />
+      </View>
       {/* Declares the routes; the icons above are what's shown. Tabs only reads triggers from a TabList that is its direct child. */}
       <TabList style={styles.hidden}>
         {TABS.map((t) => (
@@ -197,6 +194,30 @@ function TopBar({ onChat }: { onChat: boolean }) {
   );
 }
 
+/** Overlayed on the pages so the island floats; taps in the empty margin pass through. */
+function FloatingTabBar() {
+  const styles = useStyles();
+  const insets = useSafeAreaInsets();
+  const scheme = useScheme();
+  const glass = isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
+  const tabs = TABS.map((t) => (
+    <TabTrigger key={t.name} name={t.name} asChild>
+      <TabIcon icon={t.icon} label={t.label} emphasized={t.name === "chat"} />
+    </TabTrigger>
+  ));
+  return (
+    <View pointerEvents="box-none" style={[styles.tabBarWrap, { paddingBottom: Math.max(insets.bottom, space.sm) }]}>
+      {glass ? (
+        <GlassView isInteractive glassEffectStyle="regular" colorScheme={scheme} style={styles.tabBar}>
+          {tabs}
+        </GlassView>
+      ) : (
+        <View style={[styles.tabBar, styles.tabBarSolid]}>{tabs}</View>
+      )}
+    </View>
+  );
+}
+
 function TabIcon({
   icon,
   label,
@@ -247,15 +268,34 @@ const useStyles = makeStyles((colors) =>
       borderColor: colors.bg,
     },
     pager: { flex: 1, overflow: "hidden" },
+    stage: { flex: 1 },
     hidden: { display: "none" },
+    tabBarWrap: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      // Inset more than the page cards (space.lg) so the island doesn't share their edges.
+      paddingHorizontal: space.xl,
+    },
     tabBar: {
       flexDirection: "row",
       flexGrow: 0,
       flexShrink: 0,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.line,
-      backgroundColor: colors.bg,
-      paddingTop: 6,
+      borderRadius: radius.lg + 8,
+      paddingVertical: 6,
+      paddingHorizontal: 4,
+      overflow: "hidden",
+    },
+    tabBarSolid: {
+      backgroundColor: colors.surface,
+      borderColor: colors.line,
+      borderWidth: StyleSheet.hairlineWidth,
+      shadowColor: colors.ink,
+      shadowOpacity: 0.12,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 8,
     },
     tab: { flex: 1, minHeight: 52, alignItems: "center", justifyContent: "center", gap: 4 },
     tabIcon: { height: 26, width: 44, borderRadius: 13, alignItems: "center", justifyContent: "center" },

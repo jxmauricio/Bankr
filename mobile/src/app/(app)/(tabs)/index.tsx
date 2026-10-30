@@ -3,6 +3,7 @@ import { HealthBoard } from "@/features/health/HealthBoard";
 import { useMoney } from "@/features/money/MoneyContext";
 import { NetWorthCard } from "@/features/money/NetWorthCard";
 import { RecapCard } from "@/features/recap/RecapCard";
+import { useFloatingTabInset } from "@/theme/tabBar";
 import { space } from "@/theme/tokens";
 import { makeStyles, useColors } from "@/theme/theme";
 import { Screen } from "@/ui";
@@ -14,12 +15,13 @@ import { Screen } from "@/ui";
 export default function HomeScreen() {
   const styles = useStyles();
   const colors = useColors();
+  const tabInset = useFloatingTabInset();
   const { syncFromBank, isSyncing } = useMoney();
 
   return (
     <Screen padded={false} edges={[]}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: tabInset + space.md }]}
         refreshControl={<RefreshControl refreshing={isSyncing} onRefresh={syncFromBank} tintColor={colors.accent} />}
       >
         <RecapCard />

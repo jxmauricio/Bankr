@@ -1,0 +1,11 @@
+{
+  "aps": {
+    "alert": {
+      "title": "Your weekly recap is ready",
+      "body": "Sep 7–13: $198.45 more went out than came in. Spent $238.45, 62% under usual."
+    },
+    "sound": "default"
+  },
+  "type": "weekly_recap",
+  "week_start": "latest"
+}

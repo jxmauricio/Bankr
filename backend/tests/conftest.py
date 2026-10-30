@@ -24,6 +24,7 @@ os.environ.setdefault("SESSION_JWT_SECRET", "test-secret")
 os.environ.setdefault(
     "TOKEN_ENCRYPTION_KEY", "ziMCX2zuXm-wqPP1MbdpWti2J4HxbDturtJ47-6W-Co="
 )
+os.environ.setdefault("ENABLE_RECAP_CRON", "false")
 
 from app.auth import get_current_user  # noqa: E402
 from app.db.base import Base, get_db, get_session_factory  # noqa: E402
