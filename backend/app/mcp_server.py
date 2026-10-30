@@ -2,20 +2,25 @@
 client) to their Bankr data instead of using the in-app chat agent.
 
 Mounted on the main FastAPI app at POST /mcp (Streamable HTTP, stateless).
-Auth is a bearer token minted by POST /auth/mcp-token (see app/auth.py) --
-each request resolves to exactly one user, and every tool reads only that
-user's rows.
+Auth is an OAuth 2.1 access token (app/mcp_oauth.py: how Claude and ChatGPT
+custom connectors connect) or the legacy token minted by POST
+/auth/mcp-token (app/auth.py). Each request resolves to exactly one user,
+and every tool reads only that user's rows.
 
-The tool set is a deliberate subset of what the in-app agent gets (see
-app/agent/tools.py, which both share): read-only banking/spending/goal data.
-Left out on purpose:
-- propose_goal: it relies on Bankr's in-app confirm card; a bare MCP client
-  has no such step, and an external client shouldn't write goals.
-- calculate / web_search: the connecting client already has its own.
-As with the in-app agent, there is no investment or trade-execution tool.
+Two scopes:
+- read: a deliberate subset of what the in-app agent gets (see
+  app/agent/tools.py, which both share): banking/spending/goal data.
+- write (read + write): also the propose_* tools. They never change
+  anything: each stores a pending proposal (app/services/proposal_service.py)
+  that the user has to confirm in Bankr, just as the in-app agent's
+  proposals wait for a tap on a confirm card.
+Left out on purpose: calculate / web_search (the connecting client already
+has its own). As with the in-app agent, there is no investment or
+trade-execution tool.
 """
 
 import contextlib
+import json
 from collections.abc import AsyncIterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -28,18 +33,25 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from app import mcp_oauth
 from app.agent import tools
-from app.auth import verify_mcp_token
 from app.db import base as db_base
-
-MCP_PATH = "/mcp"
+from app.mcp_oauth import MCP_PATH, READ, WRITE, McpCaller
+from app.services import proposal_service
 
 INSTRUCTIONS = (
-    "Read-only access to the connected user's Bankr personal-finance data: net worth, "
+    "Access to the connected user's Bankr personal-finance data: net worth, "
     "spending, income, savings/debt goals, and transactions. Amounts are USD. Ground every "
     "figure in a tool result. Bankr does not provide investment advice, and neither should you "
     "based on this data."
 )
+WRITE_INSTRUCTIONS = (
+    " The propose_* tools never change anything themselves: each saves a proposal the user must "
+    "confirm in the Bankr app. After calling one, tell the user it's waiting for them in Bankr; "
+    "never say the change is made."
+)
+
+WRITE_TOOLS = {"propose_goal", "propose_rule", "propose_budget_move", "propose_recategorization"}
 
 Window = Literal[
     "today",
@@ -57,6 +69,7 @@ Window = Literal[
 ]
 
 _current_user_id: ContextVar[UUID] = ContextVar("bankr_mcp_user_id")
+_current_caller: ContextVar[McpCaller] = ContextVar("bankr_mcp_caller")
 
 
 @contextmanager
@@ -69,10 +82,21 @@ def _session():
         db.close()
 
 
-def build_mcp_server() -> FastMCP:
+def _propose(kind: str, draft: dict, payload: dict | None = None) -> dict:
+    """Store a validated draft as a pending proposal; pass errors through."""
+    if draft.get("status") != "proposed":
+        return draft
+    caller = _current_caller.get()
+    with _session() as db:
+        return proposal_service.save(
+            db, caller.user_id, kind, payload or draft["action"], caller.grant_id, caller.client_name
+        )
+
+
+def build_mcp_server(write: bool = False) -> FastMCP:
     mcp = FastMCP(
         "Bankr",
-        instructions=INSTRUCTIONS,
+        instructions=INSTRUCTIONS + (WRITE_INSTRUCTIONS if write else ""),
         stateless_http=True,
         json_response=True,
         streamable_http_path="/",
@@ -164,31 +188,107 @@ def build_mcp_server() -> FastMCP:
         with _session() as db:
             return tools.get_unusual_transactions(db, _current_user_id.get())
 
+    if write:
+        _add_write_tools(mcp)
     return mcp
 
 
+def _add_write_tools(mcp: FastMCP) -> None:
+    @mcp.tool()
+    def propose_goal(
+        type: Literal["save", "track_spending"],
+        target_amount: float | None = None,
+        target_date: str | None = None,
+        name: str | None = None,
+        category: str | None = None,
+        window: Literal["this_week", "this_month", "this_year", "last_7_days", "last_30_days", "last_90_days"] | None = None,
+    ) -> dict:
+        """Propose a goal for the user to confirm in Bankr: "save" toward target_amount (optional
+        target_date YYYY-MM-DD and a name like "Emergency fund"), or "track_spending" in a category
+        (optional cap as target_amount). Changes nothing until the user confirms in the Bankr app."""
+        with _session() as db:
+            draft = tools.propose_goal(
+                db, _current_user_id.get(), type=type, target_amount=target_amount, target_date=target_date,
+                name=name, category=category, window=window,
+            )
+        if draft.get("status") != "proposed":
+            return draft
+        fields = ("type", "name", "target_amount", "target_date", "category", "window")
+        return _propose("goal", draft, {k: draft["proposal"].get(k) for k in fields})
+
+    @mcp.tool()
+    def propose_rule(merchant: str, category: str, rename_to: str | None = None) -> dict:
+        """Propose a rule "always put transactions whose merchant contains <merchant> in <category>"
+        (optionally renaming the merchant), also applied to past transactions. Changes nothing until
+        the user confirms in the Bankr app."""
+        with _session() as db:
+            draft = tools.propose_rule(db, _current_user_id.get(), merchant, category, rename_to)
+        return _propose("rule", draft)
+
+    @mcp.tool()
+    def propose_budget_move(from_line: str, to_line: str, amount: float, month: str | None = None) -> dict:
+        """Propose moving budget money between two lines (a category, or "Flexible") for a month
+        (YYYY-MM, default this month), e.g. to cover overspending. Changes nothing until the user
+        confirms in the Bankr app."""
+        with _session() as db:
+            draft = tools.propose_budget_move(db, _current_user_id.get(), from_line, to_line, amount, month)
+        return _propose("budget_move", draft)
+
+    @mcp.tool()
+    def propose_recategorization(transaction_id: str, category: str) -> dict:
+        """Propose putting one transaction (its id from find_transactions) in another category.
+        Changes nothing until the user confirms in the Bankr app."""
+        with _session() as db:
+            draft = proposal_service.draft_recategorization(db, _current_user_id.get(), transaction_id, category)
+        return _propose("recategorize", draft)
+
+
+def _challenge(request: Request, status_code: int, detail: str, **params: str) -> JSONResponse:
+    """RFC 6750 / RFC 9728 challenge: where to find the authorization server
+    and which scopes to ask for."""
+    fields = {**params, "scope": f"{READ} {WRITE}" if status_code == 401 else WRITE}
+    fields["resource_metadata"] = mcp_oauth.resource_metadata_url(request)
+    header = "Bearer " + ", ".join(f'{k}="{v}"' for k, v in fields.items())
+    return JSONResponse({"detail": detail}, status_code=status_code, headers={"WWW-Authenticate": header})
+
+
+def _calls_write_tool(body: bytes) -> bool:
+    try:
+        messages = json.loads(body)
+    except ValueError:
+        return False
+    for m in messages if isinstance(messages, list) else [messages]:
+        if isinstance(m, dict) and m.get("method") == "tools/call":
+            if (m.get("params") or {}).get("name") in WRITE_TOOLS:
+                return True
+    return False
+
+
 class McpEndpoint:
-    """ASGI app for the /mcp path: bearer-token auth in front of the FastMCP app.
+    """ASGI app for the /mcp path: token auth in front of two FastMCP apps,
+    one per scope, so a read-only connection doesn't even list the write
+    tools.
 
     Mounted at "/" on the main app (after all real routes) so that exactly
     /mcp works with no trailing-slash redirect; every other path falls
-    through to a plain 404. The inner FastMCP app is created in `lifespan`
+    through to a plain 404. The inner FastMCP apps are created in `lifespan`
     because a FastMCP session manager can only be run once per instance, and
     the main app's lifespan may run several times (e.g. across test clients).
     """
 
     def __init__(self) -> None:
-        self._app: ASGIApp | None = None
+        self._apps: dict[bool, ASGIApp] = {}
 
     @contextlib.asynccontextmanager
     async def lifespan(self) -> AsyncIterator[None]:
-        mcp = build_mcp_server()
-        self._app = mcp.streamable_http_app()
+        read_server, write_server = build_mcp_server(), build_mcp_server(write=True)
+        apps = {False: read_server.streamable_http_app(), True: write_server.streamable_http_app()}
         try:
-            async with mcp.session_manager.run():
+            async with read_server.session_manager.run(), write_server.session_manager.run():
+                self._apps = apps
                 yield
         finally:
-            self._app = None
+            self._apps = {}
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or scope["path"].rstrip("/") != MCP_PATH:
@@ -197,24 +297,50 @@ class McpEndpoint:
 
         request = Request(scope)
         scheme, _, token = request.headers.get("authorization", "").partition(" ")
-        user_id = verify_mcp_token(token.strip()) if scheme.lower() == "bearer" else None
-        if user_id is None:
-            response = JSONResponse(
-                {"detail": "Missing, invalid, or expired MCP token"},
-                status_code=401,
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+        caller = None
+        if scheme.lower() == "bearer" and token.strip():
+            with _session() as db:
+                caller = mcp_oauth.authenticate_mcp(db, token.strip(), mcp_oauth.resource_url(request))
+        if caller is None:
+            response = _challenge(request, 401, "Missing, invalid, expired, or revoked token")
             await response(scope, receive, send)
             return
 
-        if self._app is None:
+        if not self._apps:
             await JSONResponse({"detail": "MCP server not running"}, status_code=503)(scope, receive, send)
             return
 
+        can_write = WRITE in caller.scopes
+        if not can_write and scope["method"] == "POST":
+            # Read the body to spot a write tool called with a read-only
+            # token, then replay it to the inner app.
+            body, more = b"", True
+            while more:
+                message = await receive()
+                body += message.get("body", b"")
+                more = message.get("more_body", False)
+            if _calls_write_tool(body):
+                response = _challenge(
+                    request, 403, "This connection is read-only. Reconnect Bankr with read + write to propose changes.",
+                    error="insufficient_scope",
+                )
+                await response(scope, receive, send)
+                return
+            replayed = False
+
+            async def receive() -> dict:  # noqa: F811 -- replaces the consumed one
+                nonlocal replayed
+                if not replayed:
+                    replayed = True
+                    return {"type": "http.request", "body": body, "more_body": False}
+                return {"type": "http.disconnect"}
+
         # Inner app has its single route at "/", so rewrite the path.
         inner_scope = {**scope, "path": "/", "raw_path": b"/"}
-        token_ctx = _current_user_id.set(user_id)
+        user_ctx = _current_user_id.set(caller.user_id)
+        caller_ctx = _current_caller.set(caller)
         try:
-            await self._app(inner_scope, receive, send)
+            await self._apps[can_write](inner_scope, receive, send)
         finally:
-            _current_user_id.reset(token_ctx)
+            _current_caller.reset(caller_ctx)
+            _current_user_id.reset(user_ctx)

@@ -425,3 +425,80 @@ class BudgetMove(Base):
     to_group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("category_groups.id"), nullable=True)
     amount: Mapped[float] = mapped_column(Numeric(12, 2))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class OAuthClient(Base):
+    """An MCP client registered through Dynamic Client Registration
+    (POST /oauth/register). Clients that identify with a Client ID Metadata
+    Document (an https URL as client_id) aren't stored: their metadata is
+    fetched from that URL on each authorization. See app/mcp_oauth.py."""
+
+    __tablename__ = "oauth_clients"
+
+    client_id: Mapped[str] = mapped_column(String, primary_key=True)
+    client_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    redirect_uris: Mapped[list[str]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class McpGrant(Base):
+    """One connected app: the user approved a client on the consent page.
+    Access tokens carry the grant's id, so revoking it (Settings) cuts the
+    client off on its very next request. The current refresh token is kept
+    hashed and rotated on every use."""
+
+    __tablename__ = "mcp_grants"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    client_id: Mapped[str] = mapped_column(String)
+    client_name: Mapped[str] = mapped_column(String)
+    redirect_uri: Mapped[str] = mapped_column(String)
+    scope: Mapped[str] = mapped_column(String)  # "read" | "read write"
+    resource: Mapped[str] = mapped_column(String)
+    refresh_token_hash: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class OAuthAuthorization(Base):
+    """An authorization request from GET /oauth/authorize, waiting for the
+    user on the consent page; once approved it holds the (hashed) one-time
+    code the client exchanges at POST /oauth/token. Short-lived."""
+
+    __tablename__ = "oauth_authorizations"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    client_id: Mapped[str] = mapped_column(String)
+    client_name: Mapped[str] = mapped_column(String)
+    redirect_uri: Mapped[str] = mapped_column(String)
+    state: Mapped[str | None] = mapped_column(String, nullable=True)
+    code_challenge: Mapped[str] = mapped_column(String)
+    requested_scope: Mapped[str] = mapped_column(String)
+    resource: Mapped[str] = mapped_column(String)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    grant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("mcp_grants.id", ondelete="CASCADE"), nullable=True)
+    code_hash: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class McpProposal(Base):
+    """A change an MCP client asked for under the write scope: a goal, a
+    rule, a budget move or a recategorization. Nothing changes until the
+    user confirms it in Bankr (POST /proposals/{id}/confirm)."""
+
+    __tablename__ = "mcp_proposals"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    grant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("mcp_grants.id", ondelete="SET NULL"), nullable=True)
+    source: Mapped[str] = mapped_column(String)  # the client's name, shown as "from Claude"
+    kind: Mapped[str] = mapped_column(String)  # goal | rule | budget_move | recategorize
+    payload: Mapped[dict] = mapped_column(JSONB)
+    summary: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String, default="pending")  # pending | confirmed | dismissed | failed
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

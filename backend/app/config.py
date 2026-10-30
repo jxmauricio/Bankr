@@ -40,6 +40,18 @@ class Settings(BaseSettings):
     # clients. Long by default (1 year) since they're pasted into a client
     # config once; re-mint to rotate.
     mcp_token_ttl_seconds: int = 31536000
+    # OAuth for MCP connectors (app/mcp_oauth.py). The backend's public
+    # origin, e.g. https://api.bankr.app: the OAuth issuer, and with /mcp the
+    # resource a token is bound to. Blank uses the origin each request came
+    # in on, which is right for local dev but not behind a proxy that
+    # rewrites Host.
+    public_api_url: str = ""
+    # Where the consent page lives (<web app>/oauth/consent). Blank uses the
+    # first CORS_ALLOWED_ORIGINS entry.
+    web_app_url: str = ""
+    # OAuth access tokens are short; clients refresh with a rotating
+    # refresh token that lasts until the user revokes the connection.
+    mcp_access_token_ttl_seconds: int = 3600
 
     # Fernet key (Fernet.generate_key()) used to encrypt aggregator access
     # tokens at rest. Dev-only placeholder -- swap for a secrets-manager-backed
@@ -160,6 +172,10 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+
+    @property
+    def web_app_origin(self) -> str:
+        return (self.web_app_url or (self.cors_origins or ["http://localhost:5173"])[0]).rstrip("/")
 
     @property
     def invite_codes(self) -> set[str]:

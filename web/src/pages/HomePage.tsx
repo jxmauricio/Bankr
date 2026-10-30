@@ -57,6 +57,7 @@ import { PlanView } from "./PlanView";
 import { HealthView } from "./HealthView";
 import { UpcomingBills } from "../components/UpcomingBills";
 import { InsightsBell } from "../components/InsightsBell";
+import { ProposalsTray } from "../components/ProposalsTray";
 import { CashFlowView } from "./CashFlowView";
 import type { Citation } from "../components/TransactionDetails";
 
@@ -451,6 +452,16 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
             <PeriodFilter period={period} onChange={changePeriod} />
           </div>
           <ThemeToggle />
+          {token && (
+            <ProposalsTray
+              token={token}
+              refreshKey={monthRollup}
+              onChanged={async () => {
+                await loadStandingState();
+                setPlanVersion((v) => v + 1);
+              }}
+            />
+          )}
           {token && (
             <InsightsBell
               token={token}

@@ -74,6 +74,8 @@ Real-model agent evals live in `tests/evals/` and are skipped unless `RUN_EVALS=
 - `app/integrations/bank_aggregator.py` — aggregator-agnostic adapter interface
 - `app/integrations/plaid_client.py` — Plaid implementation of that interface
 - `app/mcp_server.py` — MCP server mounted at `/mcp` (see "Use Bankr from your own Claude")
+- `app/mcp_oauth.py` — OAuth 2.1 authorization server for MCP connectors (Claude, ChatGPT): metadata, consent, tokens, connected apps
+- `app/services/proposal_service.py` + `app/api/proposals.py` — changes a write-scope MCP client proposes, pending until the user confirms
 - `app/api/deps.py` — `get_aggregator` dependency (swap for a fake in tests via `app.dependency_overrides`)
 - `app/services/crypto.py` — Fernet encryption for aggregator access tokens at rest
 - `app/services/category_mapper.py` — raw aggregator category → Bankr `Category`
@@ -150,34 +152,97 @@ yet.
 ## Use Bankr from your own Claude (MCP)
 
 The backend doubles as a remote [MCP](https://modelcontextprotocol.io) server
-at `POST /mcp` (Streamable HTTP), so you can query your Bankr data from Claude
-Code or any MCP client that supports custom headers, without the in-app chat.
+at `POST /mcp` (Streamable HTTP), so you can ask Claude or ChatGPT about your
+Bankr data, without the in-app chat. Clients connect with OAuth 2.1 (the MCP
+authorization spec, rev. 2026-07-28): the user signs in to Bankr on a consent
+page and picks one of two levels of access.
 
-1. Get a token (long-lived, MCP-only; re-mint to rotate). With a normal
-   session token from `/auth/login`:
+| Scope | Tools |
+| --- | --- |
+| `read` (Read only) | `get_net_worth`, `get_cash_flow`, `get_spending`, `compare_spending`, `find_transactions`, `get_goal_progress`, `get_recent_transactions`, `get_unusual_transactions` |
+| `read write` (Read + propose changes) | the above, plus `propose_goal`, `propose_rule`, `propose_budget_move`, `propose_recategorization` |
 
-   ```bash
-   curl -X POST http://localhost:8000/auth/mcp-token -H "Authorization: Bearer $SESSION_TOKEN"
-   ```
+The write tools never change anything. Each stores a pending proposal and
+tells the client the user has to confirm it in Bankr; the web app shows a
+"to review" badge in the header where the user confirms or dismisses them
+(`GET /proposals`, `POST /proposals/{id}/confirm`). There is no investment
+or trade tool at either level. `calculate` and `web_search` are left out
+because the client has its own.
 
-2. Connect:
+**Server URL:** `<PUBLIC_API_URL>/mcp`, e.g. `https://api.bankr.app/mcp`, or
+`http://localhost:8000/mcp` locally. Settings → "Connect to Claude or
+ChatGPT" in the web app shows it with a copy button, and lists connected
+apps with a Disconnect button (revokes the grant: the client's next request
+gets a 401).
 
-   ```bash
-   claude mcp add --transport http bankr http://localhost:8000/mcp \
-     --header "Authorization: Bearer $MCP_TOKEN"
-   ```
+### Claude (claude.ai, Desktop, mobile)
 
-Tools exposed are the read-only subset of the in-app agent's:
-`get_net_worth`, `get_cash_flow`, `get_spending`, `compare_spending`,
-`find_transactions`, `get_goal_progress`, `get_recent_transactions`,
-`get_unusual_transactions`.
-`propose_goal` (needs the in-app confirm card), `calculate` and `web_search`
-(the client has its own) are intentionally left out. An MCP token is rejected
-by every other endpoint and a session token is rejected by `/mcp`. Lifetime
-is `MCP_TOKEN_TTL_SECONDS` (default 1 year). Server code: `app/mcp_server.py`.
+Claude's servers connect to Bankr, so the backend must be reachable over
+public HTTPS (deploy it, or `ngrok http 8000` and set `PUBLIC_API_URL` to the
+tunnel URL and `WEB_APP_URL` to where the web app runs).
 
-Claude.ai / Claude Desktop "custom connectors" require OAuth rather than a
-static bearer header, so they can't connect yet.
+1. Settings → Connectors → **Add custom connector**.
+2. Name it Bankr and paste the server URL. Leave the OAuth client ID and
+   secret empty: Claude identifies itself with its Client ID Metadata
+   Document (or registers itself through DCR).
+3. Click **Connect**, sign in to Bankr, pick Read only or Read + propose
+   changes, and Allow.
+
+### Claude Code
+
+```bash
+claude mcp add --transport http bankr http://localhost:8000/mcp
+```
+
+Then run `/mcp` in Claude Code, pick bankr and authenticate: the browser
+opens the consent page. Claude Code listens on a localhost port that changes
+each time; Bankr accepts any port for loopback redirects (RFC 8252).
+
+### ChatGPT
+
+Settings → Apps & Connectors → Advanced → turn on Developer mode, then
+**Create** a connector with the server URL and OAuth authentication. ChatGPT
+discovers the endpoints from the metadata, registers itself, and opens the
+consent page.
+
+### Without OAuth (legacy token)
+
+For clients that only take a static header, mint a read-only token (lifetime
+`MCP_TOKEN_TTL_SECONDS`, default 1 year; re-mint to rotate; it can't be
+revoked individually):
+
+```bash
+curl -X POST http://localhost:8000/auth/mcp-token -H "Authorization: Bearer $SESSION_TOKEN"
+claude mcp add --transport http bankr http://localhost:8000/mcp --header "Authorization: Bearer $MCP_TOKEN"
+```
+
+### How the OAuth server works
+
+All in `app/mcp_oauth.py`; the MCP side is `app/mcp_server.py`.
+
+- `GET /.well-known/oauth-protected-resource[/mcp]` (RFC 9728) names this
+  backend as the authorization server; a 401 from `/mcp` points at it in
+  `WWW-Authenticate` with `scope="read write"`.
+- `GET /.well-known/oauth-authorization-server` (RFC 8414) advertises PKCE
+  S256 only, public clients only (`none`), Client ID Metadata Documents and
+  DCR (`POST /oauth/register`), and `iss` in the authorization response
+  (RFC 9207).
+- `GET /oauth/authorize` validates the client and redirect URI, then sends
+  the browser to `<WEB_APP_URL>/oauth/consent`. The page calls
+  `/oauth/requests/{id}` and `/oauth/requests/{id}/decision` with the user's
+  session and redirects back with the code.
+- `POST /oauth/token` exchanges the code (PKCE checked, single use; a
+  replayed code revokes the grant) and refreshes. Access tokens are 1-hour
+  JWTs bound to the `/mcp` resource (RFC 8707) that name their grant, so a
+  revoked connection stops at once; refresh tokens are stored hashed and
+  rotate on every use. `POST /oauth/revoke` (RFC 7009) revokes the grant.
+- A read-only token calling a write tool gets `403` with
+  `error="insufficient_scope", scope="write"`, so a client can step up.
+- No OAuth or MCP token works on the REST API, and a session token doesn't
+  work on `/mcp`.
+
+Settings: `PUBLIC_API_URL`, `WEB_APP_URL`, `MCP_ACCESS_TOKEN_TTL_SECONDS`
+(see `.env.example`).
 
 ## How money figures are defined
 
