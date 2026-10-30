@@ -18,7 +18,7 @@ class LoopingClient:
         self.final_text = final_text
         self.results: list[dict] = []
 
-    def run_turn(self, system, tools, history, call_tool, on_text=None):
+    def run_turn(self, system, tools, history, call_tool, on_text=None, system_context=""):
         for name, tool_input in self.calls:
             self.results.append(call_tool(name, tool_input))
         return self.final_text

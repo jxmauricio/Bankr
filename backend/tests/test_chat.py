@@ -233,7 +233,7 @@ def test_chat_stream_sends_reset_when_the_model_drops_its_text(client, user, mon
     to drop it before the real reply streams."""
 
     class ThinksAloudClient:
-        def run_turn(self, system, tools, history, call_tool, on_text=None, on_usage=None):
+        def run_turn(self, system, tools, history, call_tool, on_text=None, on_usage=None, system_context=""):
             on_text("Let me check.")
             on_text(None)
             on_text("All set.")

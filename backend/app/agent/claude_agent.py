@@ -981,12 +981,17 @@ def run_agent_turn(
         check_cancelled()
         on_text(text)
 
-    system = SYSTEM_PROMPT + _date_context(db, user_id)
     # Only passed when wanted, so AgentClient stand-ins without it still work.
     streaming = {"on_text": stream_text} if on_text else {}
     if on_usage:
         streaming["on_usage"] = on_usage
-    reply = clip_reply(_client.run_turn(system, TOOL_DEFINITIONS, messages, call_tool, **streaming))
+    # The date goes separately, after the static prompt, so the prompt and
+    # tool schemas stay a byte-identical prefix the provider can cache.
+    reply = clip_reply(
+        _client.run_turn(
+            SYSTEM_PROMPT, TOOL_DEFINITIONS, messages, call_tool, system_context=_date_context(db, user_id), **streaming
+        )
+    )
     check_cancelled()
     if not reply.strip():
         reply = EMPTY_REPLY_FALLBACK
