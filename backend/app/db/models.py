@@ -40,6 +40,21 @@ class User(Base):
     goals: Mapped[list["Goal"]] = relationship(back_populates="user")
 
 
+class DevicePushToken(Base):
+    """One iOS (or later Android) device that's allowed to receive pushes
+    for this user. The same physical phone re-registers the same token;
+    a token that shows up under a new user is reassigned, because APNs
+    tokens are per-install, not per-account."""
+
+    __tablename__ = "device_push_tokens"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token: Mapped[str] = mapped_column(String, unique=True)
+    platform: Mapped[str] = mapped_column(String, default="ios")  # ios | android
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
 class LinkedAccount(Base):
     __tablename__ = "linked_accounts"
 
@@ -475,20 +490,6 @@ class MerchantCancelLink(Base):
     url: Mapped[str | None] = mapped_column(Text, nullable=True)
     title: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-
-
-class PushDevice(Base):
-    """A phone's Expo push token. One user can have several phones; a token
-    moving to another account (sign out, sign in as someone else) moves its row."""
-
-    __tablename__ = "push_devices"
-
-    id: Mapped[uuid.UUID] = uuid_pk()
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    token: Mapped[str] = mapped_column(String, unique=True)
-    platform: Mapped[str | None] = mapped_column(String, nullable=True)  # ios | android
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class NotificationPrefs(Base):

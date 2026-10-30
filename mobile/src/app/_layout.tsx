@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { useMemo } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SessionProvider, useSession } from "@/lib/session";
+import { usePushNotifications } from "@/features/notifications/usePush";
 import { restoreAppearance } from "@/theme/appearance";
 import { useColors, useScheme } from "@/theme/theme";
 
@@ -33,6 +34,7 @@ export default function RootLayout() {
 
 /** Signed out sees only sign-in; signed in sees only the app. */
 function RootStack() {
+  usePushNotifications();
   const colors = useColors();
   const { isAuthenticated } = useSession();
   return (

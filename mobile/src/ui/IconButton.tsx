@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet } from "react-native";
 import { radius } from "@/theme/tokens";
 import { makeStyles, useColors } from "@/theme/theme";
 import { Icon, type IconName } from "./Icon";
@@ -10,6 +10,7 @@ export function IconButton({
   onPress,
   variant = "secondary",
   disabled = false,
+  loading = false,
 }: {
   icon: IconName;
   label: string;
@@ -17,30 +18,33 @@ export function IconButton({
   /** "plain" is a bare accent icon, for the top bar. */
   variant?: "primary" | "secondary" | "plain";
   disabled?: boolean;
+  loading?: boolean;
 }) {
   const styles = useStyles();
   const colors = useColors();
   const primary = variant === "primary";
   const plain = variant === "plain";
+  const inactive = disabled || loading;
+  const iconColor = primary ? colors.onAccent : plain ? colors.accent : colors.inkSoft;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
+      accessibilityLabel={loading ? `${label}, in progress` : label}
+      accessibilityState={{ disabled: inactive, busy: loading }}
       onPress={onPress}
-      disabled={disabled}
+      disabled={inactive}
       hitSlop={4}
       style={({ pressed }) => [
         styles.base,
         primary ? styles.primary : plain ? null : styles.secondary,
-        (pressed || disabled) && styles.dimmed,
+        (pressed || inactive) && styles.dimmed,
       ]}
     >
-      <Icon
-        name={icon}
-        color={primary ? colors.onAccent : plain ? colors.accent : colors.inkSoft}
-        size={plain ? 24 : 20}
-      />
+      {loading ? (
+        <ActivityIndicator color={iconColor} />
+      ) : (
+        <Icon name={icon} color={iconColor} size={plain ? 24 : 20} />
+      )}
     </Pressable>
   );
 }

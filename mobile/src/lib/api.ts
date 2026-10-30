@@ -682,14 +682,6 @@ export const markAllInsightsRead = (token: string) => request<void>("/insights/r
 
 // --- Push notifications ---
 
-/** After the user allows notifications: where to push this account's briefing and recap. */
-export const registerPushDevice = (token: string, pushToken: string, platform: "ios" | "android") =>
-  request<void>("/notifications/devices", { method: "POST", token, body: { token: pushToken, platform } });
-
-/** Signing out: stop pushing this account's news to this phone. */
-export const removePushDevice = (token: string, pushToken: string) =>
-  request<void>("/notifications/devices/remove", { method: "POST", token, body: { token: pushToken } });
-
 export interface NotificationSettings {
   daily_briefing: boolean;
   weekly_recap: boolean;
@@ -776,6 +768,13 @@ export interface WeeklyRecap {
   previous_week_start: string | null;
   next_week_start: string | null;
 }
+
+export const registerPushToken = (sessionToken: string, deviceToken: string, platform: "ios" | "android" = "ios") =>
+  request<{ ok: boolean }>("/devices/push-token", {
+    method: "PUT",
+    token: sessionToken,
+    body: { token: deviceToken, platform },
+  });
 
 export const fetchLatestRecap = (token: string) => request<{ recap: WeeklyRecap | null }>("/recaps/latest", { token });
 

@@ -77,20 +77,16 @@ Until then those banks may not link from the app; non-OAuth banks do.
 
 ## Push notifications
 
-`src/features/notifications/push.ts` asks for permission once the user reaches
-home, sends the phone's Expo push token to `POST /notifications/devices`, and
-opens the recap or the notifications list when a push is tapped. Signing out
-removes the token. Per-kind switches (daily briefing, weekly recap) sit under
-the notifications list and in the web app's Settings.
+`src/features/notifications/usePush.ts` asks for permission, sends the
+phone's APNs token to `PUT /devices/push-token` after sign-in, and opens the
+week's recap (weekly recap) or the notifications list (daily briefing) when a
+push is tapped. Per-kind switches sit under the notifications list and in the
+web app's Settings.
 
-To actually receive pushes, once:
-- link the app to an EAS project (`npx eas-cli@latest init`), which puts
-  `extra.eas.projectId` in the app config. Without it the app skips
-  registration quietly.
-- use a development build (`npx expo run:ios`): `expo-notifications` is a
-  native module, and Expo Go can't receive remote pushes on Android.
-- set `EXPO_PUSH_ENABLED=true` on the backend and run
-  `python -m app.jobs.notifications_job` every 15 minutes or so from cron.
+The backend sends both from a scheduler inside the API process: the recap on
+Sunday evening, the daily briefing from 8am in the user's time zone. Pushes
+only leave once the APNs key is set (`APNS_*` in `backend/.env`); the
+Simulator never receives real APNs, so use `scripts/sim-push-recap.sh` there.
 
 ## Not built yet
 

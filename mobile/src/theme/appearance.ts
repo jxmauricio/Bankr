@@ -14,7 +14,8 @@ function apply(pref: AppearancePref) {
 
 function read(): AppearancePref {
   const saved = SecureStore.getItem(STORAGE_KEY);
-  return saved === "light" || saved === "dark" ? saved : "system";
+  if (saved === "light" || saved === "dark" || saved === "system") return saved;
+  return "light";
 }
 
 /** Applies the saved choice. Called once at launch, before the first frame, so a forced mode never flashes the other. */

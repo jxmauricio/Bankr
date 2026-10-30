@@ -17,6 +17,7 @@ import {
 import type { TransactionRow } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
 import { merchantOf, signedAmount, topCategory } from "@/lib/transactions";
+import { useFloatingTabInset } from "@/theme/tabBar";
 import { space } from "@/theme/tokens";
 import { makeStyles, useColors } from "@/theme/theme";
 import {
@@ -45,6 +46,7 @@ import {
 export default function TransactionsScreen() {
   const styles = useStyles();
   const colors = useColors();
+  const tabInset = useFloatingTabInset();
   const { syncFromBank, isSyncing } = useMoney();
   const { filters, update, list } = useTransactionFilters();
   const { status, data, error, retry } = list;
@@ -124,7 +126,7 @@ export default function TransactionsScreen() {
           stickySectionHeadersEnabled
           keyboardDismissMode="on-drag"
           refreshControl={<RefreshControl refreshing={isSyncing} onRefresh={syncFromBank} tintColor={colors.accent} />}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: tabInset + space.md }]}
           renderSectionHeader={({ section }) => (
             <SectionHeader title={section.title} trailing={section.out > 0 ? `−${formatMoney(section.out)}` : null} />
           )}

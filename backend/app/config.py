@@ -150,21 +150,20 @@ class Settings(BaseSettings):
     # whose client hasn't reported a timezone yet (see User.timezone).
     default_timezone: str = "America/New_York"
 
+    # Auth-key (.p8) credentials for alert pushes. Blank = the weekly recap
+    # cron still writes the in-app bell row, it just doesn't hit APNs.
     apns_key_id: str = ""
     apns_team_id: str = ""
     apns_auth_key_path: str = ""
-    apns_topic: str = ""
+    apns_topic: str = "com.jxmauricio.bankr"
     apns_use_sandbox: bool = True
 
-    # Push notifications to the mobile app through Expo's push service (see
-    # app/integrations/push.py). Off by default: the jobs still run and log
-    # what they'd send. EXPO_ACCESS_TOKEN is only needed when "enhanced push
-    # security" is on for the Expo project.
-    expo_push_enabled: bool = False
-    expo_access_token: str = ""
     # Days ahead a subscription renewal (or a trial's first charge) shows up
     # in the daily briefing.
     renewal_reminder_days: int = 3
+    # Sunday-evening recap job inside the API process. Tests turn this off.
+    enable_recap_cron: bool = True
+
 
     @property
     def cors_origins(self) -> list[str]:
