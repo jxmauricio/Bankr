@@ -8,11 +8,14 @@ from app.api.accounts import router as accounts_router
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.dashboard import router as dashboard_router
-from app.api.devices import router as devices_router
+from app.api.briefing import router as briefing_router
 from app.api.budgets import router as budgets_router
 from app.api.categories import router as categories_router
+from app.api.devices import router as devices_router
 from app.api.goals import router as goals_router
 from app.api.insights import router as insights_router
+from app.api.memory import router as memory_router
+from app.api.notifications import router as notifications_router
 from app.api.proposals import router as proposals_router
 from app.api.recaps import router as recaps_router
 from app.api.recurring import router as recurring_router
@@ -61,6 +64,7 @@ app.include_router(goals_router)
 app.include_router(transactions_router)
 app.include_router(categories_router)
 app.include_router(rules_router)
+app.include_router(memory_router)
 app.include_router(recurring_router)
 app.include_router(budgets_router)
 app.include_router(insights_router)
@@ -68,6 +72,8 @@ app.include_router(devices_router)
 app.include_router(proposals_router)
 app.include_router(mcp_oauth_router)
 app.include_router(recaps_router)
+app.include_router(briefing_router)
+app.include_router(notifications_router)
 app.include_router(chat_router)
 app.include_router(webhooks_router)
 

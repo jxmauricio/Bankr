@@ -20,8 +20,9 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.db.models import Category, Goal, LinkedAccount, NetWorthSnapshot, Transaction
-from app.integrations.web_search import WebSearchClient
+from app.integrations.web_search import WebSearchClient, as_untrusted
 from app.services import budget_service
+from app.services import memory_service
 from app.services import answer_charts
 from app.services import money_query as mq
 from app.services.goal_service import (
@@ -737,6 +738,31 @@ def propose_rule(
     }
 
 
+def propose_memory(db: Session, user_id: UUID, text: str, kind: str = "other", replaces: str | None = None) -> dict:
+    """Draft a fact for Bankr to remember across conversations, for the user
+    to confirm on a card. Checked like a saved one (length, room, no account
+    numbers or credentials), but nothing is written until they confirm."""
+    old = memory_service.find_fact(db, user_id, replaces) if replaces else None
+    if replaces and old is None:
+        return {"error": "replaces must be the exact text of a fact you were shown under what you know about the user"}
+    try:
+        text, kind = memory_service.check_new_fact(db, user_id, text, kind, old)
+    except memory_service.FactError as e:
+        return {"error": str(e)}
+    return {
+        "status": "proposed",
+        "action": {
+            "kind": "memory",
+            "text": text,
+            "fact_kind": kind,
+            "fact_kind_label": memory_service.KINDS[kind],
+            "replaces_id": str(old.id) if old else None,
+            "replaces_text": old.text if old else None,
+        },
+        "message": "Drafted a memory for the user to confirm. Do not claim it is saved yet.",
+    }
+
+
 def get_recurring(db: Session, user_id: UUID, days_ahead: int = 30) -> dict:
     """Recurring bills, subscriptions and paychecks: what's coming up, monthly
     totals, and any price changes. Suggested series aren't confirmed by the
@@ -883,6 +909,16 @@ def get_unusual_transactions(db: Session, user_id: UUID, stddev_threshold: float
     }
 
 
+@_grounded
+def get_daily_briefing(db: Session, user_id: UUID) -> dict:
+    """Today's daily briefing: charges to categorize, unusual or doubled
+    charges, price changes and renewals coming up -- the same items the app
+    shows, picked by app/jobs/daily_briefing_job.py."""
+    from app.services.briefing_actions import summarize_for_agent
+
+    return summarize_for_agent(db, user_id)
+
+
 # ---------------------------------------------------------------------------
 # Calculator: precise arithmetic for projections (compound interest, loan
 # payoff timelines, percentage changes, ...) that the model would otherwise
@@ -968,7 +1004,4 @@ def web_search(query: str, max_results: int = 5, *, client: WebSearchClient | No
     except Exception as e:
         # A flaky search API/network blip shouldn't fail the whole chat turn.
         return {"query": query, "error": f"Search failed: {e}"}
-    return {
-        "query": query,
-        "results": [{"title": r.title, "url": r.url, "snippet": r.snippet} for r in results],
-    }
+    return as_untrusted(query, results)

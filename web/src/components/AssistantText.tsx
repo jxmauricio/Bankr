@@ -5,6 +5,8 @@ import { BankText } from "./BankLogo";
 /** How a reply's dollar figures link back to the sources under it. */
 export interface FigureSources {
   citations: Citation[];
+  /** Figures the server found no source for (ChatResponse.uncited_figures). */
+  uncited?: string[];
   sources: ChatSource[];
   onOpen: (query: SourceQuery) => void;
 }
@@ -16,8 +18,9 @@ export interface FigureSources {
  * else as plain text -- it is not a general-purpose markdown parser.
  *
  * Every dollar figure the server matched to a tool result (ChatResponse
- * .citations) is underlined and numbered to that source; a figure no source
- * holds renders as a plain number, so the underline only ever means "checked".
+ * .citations) is underlined and numbered to that source, so that underline
+ * only ever means "checked". A figure no source holds (.uncited_figures) is
+ * greyed with a "?" instead of a number: not verified.
  */
 export function AssistantText({ text, figures }: { text: string; figures?: FigureSources }) {
   const lines = text.split(/\n+/).filter((line) => line.trim());
@@ -53,10 +56,19 @@ export function AssistantText({ text, figures }: { text: string; figures?: Figur
 }
 
 // Same pattern the server cites figures with (app/api/chat.py _MONEY).
-const MONEY = /(-?\$[\d,]+(?:\.\d+)?)/g;
+const MONEY = /(-?\$\d+(?:,\d{3})*(?:\.\d+)?)/g;
 
 function Figure({ text, figures }: { text: string; figures?: FigureSources }) {
   const number = figures?.citations.find((c) => c.text === text)?.source;
+  if (!number && figures?.uncited?.includes(text)) {
+    return (
+      <span title="Not verified: none of the sources has this figure">
+        <span className="fig-unverified">{text}</span>
+        <sup aria-hidden className="ml-px font-mono text-[10px] text-ink-faint">?</sup>
+        <span className="sr-only"> (not verified)</span>
+      </span>
+    );
+  }
   if (!number) return <span className="font-mono text-[0.94em] tabular-nums">{text}</span>;
   const source = figures?.sources[number - 1];
   const mark = (

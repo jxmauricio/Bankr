@@ -9,6 +9,7 @@ import {
   OpenInCashFlow,
   RecordCard,
   recordQuery,
+  ReplyFeedback,
   SearchedBox,
   SourceTrail,
   ViewLinks,
@@ -186,7 +187,7 @@ function Message({
   return (
     <View style={styles.assistant}>
       {headline && <AnswerHeadline headline={headline} />}
-      <AssistantText text={item.text} citations={parts.citations} sources={sources} />
+      <AssistantText text={item.text} citations={parts.citations} uncited={parts.uncited_figures} sources={sources} />
       {parts.records?.map((record, i) => (
         <RecordCard key={i} record={record} query={recordQuery(sources)} />
       ))}
@@ -204,6 +205,7 @@ function Message({
         <ChatChart key={i} chart={chart} />
       ))}
       {sources.length > 0 && <SourceTrail sources={sources} />}
+      <ReplyFeedback key={item.messageId} messageId={item.messageId} initial={item.feedback ?? null} />
       {item.usage && (
         <Text variant="caption" tone="soft">
           {formatTurnUsage(item.usage)}

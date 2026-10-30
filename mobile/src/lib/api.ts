@@ -663,7 +663,7 @@ export const moveBudgetMoney = (token: string, move: { month?: string; from_key:
 
 export interface Insight {
   id: string;
-  type: "budget_overspend" | "goal_drift" | "unusual_transaction" | "price_change" | "weekly_recap" | string;
+  type: "budget_overspend" | "goal_drift" | "unusual_transaction" | "price_change" | "weekly_recap" | "daily_briefing" | string;
   message: string;
   transaction_ids: string[];
   /** What it's about: a budget line key, recurring series id, goal id, transaction id or a recap's week start. */
@@ -679,6 +679,19 @@ export const markInsightRead = (token: string, id: string) =>
   request<Insight>(`/insights/${id}/read`, { method: "POST", token });
 
 export const markAllInsightsRead = (token: string) => request<void>("/insights/read-all", { method: "POST", token });
+
+// --- Push notifications ---
+
+export interface NotificationSettings {
+  daily_briefing: boolean;
+  weekly_recap: boolean;
+  device_count: number;
+}
+
+export const fetchNotificationSettings = (token: string) => request<NotificationSettings>("/notifications/settings", { token });
+
+export const updateNotificationSettings = (token: string, changes: Partial<Pick<NotificationSettings, "daily_briefing" | "weekly_recap">>) =>
+  request<NotificationSettings>("/notifications/settings", { method: "PATCH", token, body: changes });
 
 // --- Weekly recap ---
 
@@ -859,6 +872,8 @@ export interface Clarify {
 export interface AnswerParts {
   sources: ChatSource[];
   citations?: Citation[];
+  /** Dollar figures in the reply that no source holds; shown as not verified. */
+  uncited_figures?: string[];
   goal_proposal: GoalProposal | null;
   action_proposal?: ActionProposal | null;
   charts?: ChartSpec[];
@@ -984,6 +999,8 @@ export function formatTurnUsage(u: TurnUsage): string {
 
 export interface ChatResponse extends AnswerParts {
   conversation_id: string;
+  /** The saved reply, for rateMessage. */
+  message_id: string;
   reply: string;
   usage?: TurnUsage | null;
 }
@@ -1050,10 +1067,25 @@ export interface ConversationSummary {
 }
 
 export interface ConversationMessage extends AnswerParts {
+  id: string;
   role: string;
   content: string;
   created_at: string;
+  feedback?: Rating | null;
 }
+
+export type Rating = "up" | "down";
+
+/** Thumbs up or down on a reply; rating it again replaces the earlier one. */
+export const rateMessage = (token: string, messageId: string, rating: Rating) =>
+  request<{ message_id: string; rating: Rating }>(`/chat/messages/${messageId}/feedback`, {
+    method: "POST",
+    token,
+    body: { rating },
+  });
+
+export const clearMessageRating = (token: string, messageId: string) =>
+  request<void>(`/chat/messages/${messageId}/feedback`, { method: "DELETE", token });
 
 export const fetchConversations = (token: string) =>
   request<ConversationSummary[]>("/chat/conversations", { token });

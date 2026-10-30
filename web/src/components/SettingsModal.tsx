@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { AddBankButton } from "./AddBankButton";
 import { BankLogo, BankName } from "./BankLogo";
 import { CategoriesSettings } from "./CategoriesSettings";
+import { MemorySettings } from "./MemorySettings";
+import { NotificationSettings } from "./NotificationSettings";
 import { ConnectedAppsSettings } from "./ConnectedAppsSettings";
 import { RulesSettings } from "./RulesSettings";
 import { ApiError, deleteAccount, disconnectBank, fetchLinkedBanks, type LinkedBank } from "../lib/api";
@@ -189,9 +191,13 @@ export function SettingsModal({
           }}
         />
 
+        <MemorySettings token={token} />
+
         <CategoriesSettings token={token} />
 
         <RulesSettings token={token} />
+
+        <NotificationSettings token={token} />
 
         <ConnectedAppsSettings token={token} />
 

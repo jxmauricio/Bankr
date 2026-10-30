@@ -3,6 +3,7 @@ import { Pressable, RefreshControl, SectionList, StyleSheet, View } from "react-
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useState } from "react";
 import { useNotifications } from "@/features/notifications/NotificationsContext";
+import { PushSettings } from "@/features/notifications/PushSettings";
 import type { Insight } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/format";
 import { radius, space } from "@/theme/tokens";
@@ -56,6 +57,7 @@ export default function NotificationsScreen() {
           renderItem={({ item, index, section }) => (
             <Row insight={item} first={index === 0} last={index === section.data.length - 1} />
           )}
+          ListFooterComponent={<PushSettings />}
           ListEmptyComponent={
             <Text tone="soft" align="center" style={styles.empty}>
               Nothing yet. Your weekly recap and anything worth a heads-up will show up here.
@@ -109,6 +111,8 @@ function lookFor(type: string, colors: Colors): { icon: IconName; color: string;
   switch (type) {
     case "weekly_recap":
       return { icon: "calendar", color: colors.positive, wash: colors.positiveWash };
+    case "daily_briefing":
+      return { icon: "sparkle", color: colors.accent, wash: colors.accentWash };
     case "budget_overspend":
       return { icon: "warning", color: colors.warn, wash: colors.warnWash };
     case "goal_drift":

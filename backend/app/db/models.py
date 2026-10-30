@@ -249,7 +249,7 @@ class InsightLog(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    type: Mapped[str] = mapped_column(String)  # budget_overspend | goal_drift | unusual_transaction | price_change
+    type: Mapped[str] = mapped_column(String)  # budget_overspend | goal_drift | unusual_transaction | price_change | weekly_recap | daily_briefing
     message: Mapped[str] = mapped_column(Text)
     related_transaction_ids: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     # Identifies the event an insight is about (see insights_job._dedupe_key)
@@ -293,6 +293,24 @@ class ChatMessage(Base):
     # trust/verification trail (see claude_agent.run_agent_turn). Always
     # null on user-role messages.
     tool_calls: Mapped[list[dict] | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class ChatFeedback(Base):
+    """A user's thumbs up or down on one assistant reply, so bad answers can
+    be pulled out (app/scripts/export_feedback.py) and turned into eval
+    tasks. One per message: rating it again replaces the earlier one."""
+
+    __tablename__ = "chat_feedback"
+    __table_args__ = (CheckConstraint("rating IN ('up', 'down')", name="chat_feedback_rating"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    message_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("chat_messages.id", ondelete="CASCADE"), unique=True
+    )
+    rating: Mapped[str] = mapped_column(String)  # up | down
+    reason: Mapped[str | None] = mapped_column(String(280), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
@@ -440,6 +458,85 @@ class BudgetMove(Base):
     to_group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("category_groups.id"), nullable=True)
     amount: Mapped[float] = mapped_column(Numeric(12, 2))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class DailyBriefing(Base):
+    """One day's short list of things worth a look (app/jobs/daily_briefing_job.py):
+    charges to categorize, unusual or doubled charges, price changes and
+    renewals coming up. Items are picked in Python; `intro` is the one line
+    the model wrote over them, null when it couldn't be reached. What the
+    user did about each item lives in BriefingItemState, not here."""
+
+    __tablename__ = "daily_briefings"
+    __table_args__ = (UniqueConstraint("user_id", "day", name="uq_daily_briefing_user_day"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date)  # in the user's time zone
+    items: Mapped[list[dict]] = mapped_column(JSONB)
+    intro: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class BriefingItemState(Base):
+    """What the user did about one briefing item, by its key ("unusual:<txn id>",
+    "renewal:<series id>:<due date>"). A handled key never comes back in a
+    later day's briefing."""
+
+    __tablename__ = "briefing_item_states"
+    __table_args__ = (UniqueConstraint("user_id", "item_key"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    item_key: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String)  # done | expected | dismissed
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class MerchantCancelLink(Base):
+    """Where to cancel one merchant's subscription, found by web search when
+    the curated list (app/services/subscription_help.py) doesn't know it.
+    Shared by every user, like MerchantCategoryGuess: only the merchant's
+    name is ever searched."""
+
+    __tablename__ = "merchant_cancel_links"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    # recurring_service.merchant_key
+    merchant_key: Mapped[str] = mapped_column(String, unique=True, index=True)
+    # Null when the search found nothing usable; cached so it isn't asked again.
+    url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    title: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class NotificationPrefs(Base):
+    """Which pushes a user wants. No row means the defaults (all on)."""
+
+    __tablename__ = "notification_prefs"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    daily_briefing: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    weekly_recap: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class MemoryFact(Base):
+    """Something durable the user told Bankr about themselves ("paid every
+    other Friday", "saving for a wedding next June"), shown to the agent on
+    every turn so it outlives the chat's history window. Written only by the
+    user: in Settings, or by confirming a card the agent drafted (see
+    app/services/memory_service.py, which also keeps these short and free
+    of account numbers and credentials)."""
+
+    __tablename__ = "memory_facts"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String)  # income | priority | household | preference | other
+    text: Mapped[str] = mapped_column(String)
+    source: Mapped[str] = mapped_column(String, default="user")  # user | agent (drafted by the agent, confirmed by the user)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class OAuthClient(Base):

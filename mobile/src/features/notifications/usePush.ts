@@ -15,35 +15,36 @@ Notifications.setNotificationHandler({
   }),
 });
 
-type RecapHandler = (week: string) => void;
+type OpenHandler = (target: string) => void;
 
-let pendingWeek: string | null = null;
-const recapHandlers = new Set<RecapHandler>();
+let pendingTarget: string | null = null;
+const openHandlers = new Set<OpenHandler>();
 
-/** Home calls this once the recap screen is actually on the stack. */
-export function consumePendingRecap(): string | null {
-  const week = pendingWeek;
-  pendingWeek = null;
-  return week;
+/** Home calls this once the screens a push opens are actually on the stack. */
+export function consumePendingOpen(): string | null {
+  const target = pendingTarget;
+  pendingTarget = null;
+  return target;
 }
 
-export function subscribeRecapOpen(handler: RecapHandler): () => void {
-  recapHandlers.add(handler);
+export function subscribePushOpen(handler: OpenHandler): () => void {
+  openHandlers.add(handler);
   return () => {
-    recapHandlers.delete(handler);
+    openHandlers.delete(handler);
   };
 }
 
-function openRecap(week: string) {
-  if (recapHandlers.size > 0) {
-    recapHandlers.forEach((handler) => handler(week));
-    pendingWeek = null;
+function openTarget(target: string) {
+  if (openHandlers.size > 0) {
+    openHandlers.forEach((handler) => handler(target));
+    pendingTarget = null;
   } else {
-    pendingWeek = week;
+    pendingTarget = target;
   }
 }
 
-function weekFromResponse(response: Notifications.NotificationResponse | null | undefined): string | null {
+/** Where a tapped push leads: its week's recap, or the notifications list for a daily briefing. */
+function targetFromResponse(response: Notifications.NotificationResponse | null | undefined): string | null {
   if (!response || response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return null;
   const data = response.notification.request.content.data;
   const trigger = response.notification.request.trigger;
@@ -55,10 +56,11 @@ function weekFromResponse(response: Notifications.NotificationResponse | null | 
     if (!bag || typeof bag !== "object") continue;
     const record = bag as Record<string, unknown>;
     const week = record.week_start ?? record.weekStart;
-    if (typeof week === "string" && week.length > 0) return week;
+    if (typeof week === "string" && week.length > 0) return `/recap/${week}`;
+    if (record.type === "daily_briefing") return "/notifications";
   }
   if (data && typeof data === "object" && (data as { type?: unknown }).type === "weekly_recap") {
-    return "latest";
+    return "/recap/latest";
   }
   return null;
 }
@@ -66,7 +68,8 @@ function weekFromResponse(response: Notifications.NotificationResponse | null | 
 /**
  * Ask for notification permission on launch (so a Simulator banner can
  * show), register the APNs token after sign-in (phones only — the
- * Simulator has none), and open the recap when they tap a weekly push.
+ * Simulator has none), and open the recap or the daily briefing's
+ * notifications list when they tap a push.
  */
 export function usePushNotifications() {
   const { token } = useSession();
@@ -113,7 +116,7 @@ export function usePushNotifications() {
   }, [token]);
 
   useEffect(() => {
-    const week = weekFromResponse(lastResponse);
-    if (week) openRecap(week);
+    const target = targetFromResponse(lastResponse);
+    if (target) openTarget(target);
   }, [lastResponse]);
 }

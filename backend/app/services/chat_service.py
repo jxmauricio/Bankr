@@ -14,6 +14,7 @@ reply are a separate, lightweight thing we do keep (ChatMessage.tool_calls),
 purely for the user-facing "sources" trail -- never fed back into history.
 """
 
+from datetime import datetime, timezone
 from typing import Callable
 from uuid import UUID
 
@@ -21,7 +22,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.agent.claude_agent import TurnCancelled, run_agent_turn
-from app.db.models import ChatMessage
+from app.db.models import ChatFeedback, ChatMessage
 
 _PREVIEW_MAX_CHARS = 120
 
@@ -68,11 +69,13 @@ def send_message(
     is_cancelled: Callable[[], bool] | None = None,
     on_text: Callable[[str | None], None] | None = None,
     on_usage: Callable[[dict], None] | None = None,
-) -> tuple[str, list[dict]]:
-    """Returns (reply text, sources) -- see run_agent_turn for what sources
-    is and what on_status and on_text receive. If is_cancelled turns True mid-turn the
-    user's message is removed again (so history never holds a question with
-    no answer) and TurnCancelled is raised."""
+) -> tuple[str, list[dict], UUID]:
+    """Returns (reply text, sources, the saved reply's message id) -- see
+    run_agent_turn for what sources is and what on_status and on_text
+    receive. The id is what feedback (set_feedback) is keyed to. If
+    is_cancelled turns True mid-turn the user's message is removed again (so
+    history never holds a question with no answer) and TurnCancelled is
+    raised."""
     history = _conversation_history(db, user_id, conversation_id)
     history.append({"role": "user", "content": message_text})
 
@@ -87,17 +90,16 @@ def send_message(
         db.commit()
         raise
 
-    db.add(
-        ChatMessage(
-            user_id=user_id,
-            conversation_id=conversation_id,
-            role="assistant",
-            content=assistant_text,
-            tool_calls=sources or None,
-        )
+    assistant_row = ChatMessage(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        role="assistant",
+        content=assistant_text,
+        tool_calls=sources or None,
     )
+    db.add(assistant_row)
     db.commit()
-    return assistant_text, sources
+    return assistant_text, sources, assistant_row.id
 
 
 def list_conversations(db: Session, user_id: UUID) -> list[dict]:
@@ -146,17 +148,53 @@ def get_conversation(db: Session, user_id: UUID, conversation_id: UUID) -> list[
     past conversation in the UI. Scoped to user_id, so asking for another
     user's conversation_id just comes back empty, same as it not existing."""
     rows = (
-        db.query(ChatMessage)
+        db.query(ChatMessage, ChatFeedback.rating)
+        .outerjoin(ChatFeedback, ChatFeedback.message_id == ChatMessage.id)
         .filter(ChatMessage.user_id == user_id, ChatMessage.conversation_id == conversation_id)
         .order_by(ChatMessage.created_at)
         .all()
     )
     return [
         {
+            "id": row.id,
             "role": row.role,
             "content": row.content,
             "sources": row.tool_calls or [],
             "created_at": row.created_at,
+            "feedback": rating,
         }
-        for row in rows
+        for row, rating in rows
     ]
+
+
+def set_feedback(db: Session, user_id: UUID, message_id: UUID, rating: str, reason: str | None) -> ChatFeedback | None:
+    """Thumbs up or down on one of this user's assistant replies, replacing
+    any earlier rating of it. None when the message isn't theirs or isn't a
+    reply, same as it not existing."""
+    message = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.id == message_id, ChatMessage.user_id == user_id, ChatMessage.role == "assistant")
+        .one_or_none()
+    )
+    if message is None:
+        return None
+    feedback = db.query(ChatFeedback).filter(ChatFeedback.message_id == message_id).one_or_none()
+    if feedback is None:
+        feedback = ChatFeedback(user_id=user_id, message_id=message_id, rating=rating)
+        db.add(feedback)
+    feedback.rating = rating
+    feedback.reason = (reason or "").strip() or None
+    feedback.created_at = datetime.now(timezone.utc)
+    db.commit()
+    return feedback
+
+
+def clear_feedback(db: Session, user_id: UUID, message_id: UUID) -> bool:
+    """Take back a rating. False when there was none of this user's to remove."""
+    removed = (
+        db.query(ChatFeedback)
+        .filter(ChatFeedback.message_id == message_id, ChatFeedback.user_id == user_id)
+        .delete()
+    )
+    db.commit()
+    return bool(removed)

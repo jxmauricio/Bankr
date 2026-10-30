@@ -7,16 +7,21 @@ const TYPE_LABEL: Record<string, string> = {
   goal_drift: "Goal",
   unusual_transaction: "Unusual charge",
   price_change: "Price change",
+  weekly_recap: "Weekly recap",
+  daily_briefing: "Daily briefing",
 };
 
 /** Header bell: Bankr's nudges, newest first. Opening one marks it read and goes where it's about. */
 export function InsightsBell({
   token,
   refreshKey,
+  version,
   onOpenInsight,
 }: {
   token: string;
   refreshKey?: unknown;
+  /** Bump to refetch after a change elsewhere (a briefing item handled). */
+  version?: number;
   onOpenInsight: (insight: Insight) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -36,7 +41,7 @@ export function InsightsBell({
     return () => {
       stale = true;
     };
-  }, [token, refreshKey]);
+  }, [token, refreshKey, version]);
 
   useEffect(() => {
     if (!open) return;

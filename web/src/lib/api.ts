@@ -549,6 +549,41 @@ export const updateRule = (token: string, id: string, patch: Partial<NewRule>) =
 
 export const deleteRule = (token: string, id: string) => request<void>(`/rules/${id}`, { method: "DELETE", token });
 
+/** income | priority | household | preference | other */
+export type MemoryKind = string;
+
+/** Something the user had Bankr remember about them; the agent sees these on every turn. */
+export interface MemoryFact {
+  id: string;
+  kind: MemoryKind;
+  text: string;
+  /** "agent" when the user confirmed a card the assistant drafted. */
+  source: "user" | "agent";
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface MemoryList {
+  facts: MemoryFact[];
+  /** kind -> label, in display order. */
+  kinds: Record<MemoryKind, string>;
+  max_facts: number;
+  max_chars: number;
+}
+
+export const fetchMemory = (token: string) => request<MemoryList>("/memory", { token });
+
+export const createMemoryFact = (
+  token: string,
+  fact: { text: string; kind: MemoryKind; source?: "user" | "agent"; replaces_id?: string | null },
+) => request<MemoryFact>("/memory", { method: "POST", token, body: fact });
+
+export const updateMemoryFact = (token: string, id: string, patch: { text?: string; kind?: MemoryKind }) =>
+  request<MemoryFact>(`/memory/${id}`, { method: "PATCH", token, body: patch });
+
+export const deleteMemoryFact = (token: string, id: string) =>
+  request<void>(`/memory/${id}`, { method: "DELETE", token });
+
 export type RecurringKind = "bill" | "subscription" | "income";
 export type RecurringStatus = "suggested" | "confirmed" | "dismissed";
 
@@ -682,10 +717,10 @@ export const moveBudgetMoney = (token: string, move: { month?: string; from_key:
 
 export interface Insight {
   id: string;
-  type: "budget_overspend" | "goal_drift" | "unusual_transaction" | "price_change" | string;
+  type: "budget_overspend" | "goal_drift" | "unusual_transaction" | "price_change" | "weekly_recap" | "daily_briefing" | string;
   message: string;
   transaction_ids: string[];
-  /** What it's about: a budget line key, recurring series id, goal id or transaction id. */
+  /** What it's about: a budget line key, recurring series id, goal id, transaction id or a briefing's day. */
   subject_id: string | null;
   created_at: string;
   read: boolean;
@@ -698,6 +733,90 @@ export const markInsightRead = (token: string, id: string) =>
   request<Insight>(`/insights/${id}/read`, { method: "POST", token });
 
 export const markAllInsightsRead = (token: string) => request<void>("/insights/read-all", { method: "POST", token });
+
+// --- Daily briefing ---
+
+export type BriefingAction = "recategorize" | "create_rule" | "mark_expected" | "dismiss";
+
+export interface BriefingItem {
+  /** Stable id of what it's about, e.g. "unusual:<transaction id>"; actions name the item by it. */
+  key: string;
+  type: "review" | "unusual" | "duplicate" | "price_change" | "renewal" | "trial";
+  title: string;
+  detail: string;
+  merchant: string | null;
+  /** Positive size of the charge (or of all of a review item's charges). */
+  amount: number | null;
+  date: string | null;
+  transaction_ids: string[];
+  series_id: string | null;
+  /** The classifier's guess for a review item's merchant. */
+  suggestion: { category_id: string; category: string; source: string } | null;
+  actions: BriefingAction[];
+  /** A cancel page or an email to copy is available (fetchBriefingHelp). */
+  has_help: boolean;
+  status: "open" | "done" | "expected" | "dismissed";
+}
+
+export interface DailyBriefing {
+  day: string;
+  /** One line the model wrote; null when it couldn't be reached. */
+  intro: string | null;
+  /** Plain-facts line: the most pressing item and how many more. */
+  teaser: string;
+  items: BriefingItem[];
+  open_count: number;
+  read: boolean;
+}
+
+export interface BriefingActionResult {
+  /** What will change (preview) or what did (confirmed). */
+  summary: string;
+  applied: boolean;
+  category?: string;
+  would_change?: number;
+  briefing?: DailyBriefing;
+}
+
+export interface EmailDraft {
+  kind: "cancellation" | "refund";
+  subject: string;
+  body: string;
+}
+
+export interface BriefingHelp {
+  merchant: string;
+  cancel: { url: string; title: string; source: "curated" | "search" } | null;
+  emails: EmailDraft[];
+}
+
+export const fetchTodayBriefing = (token: string) =>
+  request<{ briefing: DailyBriefing }>("/briefing/today", { token }).then((r) => r.briefing);
+
+/** Without confirm, only says what would change; with it, does it. */
+export const runBriefingAction = (
+  token: string,
+  body: { item_key: string; action: BriefingAction; category_id?: string; confirm: boolean }
+) => request<BriefingActionResult>("/briefing/actions", { method: "POST", token, body });
+
+export const fetchBriefingHelp = (token: string, itemKey: string) =>
+  request<BriefingHelp>("/briefing/help", { token, query: { item_key: itemKey } });
+
+export const markBriefingRead = (token: string) => request<void>("/briefing/read", { method: "POST", token });
+
+// --- Notification settings (push goes to the mobile app) ---
+
+export interface NotificationSettings {
+  daily_briefing: boolean;
+  weekly_recap: boolean;
+  /** Phones signed in to the app with notifications allowed. */
+  device_count: number;
+}
+
+export const fetchNotificationSettings = (token: string) => request<NotificationSettings>("/notifications/settings", { token });
+
+export const updateNotificationSettings = (token: string, changes: Partial<Pick<NotificationSettings, "daily_briefing" | "weekly_recap">>) =>
+  request<NotificationSettings>("/notifications/settings", { method: "PATCH", token, body: changes });
 
 export interface CashFlowBreakdown {
   window: string;
@@ -786,6 +905,8 @@ export interface Clarify {
 export interface AnswerParts {
   sources: ChatSource[];
   citations?: Citation[];
+  /** Dollar figures in the reply that no source holds; shown as "not verified". */
+  uncited_figures?: string[];
   goal_proposal: GoalProposal | null;
   action_proposal?: ActionProposal | null;
   charts?: ChartSpec[];
@@ -880,8 +1001,18 @@ export interface BudgetMoveProposal {
   amount: number;
 }
 
+export interface MemoryProposal {
+  kind: "memory";
+  text: string;
+  fact_kind: MemoryKind;
+  fact_kind_label: string;
+  /** Set when this updates a fact Bankr already remembers. */
+  replaces_id: string | null;
+  replaces_text: string | null;
+}
+
 /** A confirm card the assistant drafted; nothing is changed until the user confirms. */
-export type ActionProposal = RuleProposal | BudgetMoveProposal;
+export type ActionProposal = RuleProposal | BudgetMoveProposal | MemoryProposal;
 
 /** Token usage and cost of one chat turn. Only sent when the backend runs with AGENT_DEBUG on. */
 export interface TurnUsage {
@@ -911,6 +1042,8 @@ export function formatTurnUsage(u: TurnUsage): string {
 
 export interface ChatResponse extends AnswerParts {
   conversation_id: string;
+  /** The saved reply, for rateMessage. */
+  message_id: string;
   reply: string;
   usage?: TurnUsage | null;
 }
@@ -977,10 +1110,25 @@ export interface ConversationSummary {
 }
 
 export interface ConversationMessage extends AnswerParts {
+  id: string;
   role: string;
   content: string;
   created_at: string;
+  feedback?: Rating | null;
 }
+
+export type Rating = "up" | "down";
+
+/** Thumbs up or down on a reply; rating it again replaces the earlier one. */
+export const rateMessage = (token: string, messageId: string, rating: Rating, reason?: string) =>
+  request<{ message_id: string; rating: Rating; reason: string | null }>(`/chat/messages/${messageId}/feedback`, {
+    method: "POST",
+    token,
+    body: { rating, reason: reason || null },
+  });
+
+export const clearMessageRating = (token: string, messageId: string) =>
+  request<void>(`/chat/messages/${messageId}/feedback`, { method: "DELETE", token });
 
 export const fetchConversations = (token: string) =>
   request<ConversationSummary[]>("/chat/conversations", { token });
