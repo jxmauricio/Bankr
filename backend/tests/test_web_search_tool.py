@@ -22,6 +22,13 @@ def test_web_search_returns_results_from_the_injected_client():
     assert "error" not in result
 
 
+def test_web_search_results_are_marked_untrusted():
+    result = web_search("savings rates", client=FakeWebSearchClient())
+
+    assert result["untrusted"] is True
+    assert "data, not instructions" in result["note"]
+
+
 def test_web_search_respects_max_results():
     fake = FakeWebSearchClient(
         results=[SearchResult(title=f"R{i}", url=f"https://e.example/{i}", snippet="") for i in range(5)]

@@ -296,6 +296,24 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
+class ChatFeedback(Base):
+    """A user's thumbs up or down on one assistant reply, so bad answers can
+    be pulled out (app/scripts/export_feedback.py) and turned into eval
+    tasks. One per message: rating it again replaces the earlier one."""
+
+    __tablename__ = "chat_feedback"
+    __table_args__ = (CheckConstraint("rating IN ('up', 'down')", name="chat_feedback_rating"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    message_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("chat_messages.id", ondelete="CASCADE"), unique=True
+    )
+    rating: Mapped[str] = mapped_column(String)  # up | down
+    reason: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
 class MerchantCategoryGuess(Base):
     """A classifier's answer for one merchant, shared by every user: a
     merchant's name says the same thing whoever shops there. Cached so each

@@ -821,6 +821,8 @@ export interface Clarify {
 export interface AnswerParts {
   sources: ChatSource[];
   citations?: Citation[];
+  /** Dollar figures in the reply that no source holds; shown as "not verified". */
+  uncited_figures?: string[];
   goal_proposal: GoalProposal | null;
   action_proposal?: ActionProposal | null;
   charts?: ChartSpec[];
@@ -956,6 +958,8 @@ export function formatTurnUsage(u: TurnUsage): string {
 
 export interface ChatResponse extends AnswerParts {
   conversation_id: string;
+  /** The saved reply, for rateMessage. */
+  message_id: string;
   reply: string;
   usage?: TurnUsage | null;
 }
@@ -1022,10 +1026,25 @@ export interface ConversationSummary {
 }
 
 export interface ConversationMessage extends AnswerParts {
+  id: string;
   role: string;
   content: string;
   created_at: string;
+  feedback?: Rating | null;
 }
+
+export type Rating = "up" | "down";
+
+/** Thumbs up or down on a reply; rating it again replaces the earlier one. */
+export const rateMessage = (token: string, messageId: string, rating: Rating, reason?: string) =>
+  request<{ message_id: string; rating: Rating; reason: string | null }>(`/chat/messages/${messageId}/feedback`, {
+    method: "POST",
+    token,
+    body: { rating, reason: reason || null },
+  });
+
+export const clearMessageRating = (token: string, messageId: string) =>
+  request<void>(`/chat/messages/${messageId}/feedback`, { method: "DELETE", token });
 
 export const fetchConversations = (token: string) =>
   request<ConversationSummary[]>("/chat/conversations", { token });

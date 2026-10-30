@@ -102,7 +102,13 @@ Real-model agent evals live in `tests/evals/` and are skipped unless `RUN_EVALS=
   as Server-Sent Events (`status` progress lines before each tool call, then
   `done` with the same body as `POST /chat`, or `error`); the web and iOS
   clients use it. It needs a host that doesn't buffer responses (Render
-  doesn't; behind nginx, `X-Accel-Buffering: no` is already sent)
+  doesn't; behind nginx, `X-Accel-Buffering: no` is already sent).
+  `uncited_figures` lists the reply's `$` figures that no source holds (the
+  clients grey them as "not verified"; the server logs a count per turn).
+  `POST`/`DELETE /chat/messages/{id}/feedback` sets or clears a thumbs
+  up/down (with an optional short reason) on one of the user's replies;
+  `python -m app.scripts.export_feedback --rating down` dumps rated turns
+  with their question, history and sources as JSON lines, to turn into eval tasks
 - `app/agent/tools.py` — tool implementations the agent can call. Most are
   DB-backed (also the source of truth `dashboard_service.py` and
   `goal_service.py` reuse for net worth and goal pacing, so the dashboard and
@@ -110,7 +116,9 @@ Real-model agent evals live in `tests/evals/` and are skipped unless `RUN_EVALS=
   AST-whitelisted arithmetic evaluator, so financial projections don't rely
   on LLM mental math) and `web_search` (current rates/inflation/etc. via
   `app/integrations/web_search.py`, gracefully unconfigured without
-  `BRAVE_SEARCH_API_KEY`)
+  `BRAVE_SEARCH_API_KEY`). Search results reach the model marked
+  `untrusted`, and `app/agent/search_guard.py` removes any ticker or named
+  fund/stock in the reply that came only from the results
 - `app/agent/agent_client.py` — vendor-agnostic `AgentClient` Protocol (`run_turn`
   for the tool-use loop, `complete` for one-shot phrasing) + `build_agent_client()`,
   selected by `AGENT_PROVIDER` (`openrouter` | `anthropic` | `openai_compatible`).

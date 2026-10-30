@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ApiError,
+  clearMessageRating,
   fetchConversation,
   fetchGoalProgress,
   fetchIncome,
@@ -9,6 +10,7 @@ import {
   fetchRollup,
   fetchSpending,
   formatTurnUsage,
+  rateMessage,
   resyncAccounts,
   streamChatMessage,
   type ChartSpec,
@@ -21,6 +23,7 @@ import {
   type LinkedBank,
   type ItemizedTransactions,
   type PeriodRollup,
+  type Rating,
   type SourceQuery,
   type TransactionRecord,
   type TurnUsage,
@@ -78,8 +81,12 @@ type StreamItem =
       kind: "assistant-text";
       id: string;
       text: string;
+      // The saved reply; unset on the greeting, which can't be rated.
+      messageId?: string;
+      feedback?: Rating | null;
       sources?: ChatSource[];
       citations?: FigureCitation[];
+      uncitedFigures?: string[];
       goalProposal?: GoalProposal | null;
       actionProposal?: ActionProposal | null;
       charts?: ChartSpec[];
@@ -269,8 +276,10 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
         kind: "assistant-text",
         id: makeId(),
         text: response.reply,
+        messageId: response.message_id,
         sources: response.sources,
         citations: response.citations,
+        uncitedFigures: response.uncited_figures,
         charts: response.charts,
         links: response.links,
         clarify: response.clarify,
@@ -338,8 +347,11 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
             kind: "assistant-text" as const,
             id: makeId(),
             text: m.content,
+            messageId: m.id,
+            feedback: m.feedback,
             sources: m.sources,
             citations: m.citations,
+            uncitedFigures: m.uncited_figures,
             charts: m.charts,
             links: m.links,
             clarify: m.clarify,
@@ -764,7 +776,10 @@ function StreamEntry({
          <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
           <div className="flex max-w-full flex-col gap-3 rounded-[6px_20px_20px_20px] border border-line bg-surface shadow-card px-5 py-[18px] text-[15px] leading-[1.65] text-ink">
             {headline && <AnswerHeadline headline={headline} />}
-            <AssistantText text={item.text} figures={{ citations: item.citations ?? [], sources, onOpen: onOpenSource }} />
+            <AssistantText
+              text={item.text}
+              figures={{ citations: item.citations ?? [], uncited: item.uncitedFigures, sources, onOpen: onOpenSource }}
+            />
             {item.records?.map((record, i) => (
               <RecordCard key={i} record={record} query={recordQuery(sources)} onOpen={onOpenSource} />
             ))}
@@ -776,7 +791,14 @@ function StreamEntry({
           {item.charts?.map((chart, i) => (
             <ChatChart key={i} chart={chart} token={token} onOpenSource={onOpenSource} onOpenCashFlow={onOpenCashFlow} />
           ))}
-          {sources.length > 0 && <SourceTrail sources={sources} onOpenSource={onOpenSource} />}
+          {(sources.length > 0 || item.messageId) && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              {sources.length > 0 && <SourceTrail sources={sources} onOpenSource={onOpenSource} />}
+              {item.messageId && token && (
+                <ReplyFeedback key={item.messageId} token={token} messageId={item.messageId} initial={item.feedback ?? null} />
+              )}
+            </div>
+          )}
           {item.usage && <p className="font-mono text-[11px] text-ink-faint">{formatTurnUsage(item.usage)}</p>}
           {item.links && item.links.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -945,6 +967,103 @@ function SourceTrail({ sources, onOpenSource }: { sources: ChatSource[]; onOpenS
         ),
       )}
     </div>
+  );
+}
+
+/** Thumbs up/down under a reply. A thumbs-down asks, optionally, what was
+ * wrong; the rated turn is exported (app/scripts/export_feedback.py) so a bad
+ * answer can become an eval task. Tapping the chosen thumb again takes it back. */
+function ReplyFeedback({ token, messageId, initial }: { token: string; messageId: string; initial: Rating | null }) {
+  const [rating, setRating] = useState<Rating | null>(initial);
+  const [askReason, setAskReason] = useState(false);
+  const [reason, setReason] = useState("");
+  const [thanked, setThanked] = useState(false);
+
+  async function rate(next: Rating) {
+    const previous = rating;
+    const clearing = previous === next;
+    setRating(clearing ? null : next);
+    setAskReason(!clearing && next === "down");
+    setThanked(false);
+    try {
+      if (clearing) await clearMessageRating(token, messageId);
+      else await rateMessage(token, messageId, next);
+    } catch {
+      setRating(previous);
+      setAskReason(false);
+    }
+  }
+
+  async function sendReason(e: FormEvent) {
+    e.preventDefault();
+    setAskReason(false);
+    if (!reason.trim()) return;
+    try {
+      await rateMessage(token, messageId, "down", reason.trim());
+      setThanked(true);
+    } catch {
+      setAskReason(true);
+    }
+  }
+
+  const thumb = (value: Rating, label: string) => (
+    <button
+      type="button"
+      onClick={() => rate(value)}
+      aria-label={label}
+      aria-pressed={rating === value}
+      title={label}
+      className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-raised ${
+        rating === value ? "text-signal" : "text-ink-faint hover:text-ink"
+      }`}
+    >
+      <ThumbIcon down={value === "down"} filled={rating === value} />
+    </button>
+  );
+
+  return (
+    <div className="flex flex-wrap items-center gap-1 text-xs text-ink-soft">
+      {thumb("up", "Good answer")}
+      {thumb("down", "Bad answer")}
+      {askReason && (
+        <form onSubmit={sendReason} className="flex items-center gap-2 pl-1">
+          <input
+            autoFocus
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={280}
+            placeholder="What was wrong? (optional)"
+            aria-label="What was wrong with this answer"
+            className="h-9 w-56 rounded-full border border-line-strong bg-surface px-3 text-xs text-ink placeholder:text-ink-faint focus:border-signal focus:outline-none"
+          />
+          <button type="submit" className="h-9 cursor-pointer rounded-full px-3 text-xs font-medium text-signal hover:text-signal-hi">
+            {reason.trim() ? "Send" : "Skip"}
+          </button>
+        </form>
+      )}
+      {thanked && <span className="pl-1 text-ink-faint">Thanks, noted.</span>}
+    </div>
+  );
+}
+
+function ThumbIcon({ down = false, filled = false }: { down?: boolean; filled?: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      fillOpacity={filled ? 0.15 : undefined}
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      style={down ? { transform: "rotate(180deg)" } : undefined}
+    >
+      <path d="M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3Z" />
+      <path d="M7 10l4-7a2.5 2.5 0 0 1 3 2.6L13.5 10H19a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 17.8 21H7" />
+    </svg>
   );
 }
 
