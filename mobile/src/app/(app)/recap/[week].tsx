@@ -106,7 +106,7 @@ function Recap({ recap }: { recap: WeeklyRecap }) {
       <View style={styles.actions}>
         <Button
           label="Ask Bankr about this week"
-          onPress={() => router.dismissTo({ pathname: "/", params: { ask: `How did my week of ${recap.label} go?` } })}
+          onPress={() => router.dismissTo({ pathname: "/chat", params: { ask: `How did my week of ${recap.label} go?` } })}
         />
       </View>
     </>

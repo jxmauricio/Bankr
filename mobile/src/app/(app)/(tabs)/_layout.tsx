@@ -1,67 +1,57 @@
 import { router, usePathname } from "expo-router";
 import { TabList, TabSlot, Tabs, TabTrigger, type TabTriggerSlotProps } from "expo-router/ui";
-import { createContext, use, useEffect, useRef, useState, type ReactNode, type Ref } from "react";
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import { createContext, use, useEffect, useState, type ReactNode, type Ref } from "react";
+import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useMoney } from "@/features/money/MoneyContext";
 import { useNotifications } from "@/features/notifications/NotificationsContext";
-import { radius, space } from "@/theme/tokens";
-import { makeStyles } from "@/theme/theme";
-import { IconButton, Text } from "@/ui";
+import { ThemeToggle } from "@/theme/ThemeToggle";
+import { space } from "@/theme/tokens";
+import { makeStyles, useColors } from "@/theme/theme";
+import { Icon, IconButton, Text, type IconName } from "@/ui";
 
 /**
- * The same five views as the web app's ViewTabBar, as a top bar: settings,
- * the app's name and one action, over a row of pill tabs that scrolls
- * sideways and keeps the open tab in view. Swiping the page sideways slides
- * to the next or previous tab.
+ * Five views, Chat in the middle: Home, Cash flow, Chat, Transactions, Plan.
+ * Settings, a light/dark toggle and one action up top; icon+label tabs along
+ * the bottom, matching the web phone bar. Swiping slides to the next tab.
  */
 export default function TabsLayout() {
   const styles = useStyles();
-  const scroller = useRef<ScrollView>(null);
-  const reveal = (x: number) => scroller.current?.scrollTo({ x: Math.max(0, x - space.xl), animated: true });
   const focused = useOpenTab();
 
   return (
-    <RevealContext value={reveal}>
-      <Tabs style={styles.root}>
-        <SafeAreaView edges={["top"]} style={styles.header}>
-          <TopBar onChat={focused === 0} />
-        </SafeAreaView>
-        <ScrollView
-          ref={scroller}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.tabs}
-          contentContainerStyle={styles.tabsContent}
-        >
-          {TABS.map((t) => (
-            <TabTrigger key={t.name} name={t.name} asChild>
-              <TabPill label={t.label} />
-            </TabTrigger>
-          ))}
-        </ScrollView>
-        <SwipeBetweenTabs focused={focused} />
-        {/* Declares the routes; the pills above are what's shown. Tabs only reads triggers from a TabList that is its direct child. */}
-        <TabList style={styles.hidden}>
-          {TABS.map((t) => (
-            <TabTrigger key={t.name} name={t.name} href={t.href} />
-          ))}
-        </TabList>
-      </Tabs>
-    </RevealContext>
+    <Tabs style={styles.root}>
+      <SafeAreaView edges={["top"]} style={styles.header}>
+        <TopBar onChat={focused === 2} />
+      </SafeAreaView>
+      <SwipeBetweenTabs focused={focused} />
+      <SafeAreaView edges={["bottom"]} style={styles.tabBar}>
+        {TABS.map((t) => (
+          <TabTrigger key={t.name} name={t.name} asChild>
+            <TabIcon icon={t.icon} label={t.label} emphasized={t.name === "chat"} />
+          </TabTrigger>
+        ))}
+      </SafeAreaView>
+      {/* Declares the routes; the icons above are what's shown. Tabs only reads triggers from a TabList that is its direct child. */}
+      <TabList style={styles.hidden}>
+        {TABS.map((t) => (
+          <TabTrigger key={t.name} name={t.name} href={t.href} />
+        ))}
+      </TabList>
+    </Tabs>
   );
 }
 
 const TABS = [
-  { name: "index", href: "/", label: "Chat" },
-  { name: "transactions", href: "/transactions", label: "Transactions" },
-  { name: "cash-flow", href: "/cash-flow", label: "Cash flow" },
-  { name: "health", href: "/health", label: "Health" },
-  { name: "plan", href: "/plan", label: "Plan" },
-] as const;
+  { name: "index", href: "/", label: "Home", icon: "home" },
+  { name: "cash-flow", href: "/cash-flow", label: "Cash flow", icon: "flow" },
+  { name: "chat", href: "/chat", label: "Chat", icon: "chat" },
+  { name: "transactions", href: "/transactions", label: "Transactions", icon: "list" },
+  { name: "plan", href: "/plan", label: "Plan", icon: "calendar" },
+] as const satisfies readonly { name: string; href: string; label: string; icon: IconName }[];
 
 /**
  * The open tab's place in TABS. A sheet over the tabs (accounts, chat
@@ -170,9 +160,8 @@ function Page({ index, loaded, render }: { index: number; loaded: boolean; rende
 }
 
 /**
- * Settings on the left; notifications, then chat history on the Chat tab or
- * sync from the bank elsewhere, on the right. The left side holds an empty
- * slot so the name stays centered.
+ * Settings and light/dark on the left; notifications, then chat history on
+ * the Chat tab or sync from the bank elsewhere, on the right.
  */
 function TopBar({ onChat }: { onChat: boolean }) {
   const styles = useStyles();
@@ -182,7 +171,7 @@ function TopBar({ onChat }: { onChat: boolean }) {
     <View style={styles.bar}>
       <View style={styles.side}>
         <IconButton icon="settings" label="Accounts and goals" variant="plain" onPress={() => router.push("/money")} />
-        <View style={styles.slot} />
+        <ThemeToggle />
       </View>
       <Text variant="brand" accessibilityRole="header">
         Bankr
@@ -201,37 +190,39 @@ function TopBar({ onChat }: { onChat: boolean }) {
           // A new chat starts from the history sheet's "New chat" row.
           <IconButton icon="chat" label="Chat history" variant="plain" onPress={() => router.push("/history")} />
         ) : (
-          <IconButton icon="refresh" label="Sync from bank" variant="plain" onPress={syncFromBank} disabled={isSyncing} />
+          <IconButton icon="refresh" label="Sync from bank" variant="plain" onPress={syncFromBank} loading={isSyncing} />
         )}
       </View>
     </View>
   );
 }
 
-/** Scrolls the tab row so a tab at this x is in view. */
-const RevealContext = createContext<(x: number) => void>(() => {});
-
-function TabPill({ label, isFocused, ref, ...props }: TabTriggerSlotProps & { label: string; ref?: Ref<View> }) {
+function TabIcon({
+  icon,
+  label,
+  emphasized,
+  isFocused,
+  ref,
+  ...props
+}: TabTriggerSlotProps & { icon: IconName; label: string; emphasized?: boolean; ref?: Ref<View> }) {
   const styles = useStyles();
-  const reveal = use(RevealContext);
-  const x = useRef(0);
-  useEffect(() => {
-    if (isFocused) reveal(x.current);
-  }, [isFocused, reveal]);
-
+  const colors = useColors();
+  // Chat sits in the middle with a green well so it reads as the main action.
+  const well = emphasized ? (isFocused ? styles.tabIconChatOn : styles.tabIconChat) : isFocused ? styles.tabIconOn : null;
+  const iconColor = emphasized ? (isFocused ? colors.onAccent : colors.accent) : isFocused ? colors.ink : colors.inkFaint;
   return (
     <Pressable
       ref={ref}
       {...props}
       accessibilityRole="tab"
+      accessibilityLabel={label}
       accessibilityState={{ selected: isFocused }}
-      onLayout={(e) => {
-        x.current = e.nativeEvent.layout.x;
-        if (isFocused) reveal(x.current);
-      }}
-      style={({ pressed }) => [styles.pill, isFocused && styles.pillOn, pressed && !isFocused && styles.pressed]}
+      style={({ pressed }) => [styles.tab, pressed && !isFocused && styles.pressed]}
     >
-      <Text variant="tab" tone={isFocused ? "onAccent" : "soft"}>
+      <View style={[styles.tabIcon, well]}>
+        <Icon name={icon} color={iconColor} size={18} />
+      </View>
+      <Text variant="tab" tone={emphasized ? "accent" : isFocused ? "default" : "faint"} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
         {label}
       </Text>
     </Pressable>
@@ -244,7 +235,6 @@ const useStyles = makeStyles((colors) =>
     header: { backgroundColor: colors.bg },
     bar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.sm + 2 },
     side: { flexDirection: "row", width: 88 },
-    slot: { width: 44 },
     dot: {
       position: "absolute",
       top: 9,
@@ -256,12 +246,22 @@ const useStyles = makeStyles((colors) =>
       borderWidth: 2,
       borderColor: colors.bg,
     },
-    tabs: { flexGrow: 0, flexShrink: 0 },
     pager: { flex: 1, overflow: "hidden" },
     hidden: { display: "none" },
-    tabsContent: { gap: space.xs, paddingHorizontal: space.lg, paddingTop: space.sm + 2, paddingBottom: space.sm },
-    pill: { height: 34, justifyContent: "center", paddingHorizontal: space.md + 2, borderRadius: radius.pill },
-    pillOn: { backgroundColor: colors.accent },
+    tabBar: {
+      flexDirection: "row",
+      flexGrow: 0,
+      flexShrink: 0,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.line,
+      backgroundColor: colors.bg,
+      paddingTop: 6,
+    },
+    tab: { flex: 1, minHeight: 52, alignItems: "center", justifyContent: "center", gap: 4 },
+    tabIcon: { height: 26, width: 44, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+    tabIconOn: { backgroundColor: colors.raised },
+    tabIconChat: { backgroundColor: colors.accentWash },
+    tabIconChatOn: { backgroundColor: colors.accent },
     pressed: { opacity: 0.6 },
   })
 );

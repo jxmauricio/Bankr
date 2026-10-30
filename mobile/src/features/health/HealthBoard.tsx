@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { whole } from "@/features/cashflow/flow";
 import { useMoney } from "@/features/money/MoneyContext";
@@ -9,17 +9,14 @@ import { fetchHealth, type GoalProgress, type HealthMetric, type HealthTone, typ
 import { useResource } from "@/lib/useResource";
 import { radius, space, type Tone } from "@/theme/tokens";
 import { makeStyles, useColors } from "@/theme/theme";
-import { Card, ErrorState, Loading, Screen, Text } from "@/ui";
+import { Card, ErrorState, Loading, Text } from "@/ui";
 
 /**
- * A score out of 100, the four metrics behind it, then goal progress: the
- * Health board of the Bankr iOS Redesign canvas. The score and metrics come
- * from /dashboard/health; goals are the ones the shell already loaded.
+ * Score, the four guideline metrics, then goals. Lives on Home; was its own tab.
  */
-export default function HealthScreen() {
+export function HealthBoard() {
   const styles = useStyles();
-  const colors = useColors();
-  const { goals, syncFromBank, isSyncing, syncVersion } = useMoney();
+  const { goals, syncVersion } = useMoney();
   const health = useResource(fetchHealth, [syncVersion]);
   const { update } = useTransactionFilters();
   const h = health.data;
@@ -35,59 +32,53 @@ export default function HealthScreen() {
   }
 
   return (
-    // The tab bar above owns the top inset.
-    <Screen padded={false} edges={[]}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={isSyncing} onRefresh={syncFromBank} tintColor={colors.accent} />}
-      >
-        {health.status === "error" && !h ? (
-          <Card>
-            <ErrorState message="Couldn't load your financial health." onRetry={health.retry} />
-          </Card>
-        ) : !h ? (
-          <Card style={styles.placeholder}>
-            <Loading />
-          </Card>
-        ) : h.income <= 0 || h.score === null ? (
-          <Card>
-            <Text tone="soft" align="center">
-              No income in linked accounts for {h.label}, so there’s nothing to score against.
-            </Text>
-          </Card>
-        ) : (
-          <>
-            <ScoreCard health={h} />
-            <View style={styles.grid}>
-              {h.metrics.map((m) => (
-                <Pressable
-                  key={m.id}
-                  accessibilityRole="button"
-                  onPress={() => openMetric(m)}
-                  style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
-                >
-                  <Text variant="eyebrow" tone="soft">
-                    {m.name}
-                  </Text>
-                  <Text variant="figure">{formatMetric(m)}</Text>
-                  <Text variant="label" tone={TONE[m.tone]} style={styles.status}>
-                    {statusLabel(m)}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </>
-        )}
-
-        <GoalsCard goals={goals.goals} />
-
-        {h && h.score !== null && (
-          <Text variant="caption" tone="faint" style={styles.note}>
-            {h.partial ? `This month so far · ${h.label}, scaled to a full month.` : `Average of ${h.label}.`} {h.note}
+    <View style={styles.stack}>
+      {health.status === "error" && !h ? (
+        <Card>
+          <ErrorState message="Couldn't load your financial health." onRetry={health.retry} />
+        </Card>
+      ) : !h ? (
+        <Card style={styles.placeholder}>
+          <Loading />
+        </Card>
+      ) : h.income <= 0 || h.score === null ? (
+        <Card>
+          <Text tone="soft" align="center">
+            No income in linked accounts for {h.label}, so there’s nothing to score against.
           </Text>
-        )}
-      </ScrollView>
-    </Screen>
+        </Card>
+      ) : (
+        <>
+          <ScoreCard health={h} />
+          <View style={styles.grid}>
+            {h.metrics.map((m) => (
+              <Pressable
+                key={m.id}
+                accessibilityRole="button"
+                onPress={() => openMetric(m)}
+                style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
+              >
+                <Text variant="eyebrow" tone="soft">
+                  {m.name}
+                </Text>
+                <Text variant="figure">{formatMetric(m)}</Text>
+                <Text variant="label" tone={TONE[m.tone]} style={styles.status}>
+                  {statusLabel(m)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      )}
+
+      <GoalsCard goals={goals.goals} />
+
+      {h && h.score !== null && (
+        <Text variant="caption" tone="faint" style={styles.note}>
+          {h.partial ? `This month so far · ${h.label}, scaled to a full month.` : `Average of ${h.label}.`} {h.note}
+        </Text>
+      )}
+    </View>
   );
 }
 
@@ -189,7 +180,7 @@ function GoalsCard({ goals }: { goals: GoalProgress[] }) {
       <View style={styles.goalActions}>
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.navigate({ pathname: "/", params: { ask: "Help me set up a new goal." } })}
+          onPress={() => router.navigate({ pathname: "/chat", params: { ask: "Help me set up a new goal." } })}
           style={({ pressed }) => [styles.goalAction, pressed && styles.pressed]}
         >
           <Text variant="section" tone="accent">
@@ -272,7 +263,7 @@ function goalNote(goal: GoalProgress): string {
 
 const useStyles = makeStyles((colors) =>
   StyleSheet.create({
-    content: { padding: space.lg, paddingBottom: space.xxl + space.sm, gap: space.md },
+    stack: { gap: space.md },
     placeholder: { height: 160 },
     pressed: { opacity: 0.6 },
     flex: { flex: 1 },
@@ -282,7 +273,6 @@ const useStyles = makeStyles((colors) =>
     scoreText: { flex: 1, gap: space.xs + 2 },
     grid: { flexDirection: "row", flexWrap: "wrap", gap: space.sm + 2 },
     tile: {
-      // Two to a row, less half the gap between them.
       flexBasis: "47%",
       flexGrow: 1,
       backgroundColor: colors.surface,
