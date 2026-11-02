@@ -24,7 +24,7 @@ def test_renaming_a_built_in_keeps_its_row_mapping_budget_and_color(db, user, mo
     sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
     restaurants = seed_default_categories(db)["restaurants_and_bars"]
     ramen = db.query(Transaction).filter(Transaction.aggregator_transaction_id == "txn_dining").one()
-    assert ramen.bankr_category_id == restaurants.id
+    assert ramen.category_id == restaurants.id
     food = seed_default_groups(db)["food_and_dining"]
     db.add(Budget(user_id=user.id, group_id=food.id, amount=300, group="flex", rollover=False, start_month=date(2026, 8, 1)))
     db.commit()
@@ -39,7 +39,7 @@ def test_renaming_a_built_in_keeps_its_row_mapping_budget_and_color(db, user, mo
     assert category_color(renamed) == color
     # A fresh sync still lands the ramen there, and questions find it by its new name, key or alias.
     sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
-    assert db.query(Transaction).filter(Transaction.aggregator_transaction_id == "txn_dining").one().bankr_category_id == renamed.id
+    assert db.query(Transaction).filter(Transaction.aggregator_transaction_id == "txn_dining").one().category_id == renamed.id
     for asked in ("Dining Out", "restaurants_and_bars", "takeout"):
         assert mq.resolve_category(db, asked, user.id).category_id == renamed.id
     assert db.query(Budget).one().group_id == food.id

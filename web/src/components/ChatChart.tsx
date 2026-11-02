@@ -3,6 +3,7 @@ import { fetchQuery, type ChartPoint, type ChartSpec, type ItemizedTransactions,
 import { colorForCategory, hasCategoryColor } from "../lib/chartColors";
 import { formatDate, formatMoney } from "../lib/format";
 import { RowAmount } from "./TransactionSearch";
+import { mask } from "../lib/privacy";
 
 /** The one picture under a chat reply. The numbers are built server-side from
  * a fresh query (tools.show_chart, services/answer_charts.py), never written
@@ -117,7 +118,7 @@ function barColor(label: string): string {
 /** "$71", "$2.1k" -- for labels on narrow bars. */
 function shortMoney(value: number): string {
   const abs = Math.abs(value);
-  return abs >= 1000 ? `$${(abs / 1000).toFixed(1)}k` : `$${Math.round(abs)}`;
+  return mask(abs >= 1000 ? `$${(abs / 1000).toFixed(1)}k` : `$${Math.round(abs)}`);
 }
 
 interface BarsProps {
@@ -483,7 +484,7 @@ function Recurring({ chart, selected, onPick }: BarsProps) {
         ))}
       </div>
       <span className="text-xs leading-relaxed text-ink-faint">
-        Next dates are estimated from past charges. Bankr can't cancel subscriptions — this list is to help you decide.
+        Next dates are estimated from past charges. Centsio can't cancel subscriptions — this list is to help you decide.
       </span>
     </div>
   );
@@ -543,7 +544,7 @@ function NetWorth({ chart, selected, onPick }: BarsProps) {
         </span>
       </div>
       <span className="mt-1 text-xs leading-relaxed text-ink-faint">
-        Each account's change is the sum of its transactions. Investment growth and interest Bankr can't see line by
+        Each account's change is the sum of its transactions. Investment growth and interest Centsio can't see line by
         line show as “Not from transactions”.
       </span>
     </div>

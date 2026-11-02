@@ -1,5 +1,5 @@
 import XCTest
-@testable import Bankr
+@testable import Centsio
 
 @MainActor
 final class SessionStoreTests: XCTestCase {

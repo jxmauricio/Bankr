@@ -150,7 +150,7 @@ def _charges(db: Session, user_id: UUID, since: date) -> dict[tuple[str, str], l
     rows = (
         db.query(Transaction, Category.system_key, Category.type, CategoryGroup.system_key)
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
-        .join(Category, Transaction.bankr_category_id == Category.id)
+        .join(Category, Transaction.category_id == Category.id)
         .join(CategoryGroup, Category.group_id == CategoryGroup.id)
         .filter(
             LinkedAccount.user_id == user_id,
@@ -171,7 +171,7 @@ def _charges(db: Session, user_id: UUID, since: date) -> dict[tuple[str, str], l
         if not key:
             continue
         groups.setdefault((key, direction), []).append(
-            _Charge(txn.date, abs(amount), txn.merchant_name or key, txn.bankr_category_id, frozenset({category_key, group_key} - {None}))
+            _Charge(txn.date, abs(amount), txn.merchant_name or key, txn.category_id, frozenset({category_key, group_key} - {None}))
         )
     return groups
 

@@ -43,7 +43,7 @@ struct GoalSetupView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("What are you working toward?")
                         .font(.title2.bold())
-                    Text("Bankr will track your progress toward this from your dashboard.")
+                    Text("Centsio will track your progress toward this from your dashboard.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -136,7 +136,7 @@ struct GoalSetupView: View {
         defer { isSubmitting = false }
 
         do {
-            _ = try await BankrAPIClient.shared.createGoal(
+            _ = try await CentsioAPIClient.shared.createGoal(
                 type: selectedType.rawValue,
                 targetAmount: amount,
                 targetDate: hasTargetDate ? targetDate : nil,

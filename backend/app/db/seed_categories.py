@@ -1,4 +1,4 @@
-"""Default groups and categories Bankr normalizes every aggregator category into.
+"""Default groups and categories Centsio normalizes every aggregator category into.
 
 These built-in rows are shared by every user and never edited by one. A
 user can add groups and categories of their own on top (category_service),

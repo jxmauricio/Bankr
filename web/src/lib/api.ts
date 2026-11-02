@@ -469,7 +469,7 @@ export const setCategoryHidden = (token: string, id: string, hidden: boolean) =>
 export const renameCategory = (token: string, id: string, name: string) =>
   request<{ categories: CategoryNode[] }>(`/categories/${id}`, { method: "PATCH", token, body: { name } });
 
-/** One of the user's own groups or categories. Its transactions go back to Bankr's own category for them. */
+/** One of the user's own groups or categories. Its transactions go back to Centsio's own category for them. */
 export const deleteCategory = (token: string, id: string) =>
   request<{ recategorized: number }>(`/categories/${id}`, { method: "DELETE", token });
 
@@ -552,7 +552,7 @@ export const deleteRule = (token: string, id: string) => request<void>(`/rules/$
 /** income | priority | household | preference | other */
 export type MemoryKind = string;
 
-/** Something the user had Bankr remember about them; the agent sees these on every turn. */
+/** Something the user had Centsio remember about them; the agent sees these on every turn. */
 export interface MemoryFact {
   id: string;
   kind: MemoryKind;
@@ -895,7 +895,7 @@ export interface TransactionRecord {
   category_type?: "income" | "expense" | "transfer" | null;
 }
 
-/** Bankr asking which meaning was intended; tapping a choice sends its label. */
+/** Centsio asking which meaning was intended; tapping a choice sends its label. */
 export interface Clarify {
   question: string;
   choices: { label: string }[];
@@ -1006,7 +1006,7 @@ export interface MemoryProposal {
   text: string;
   fact_kind: MemoryKind;
   fact_kind_label: string;
-  /** Set when this updates a fact Bankr already remembers. */
+  /** Set when this updates a fact Centsio already remembers. */
   replaces_id: string | null;
   replaces_text: string | null;
 }
@@ -1099,7 +1099,7 @@ export async function streamChatMessage(
       else if (event === "error") throw new ApiError(500, payload.message);
     }
   }
-  throw new ApiError(500, "Bankr couldn't respond. Try again.");
+  throw new ApiError(500, "Centsio couldn't respond. Try again.");
 }
 
 export interface ConversationSummary {

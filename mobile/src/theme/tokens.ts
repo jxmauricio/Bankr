@@ -100,7 +100,7 @@ export const radius = {
 } as const;
 
 /**
- * The system font: San Francisco on iOS, Roboto on Android (the Bankr iOS
+ * The system font: San Francisco on iOS, Roboto on Android (the Centsio iOS
  * Redesign canvas), so there are no font files to load. Figures use tabular
  * digits so amounts line up in columns.
  */
@@ -120,7 +120,7 @@ export const type = {
   tab: { fontSize: 11, fontWeight: "500" },
   /** The app's name, centered in the top bar. */
   brand: { fontSize: 26, fontWeight: "700", letterSpacing: -0.6 },
-  /** Uppercase label over a group of cards or rows ("ASK BANKR", "TODAY"). */
+  /** Uppercase label over a group of cards or rows ("ASK CENTSIO", "TODAY"). */
   section: { fontSize: 12, fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase" },
   /** Bold inside a chat answer: the key number. */
   strong: { fontSize: 15, fontWeight: "600", lineHeight: 22 },

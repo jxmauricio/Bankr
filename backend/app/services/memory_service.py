@@ -1,4 +1,4 @@
-"""What Bankr remembers about the user across conversations.
+"""What Centsio remembers about the user across conversations.
 
 The chat only resends its last 20 messages (chat_service.MAX_HISTORY_MESSAGES),
 so a pay schedule mentioned last week is gone by now. MemoryFacts are the
@@ -74,7 +74,7 @@ def check_fact(text: str, kind: str) -> tuple[str, str]:
         raise FactError(f"kind must be one of {', '.join(KINDS)}")
     if _SSN.search(text) or _LONG_NUMBER.search(_ISO_DATE.sub("", text)) or _SENSITIVE_WORDS.search(text):
         raise FactError(
-            "Bankr doesn't remember account or card numbers, passwords, or ID numbers. "
+            "Centsio doesn't remember account or card numbers, passwords, or ID numbers. "
             "Leave those out and try again."
         )
     return text, kind
@@ -104,9 +104,9 @@ def check_new_fact(db: Session, user_id: UUID, text: str, kind: str, replaces: M
     text, kind = check_fact(text, kind)
     existing = find_fact(db, user_id, text)
     if existing is not None and existing is not replaces:
-        raise FactError("Bankr already remembers that.")
+        raise FactError("Centsio already remembers that.")
     if replaces is None and db.query(MemoryFact).filter(MemoryFact.user_id == user_id).count() >= MAX_FACTS:
-        raise FactError(f"Bankr remembers up to {MAX_FACTS} things. Delete one in Settings to add another.")
+        raise FactError(f"Centsio remembers up to {MAX_FACTS} things. Delete one in Settings to add another.")
     return text, kind
 
 
@@ -135,7 +135,7 @@ def update_fact(db: Session, fact: MemoryFact, text: str | None = None, kind: st
     new_text, new_kind = check_fact(fact.text if text is None else text, fact.kind if kind is None else kind)
     duplicate = find_fact(db, fact.user_id, new_text)
     if duplicate is not None and duplicate.id != fact.id:
-        raise FactError("Bankr already remembers that.")
+        raise FactError("Centsio already remembers that.")
     fact.text, fact.kind = new_text, new_kind
     fact.updated_at = datetime.now(timezone.utc)
     db.flush()

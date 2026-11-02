@@ -465,7 +465,7 @@ function Recurring({ chart }: { chart: ChartSpec }) {
         </PointButton>
       ))}
       <Text variant="caption" tone="faint">
-        Next dates are estimated from past charges. Bankr can&apos;t cancel subscriptions — this list is to help you decide.
+        Next dates are estimated from past charges. Centsio can&apos;t cancel subscriptions — this list is to help you decide.
       </Text>
     </View>
   );
@@ -530,7 +530,7 @@ function NetWorth({ chart }: { chart: ChartSpec }) {
         </Text>
       </View>
       <Text variant="caption" tone="faint">
-        Each account&apos;s change is the sum of its transactions. Investment growth and interest Bankr can&apos;t see line by
+        Each account&apos;s change is the sum of its transactions. Investment growth and interest Centsio can&apos;t see line by
         line show as “Not from transactions”.
       </Text>
     </View>

@@ -251,7 +251,7 @@ def _carry_over_edits(db: Session, pending_aggregator_id: str, posted: Transacti
     for field in (
         "merchant_name",
         "merchant_overridden",
-        "bankr_category_id",
+        "category_id",
         "category_source",
         "notes",
         "is_excluded",

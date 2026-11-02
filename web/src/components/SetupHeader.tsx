@@ -9,7 +9,7 @@ export function SetupHeader({ step, linkedLabel }: { step: 1 | 2; linkedLabel?: 
   return (
     <header className="flex min-h-16 flex-wrap items-center justify-between gap-4 border-b border-line px-6 sm:px-8">
       <span className="font-display text-2xl font-bold tracking-tight text-ink">
-        Bankr
+        Centsio
       </span>
       <div className="flex items-center gap-3">
         <ThemeToggle />

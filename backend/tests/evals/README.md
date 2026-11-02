@@ -11,7 +11,7 @@ RUN_EVALS=1 pytest tests/evals -q -s                       # everything, 3 trial
 RUN_EVALS=1 EVAL_TRIALS=5 EVAL_TASKS=net_worth pytest tests/evals -q -s
 ```
 
-Needs the same Postgres `bankr_test` database as the rest of the tests, and an
+Needs the same Postgres `centsio_test` database as the rest of the tests, and an
 API key for the configured provider. To compare models, override the env vars
 (e.g. `AGENT_PROVIDER=anthropic ANTHROPIC_MODEL=...`).
 
@@ -78,7 +78,7 @@ python -m tests.evals.category_heldout score --historical   # + the frozen tunin
 
 The committed file was exported from `category_low_confidence.csv`, so it has
 Plaid's answer but not the pipeline's. Re-export from the dev DB, or score
-with `--db`, to fill `pipeline_bankr` from the classifier's cached guesses.
+with `--db`, to fill `pipeline_centsio` from the classifier's cached guesses.
 Re-exporting keeps every label already in the file.
 
 **Labeling.** Fill in `expected_category` by hand; nothing fills it for you:
@@ -89,7 +89,7 @@ Re-exporting keeps every label already in the file.
 - `a|b` when both are right (a bakery cafe: `Coffee Shops|Restaurants & Bars`).
 - `?` or blank when you can't tell what the business is; it isn't scored.
 - Label what the business *is*, from what you know or can look up, not from
-  `plaid_bankr` / `pipeline_bankr`. Use `notes` for why.
+  `plaid_centsio` / `pipeline_centsio`. Use `notes` for why.
 - The tuning rows show their old label in `previous_label` (from before the
   Monarch rename, e.g. `Health`, `Fast Food`). Relabel them in today's names;
   they don't count until you do.

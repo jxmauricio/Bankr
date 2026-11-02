@@ -42,7 +42,7 @@ struct ChatView: View {
 
             inputBar
         }
-        .navigationTitle("Ask Bankr")
+        .navigationTitle("Ask Centsio")
         .navigationBarTitleDisplayMode(.inline)
     }
 

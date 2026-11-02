@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "Bankr",
-    "slug": "bankr",
+    "name": "Centsio",
+    "slug": "centsio",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "bankr",
+    "scheme": "centsio",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "com.jxmauricio.bankr",
+      "bundleIdentifier": "com.jxmauricio.centsio",
       "appleTeamId": "C8XQ9B9W25",
       "supportsTablet": false,
       "entitlements": {
@@ -16,7 +16,7 @@
       }
     },
     "android": {
-      "package": "com.bankr.app",
+      "package": "com.centsio.app",
       "adaptiveIcon": {
         "backgroundColor": "#0B0D10",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

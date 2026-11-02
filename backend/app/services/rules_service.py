@@ -56,7 +56,7 @@ def apply_rules(txn: Transaction, rules: list[Rule]) -> Rule | None:
         return None
     for rule in rules:
         if _matches(rule, txn):
-            txn.bankr_category_id, txn.category_source = rule.set_category_id, "rule"
+            txn.category_id, txn.category_source = rule.set_category_id, "rule"
             if rule.set_merchant_name and not txn.merchant_overridden:
                 txn.merchant_name = rule.set_merchant_name
             return rule
@@ -83,7 +83,7 @@ def preview_rule(db: Session, user_id: UUID, merchant_contains: str, category_id
     rule = Rule(merchant_contains=merchant_contains, set_category_id=category_id, match_exact=match_exact)
     return (
         _candidates(db, user_id, rule)
-        .filter(or_(Transaction.bankr_category_id.is_(None), Transaction.bankr_category_id != category_id))
+        .filter(or_(Transaction.category_id.is_(None), Transaction.category_id != category_id))
         .with_entities(func.count(Transaction.id))
         .scalar()
     )
@@ -95,9 +95,9 @@ def apply_rule_to_existing(db: Session, user_id: UUID, rule: Rule) -> int:
     rules = user_rules(db, user_id)
     changed = 0
     for txn in _candidates(db, user_id, rule).all():
-        before = (txn.bankr_category_id, txn.merchant_name)
+        before = (txn.category_id, txn.merchant_name)
         apply_rules(txn, rules)
-        if (txn.bankr_category_id, txn.merchant_name) != before:
+        if (txn.category_id, txn.merchant_name) != before:
             changed += 1
     db.flush()
     return changed

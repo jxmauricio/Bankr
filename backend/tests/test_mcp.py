@@ -1,4 +1,4 @@
-"""Bankr-as-MCP-server: auth, token scoping, and tool calls over /mcp, the
+"""Centsio-as-MCP-server: auth, token scoping, and tool calls over /mcp, the
 OAuth 2.1 flow Claude/ChatGPT connectors use, and write-scope proposals."""
 
 import base64
@@ -460,18 +460,18 @@ def test_propose_goal_confirm_creates_the_goal(mcp_client, db, user, writer):
 
 def test_propose_recategorization(mcp_client, db, user, writer):
     txn = db.query(Transaction).filter(Transaction.aggregator_transaction_id == "txn_dining").one()
-    before = txn.bankr_category_id
+    before = txn.category_id
     result = tool_payload(
         call(mcp_client, writer, "propose_recategorization", {"transaction_id": str(txn.id), "category": "Groceries"})
     )
     assert result["status"] == "pending_user_confirmation"
     db.expire_all()
-    assert db.get(Transaction, txn.id).bankr_category_id == before
+    assert db.get(Transaction, txn.id).category_id == before
 
     mcp_client.post(f"/proposals/{result['proposal_id']}/confirm", headers=session_headers(user))
     db.expire_all()
     changed = db.get(Transaction, txn.id)
-    assert changed.bankr_category_id != before and changed.category_source == "manual"
+    assert changed.category_id != before and changed.category_source == "manual"
 
 
 def test_invalid_proposals_are_not_stored(mcp_client, db, writer):

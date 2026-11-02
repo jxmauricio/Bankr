@@ -8,14 +8,14 @@ def test_build_agent_client_defaults_to_openrouter(monkeypatch):
     monkeypatch.setattr(config.settings, "openrouter_api_key", "test-key")
     monkeypatch.setattr(config.settings, "openrouter_model", "deepseek/deepseek-v4-flash-0731")
     monkeypatch.setattr(config.settings, "openrouter_site_url", "")
-    monkeypatch.setattr(config.settings, "openrouter_app_name", "Bankr")
+    monkeypatch.setattr(config.settings, "openrouter_app_name", "Centsio")
 
     client = build_agent_client()
 
     assert isinstance(client, OpenRouterAgentClient)
     assert client._model == "deepseek/deepseek-v4-flash-0731"
     assert str(client._client.base_url) == "https://openrouter.ai/api/v1/"
-    assert client._client.default_headers["X-Title"] == "Bankr"
+    assert client._client.default_headers["X-Title"] == "Centsio"
     assert "HTTP-Referer" not in client._client.default_headers
 
 
@@ -23,12 +23,12 @@ def test_openrouter_client_sets_referer_header_when_site_url_configured(monkeypa
     monkeypatch.setattr(config.settings, "agent_provider", "openrouter")
     monkeypatch.setattr(config.settings, "openrouter_api_key", "test-key")
     monkeypatch.setattr(config.settings, "openrouter_model", "deepseek/deepseek-v4-flash-0731")
-    monkeypatch.setattr(config.settings, "openrouter_site_url", "https://bankr.example.com")
-    monkeypatch.setattr(config.settings, "openrouter_app_name", "Bankr")
+    monkeypatch.setattr(config.settings, "openrouter_site_url", "https://centsio.example.com")
+    monkeypatch.setattr(config.settings, "openrouter_app_name", "Centsio")
 
     client = build_agent_client()
 
-    assert client._client.default_headers["HTTP-Referer"] == "https://bankr.example.com"
+    assert client._client.default_headers["HTTP-Referer"] == "https://centsio.example.com"
 
 
 def test_build_agent_client_still_supports_anthropic(monkeypatch):

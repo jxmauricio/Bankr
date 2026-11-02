@@ -42,7 +42,7 @@ def test_recategorize_survives_resync(client, db, user):
     _sync(db, user, fake)  # the fake re-reports every row, like Plaid's "modified"
     db.expire_all()
     txn = _txn(db, "txn_dining")
-    assert txn.bankr_category_id == shopping.id
+    assert txn.category_id == shopping.id
     assert txn.merchant_name == "Ramen!"
     assert txn.original_merchant_name == "Ramen Spot"
 
@@ -143,7 +143,7 @@ def test_edits_follow_a_pending_charge_when_it_posts(client, db, user):
     _sync(db, user, fake)
     db.expire_all()
     assert db.query(Transaction).filter(Transaction.aggregator_transaction_id == "p1").count() == 0
-    assert _txn(db, "posted1").bankr_category_id == shopping.id
+    assert _txn(db, "posted1").category_id == shopping.id
 
 
 def test_cannot_edit_someone_elses_transaction(client, db, user):
@@ -180,7 +180,7 @@ def test_backfill_leaves_manual_categories_alone(client, db, user):
     recategorize_all_transactions(db)
     db.commit()
     db.expire_all()
-    assert _txn(db, "txn_dining").bankr_category_id == shopping.id
+    assert _txn(db, "txn_dining").category_id == shopping.id
 
 
 def test_a_group_is_not_a_category_a_transaction_can_have(client, db, user):

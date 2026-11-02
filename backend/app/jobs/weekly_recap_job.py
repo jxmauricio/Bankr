@@ -2,7 +2,7 @@
 
 Same split as insights_job: every number is computed here in plain Python
 from money_query and the goal helpers, and Claude only writes the short
-"Bankr's take" paragraph from those numbers. If the model can't be reached
+"Centsio's take" paragraph from those numbers. If the model can't be reached
 the recap is still saved, without the paragraph.
 
 A Sunday-evening cron (`run_due_recaps`) makes the latest week and pushes

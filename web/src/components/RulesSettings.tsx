@@ -43,7 +43,7 @@ export function RulesSettings({ token }: { token: string }) {
       {rules === null && !error && <p className="mt-2 text-sm text-ink-faint">Loading…</p>}
       {rules?.length === 0 && (
         <p className="mt-2 text-sm text-ink-faint">
-          No rules yet. Change a transaction's category and Bankr will offer to remember it.
+          No rules yet. Change a transaction's category and Centsio will offer to remember it.
         </p>
       )}
       <ul className="mt-2 space-y-2">

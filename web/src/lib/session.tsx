@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
-const STORAGE_KEY = "bankr_session_token";
+const STORAGE_KEY = "centsio_session_token";
 
 interface SessionContextValue {
   token: string | null;

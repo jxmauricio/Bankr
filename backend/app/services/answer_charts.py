@@ -220,7 +220,7 @@ def _dollars(value: float) -> str:
 
 def net_worth(db: Session, user_id: UUID, window: mq.Window) -> dict:
     """Each account's change is the sum of its own transactions in the
-    window -- the one part of a balance change Bankr can see line by line.
+    window -- the one part of a balance change Centsio can see line by line.
     When there's a net-worth snapshot from the start of the window, what the
     transactions don't explain (market moves, interest, a late sync) is its
     own labelled bar rather than folded into an account."""

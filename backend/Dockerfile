@@ -11,8 +11,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY alembic.ini .
 COPY app ./app
 
-RUN useradd --create-home bankr
-USER bankr
+RUN useradd --create-home centsio
+USER centsio
 
 ENV PORT=8000
 EXPOSE 8000

@@ -124,8 +124,8 @@ class _Ledger:
             window = mq.Window(month, month_end(month), "custom")
             q = mq._base_query(self.db, self.user_id, window, "expense")
             by_category = dict(
-                q.with_entities(Transaction.bankr_category_id, func.sum(-Transaction.amount))
-                .group_by(Transaction.bankr_category_id)
+                q.with_entities(Transaction.category_id, func.sum(-Transaction.amount))
+                .group_by(Transaction.category_id)
                 .all()
             )
             spend = {}
@@ -483,7 +483,7 @@ def _first_spend_month(db: Session, user_id: UUID) -> date | None:
     first = (
         db.query(func.min(Transaction.date))
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
-        .join(Category, Transaction.bankr_category_id == Category.id)
+        .join(Category, Transaction.category_id == Category.id)
         .filter(LinkedAccount.user_id == user_id, Category.type == "expense", *mq.counted_filters())
         .scalar()
     )
@@ -494,7 +494,7 @@ def _first_spend_month(db: Session, user_id: UUID) -> date | None:
     first = (
         db.query(func.min(Transaction.date))
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
-        .join(Category, Transaction.bankr_category_id == Category.id)
+        .join(Category, Transaction.category_id == Category.id)
         .filter(LinkedAccount.user_id == user_id, Category.type == "expense", *mq.counted_filters())
         .scalar()
     )

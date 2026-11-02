@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     # config once; re-mint to rotate.
     mcp_token_ttl_seconds: int = 31536000
     # OAuth for MCP connectors (app/mcp_oauth.py). The backend's public
-    # origin, e.g. https://api.bankr.app: the OAuth issuer, and with /mcp the
+    # origin, e.g. https://api.centsio.app: the OAuth issuer, and with /mcp the
     # resource a token is bound to. Blank uses the origin each request came
     # in on, which is right for local dev but not behind a proxy that
     # rewrites Host.
@@ -98,7 +98,7 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_model: str = "deepseek/deepseek-v4-flash-0731"
     openrouter_site_url: str = ""
-    openrouter_app_name: str = "Bankr"
+    openrouter_app_name: str = "Centsio"
     # How OpenRouter picks among the providers serving OPENROUTER_MODEL:
     # "throughput" (fastest tokens/sec), "latency" (fastest first token) or
     # "price". Blank leaves it to OpenRouter's default load balancing, which
@@ -173,7 +173,7 @@ class Settings(BaseSettings):
     apns_key_id: str = ""
     apns_team_id: str = ""
     apns_auth_key_path: str = ""
-    apns_topic: str = "com.jxmauricio.bankr"
+    apns_topic: str = "com.jxmauricio.centsio"
     apns_use_sandbox: bool = True
 
     # Days ahead a subscription renewal (or a trial's first charge) shows up

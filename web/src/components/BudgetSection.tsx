@@ -13,8 +13,9 @@ import {
 } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { budgetTargets, useCategories } from "../lib/useCategories";
+import { mask } from "../lib/privacy";
 
-const whole = (n: number) => `${n < 0 ? "−" : ""}$${Math.abs(Math.round(n)).toLocaleString("en-US")}`;
+const whole = (n: number) => mask(`${n < 0 ? "−" : ""}$${Math.abs(Math.round(n)).toLocaleString("en-US")}`);
 
 function shiftMonth(month: string, delta: number): string {
   const [y, m] = month.split("-").map(Number);
@@ -122,7 +123,7 @@ export function BudgetSection({
         <div className="flex flex-col items-start gap-3 rounded-[18px] bg-raised p-5">
           <p className="m-0 text-[15px] font-semibold text-ink">Set a budget for the month</p>
           <p className="m-0 max-w-[520px] text-[13px] text-ink-soft">
-            Bankr can start you from what you actually spent over the last three months: fixed bills like rent get their own
+            Centsio can start you from what you actually spent over the last three months: fixed bills like rent get their own
             line, and everything else shares one flexible amount. You can change any of it after.
           </p>
           <button

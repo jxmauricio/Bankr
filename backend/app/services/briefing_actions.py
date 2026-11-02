@@ -142,9 +142,9 @@ def run_action(
 
     if action == "mark_expected":
         summary = {
-            "unusual": f"Mark the {item['merchant']} charge as expected. Bankr won't flag it again.",
+            "unusual": f"Mark the {item['merchant']} charge as expected. Centsio won't flag it again.",
             "duplicate": f"Mark both {item['merchant']} charges as expected: not a duplicate.",
-            "price_change": f"Accept {item['merchant']}'s new price. Bankr won't flag this change again.",
+            "price_change": f"Accept {item['merchant']}'s new price. Centsio won't flag this change again.",
         }[item["type"]]
         if confirm:
             _record(db, user_id, item_key, "expected")
@@ -161,7 +161,7 @@ def run_action(
 
 def item_help(db: Session, user_id: UUID, item_key: str, search: WebSearchClient | None) -> dict:
     """Where to cancel and an email the user can copy, for an item that has
-    them. Bankr never sends the email or cancels anything."""
+    them. Centsio never sends the email or cancels anything."""
     item = find_item(db, user_id, item_key)
     if not item["has_help"]:
         raise BriefingActionError("nothing to help with for this item")

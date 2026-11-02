@@ -14,7 +14,7 @@ final class SessionStore: ObservableObject {
     var isAuthenticated: Bool { sessionToken != nil }
 
     func signIn(withIdentityToken identityToken: String) async throws {
-        let response = try await BankrAPIClient.shared.signInWithApple(identityToken: identityToken)
+        let response = try await CentsioAPIClient.shared.signInWithApple(identityToken: identityToken)
         sessionToken = response.sessionToken
     }
 

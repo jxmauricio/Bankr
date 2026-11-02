@@ -29,7 +29,7 @@ function dayLabel(iso: string, today: string): string {
   return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-/** Recurring bills, subscriptions and paychecks: review what Bankr found, then see what's coming. */
+/** Recurring bills, subscriptions and paychecks: review what Centsio found, then see what's coming. */
 export function RecurringSection({
   token,
   refreshKey,
@@ -105,7 +105,7 @@ export function RecurringSection({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h2 className="m-0 text-lg font-semibold text-ink">Recurring</h2>
-          <span className="text-[13px] text-ink-soft">Bills, subscriptions and paychecks Bankr found in your history.</span>
+          <span className="text-[13px] text-ink-soft">Bills, subscriptions and paychecks Centsio found in your history.</span>
         </div>
         <div className="flex gap-4 font-tabular text-xs text-ink-soft">
           <span>

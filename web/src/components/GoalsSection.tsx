@@ -56,7 +56,7 @@ export function EmptyGoals({ onCreateGoal, onSuggestGoal }: { onCreateGoal: () =
       </div>
       <span className="text-[15px] font-semibold text-ink">Give your money a job</span>
       <span className="text-[13px] leading-relaxed text-ink-soft">
-        Save toward something, or keep a category under a monthly limit. Bankr tracks your pace from your real
+        Save toward something, or keep a category under a monthly limit. Centsio tracks your pace from your real
         transactions.
       </span>
       <button
@@ -71,7 +71,7 @@ export function EmptyGoals({ onCreateGoal, onSuggestGoal }: { onCreateGoal: () =
         onClick={onSuggestGoal}
         className="h-11 cursor-pointer rounded-[14px] bg-raised text-[13px] text-ink-soft hover:text-ink"
       >
-        Ask Bankr to suggest one
+        Ask Centsio to suggest one
       </button>
     </div>
   );

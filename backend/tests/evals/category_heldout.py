@@ -56,8 +56,8 @@ COLUMNS = [
     "payment_channel",
     "plaid_category",
     "plaid_confidence",
-    "plaid_bankr",
-    "pipeline_bankr",
+    "plaid_centsio",
+    "pipeline_centsio",
     "pipeline_confidence",
     "previous_label",
     "expected_category",
@@ -175,11 +175,11 @@ def fill_predictions(rows: list[dict], answers: dict[str, tuple[str, float | Non
     """Plaid's mapping and, when the DB was read, the pipeline's answer."""
     for row in rows:
         plaid = plaid_key(row)
-        row["plaid_bankr"] = _NAMES.get(plaid, plaid)
+        row["plaid_centsio"] = _NAMES.get(plaid, plaid)
         if answers is None:
             continue
         pipeline, confidence = answers.get(row["merchant_key"], (plaid, None))
-        row["pipeline_bankr"] = _NAMES.get(pipeline, pipeline)
+        row["pipeline_centsio"] = _NAMES.get(pipeline, pipeline)
         row["pipeline_confidence"] = "" if confidence is None else confidence
 
 
@@ -256,7 +256,7 @@ def score(rows: list[dict]) -> tuple[dict[str, Tally], list[str]]:
         t.labeled += 1
         plaid = plaid_key(row)
         t.plaid += plaid in expected
-        pipeline = category_key(row.get("pipeline_bankr") or "") or (row.get("pipeline_bankr") or None)
+        pipeline = category_key(row.get("pipeline_centsio") or "") or (row.get("pipeline_centsio") or None)
         if pipeline is None:
             t.no_pipeline += 1
         else:

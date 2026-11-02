@@ -13,11 +13,11 @@ export function LinkBankScreen({ onLinked }: { onLinked: () => void }) {
     <Screen edges={["top", "bottom"]}>
       <View style={styles.hero}>
         <Text variant="title" tone="accent">
-          bankr_
+          centsio_
         </Text>
         <Text variant="display">Link your bank.</Text>
         <Text tone="soft">
-          Bankr reads your balances and transactions through Plaid, read-only. It can&apos;t move money, and you can disconnect any time.
+          Centsio reads your balances and transactions through Plaid, read-only. It can&apos;t move money, and you can disconnect any time.
         </Text>
       </View>
       <View style={styles.actions}>

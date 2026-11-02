@@ -110,7 +110,7 @@ export default function ChatScreen() {
                 {chat.failed && (
                   <View style={styles.failed}>
                     <Text variant="caption" tone="negative">
-                      {chat.failed.stopped ? "Stopped." : "Bankr couldn't answer that."}
+                      {chat.failed.stopped ? "Stopped." : "Centsio couldn't answer that."}
                     </Text>
                     <Chip label="Ask again" onPress={() => chat.resolveFailed("retry")} />
                     <Chip
@@ -224,7 +224,7 @@ function ChatEmpty({ onPick }: { onPick: (text: string) => void }) {
   const colors = useColors();
   return (
     <View style={styles.empty}>
-      <SectionHeader title="Ask Bankr" />
+      <SectionHeader title="Ask Centsio" />
       {SUGGESTIONS.map((s, i) => (
         <ListRow
           key={s}

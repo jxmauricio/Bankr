@@ -174,7 +174,7 @@ class Transaction(Base):
     # UNKNOWN). LOW/UNKNOWN expense rows get a second opinion from
     # app/services/category_classifier.py.
     aggregator_category_confidence: Mapped[str | None] = mapped_column(String, nullable=True)
-    bankr_category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
+    category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
     is_pending: Mapped[bool] = mapped_column(Boolean, default=False)
     pending_transaction_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -184,7 +184,7 @@ class Transaction(Base):
     # every modified row) from undoing the user's rename.
     original_merchant_name: Mapped[str | None] = mapped_column(String, nullable=True)
     merchant_overridden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
-    # Where bankr_category_id came from: manual | rule | learned | classifier
+    # Where category_id came from: manual | rule | learned | classifier
     # | aggregator | fallback (see categorization_service). A re-sync never
     # touches a manual one.
     category_source: Mapped[str] = mapped_column(String, default="aggregator", server_default="aggregator")
@@ -521,7 +521,7 @@ class NotificationPrefs(Base):
 
 
 class MemoryFact(Base):
-    """Something durable the user told Bankr about themselves ("paid every
+    """Something durable the user told Centsio about themselves ("paid every
     other Friday", "saving for a wedding next June"), shown to the agent on
     every turn so it outlives the chat's history window. Written only by the
     user: in Settings, or by confirming a card the agent drafted (see
@@ -599,7 +599,7 @@ class OAuthAuthorization(Base):
 class McpProposal(Base):
     """A change an MCP client asked for under the write scope: a goal, a
     rule, a budget move or a recategorization. Nothing changes until the
-    user confirms it in Bankr (POST /proposals/{id}/confirm)."""
+    user confirms it in Centsio (POST /proposals/{id}/confirm)."""
 
     __tablename__ = "mcp_proposals"
 

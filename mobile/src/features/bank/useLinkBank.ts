@@ -38,7 +38,7 @@ export function useLinkBank(onLinked: (result: LinkAccountResponse) => void | Pr
             await onLinked(result);
             setBusy(false);
           } catch (err) {
-            fail(err, "Your bank connected, but Bankr couldn't load it. Try again.");
+            fail(err, "Your bank connected, but Centsio couldn't load it. Try again.");
           }
         },
         onExit: (exit) => {

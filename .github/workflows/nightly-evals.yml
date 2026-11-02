@@ -43,9 +43,9 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: bankr
-          POSTGRES_PASSWORD: bankr
-          POSTGRES_DB: bankr_test
+          POSTGRES_USER: centsio
+          POSTGRES_PASSWORD: centsio
+          POSTGRES_DB: centsio_test
         ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready
@@ -61,7 +61,7 @@ jobs:
       AGENT_PROVIDER: openrouter
       OPENROUTER_MODEL: deepseek/deepseek-v4-flash-0731
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      DATABASE_URL: postgresql://bankr:bankr@localhost:5432/bankr_test
+      DATABASE_URL: postgresql://centsio:centsio@localhost:5432/centsio_test
     steps:
       - name: Check the API key secret is set
         run: |

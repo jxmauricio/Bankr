@@ -172,7 +172,7 @@ function GoalsCard({ goals }: { goals: GoalProgress[] }) {
       </View>
       {goals.length === 0 ? (
         <Text tone="soft" style={styles.goal}>
-          No goals yet. Ask Bankr to set one up.
+          No goals yet. Ask Centsio to set one up.
         </Text>
       ) : (
         goals.map((g) => <GoalRow key={g.id} goal={g} />)

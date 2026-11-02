@@ -142,7 +142,7 @@ def test_deleting_one_sends_its_rows_back_to_plaids_category(client, db, user):
     db.commit()
     client.patch(f"/transactions/{_txn(db, 'txn_dining').id}", json={"category_id": str(ramen.id)})
     client.post("/rules", json={"merchant_contains": "trader", "set_category_id": str(ramen.id), "apply_to_existing": True})
-    assert _txn(db, "txn_groceries").bankr_category_id == ramen.id
+    assert _txn(db, "txn_groceries").category_id == ramen.id
 
     r = client.delete(f"/categories/{ramen.id}")
     assert r.status_code == 200, r.text
@@ -159,7 +159,7 @@ def test_deleting_one_sends_its_rows_back_to_plaids_category(client, db, user):
 def test_deleting_the_user_takes_their_categories(db, user):
     _synced(db, user)
     hobbies = create_category(db, user.id, "Hobbies")
-    _txn(db, "txn_dining").bankr_category_id = hobbies.id
+    _txn(db, "txn_dining").category_id = hobbies.id
     db.add(Rule(user_id=user.id, merchant_contains="ramen", set_category_id=hobbies.id))
     db.add(Budget(user_id=user.id, category_id=hobbies.id, amount=100, group="flex", rollover=False, start_month=date(2026, 8, 1)))
     db.commit()

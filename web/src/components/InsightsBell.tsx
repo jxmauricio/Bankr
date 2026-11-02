@@ -11,7 +11,7 @@ const TYPE_LABEL: Record<string, string> = {
   daily_briefing: "Daily briefing",
 };
 
-/** Header bell: Bankr's nudges, newest first. Opening one marks it read and goes where it's about. */
+/** Header bell: Centsio's nudges, newest first. Opening one marks it read and goes where it's about. */
 export function InsightsBell({
   token,
   refreshKey,
@@ -113,7 +113,7 @@ export function InsightsBell({
           </div>
           {insights.length === 0 ? (
             <p className="m-0 px-4 py-8 text-center text-[13px] text-ink-soft">
-              Nothing yet. Bankr will flag budget overruns, price changes and unusual charges here.
+              Nothing yet. Centsio will flag budget overruns, price changes and unusual charges here.
             </p>
           ) : (
             <ul className="m-0 list-none overflow-y-auto p-0">

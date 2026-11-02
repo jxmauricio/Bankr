@@ -1,11 +1,11 @@
-# Bankr design
+# Centsio design
 
-How Bankr looks and why, for the web app (`web/`) and the mobile app
+How Centsio looks and why, for the web app (`web/`) and the mobile app
 (`mobile/`). The visual direction is calm, card-based and Copilot Money–like:
 soft surfaces, hairline borders, large figures, uppercase section labels, and
 pill-shaped navigation.
 
-The mockups live on the **Bankr iOS Redesign** canvas
+The mockups live on the **Centsio iOS Redesign** canvas
 (https://claude.ai/artifact/LMSyVZe6cymbvqQN6D2HZD): the *Mobile* page has
 the phone screens in dark and light, and the *Desktop* page has the web screens
 with a Light/Dark switch in Tweaks. The code is the source of truth where the
@@ -33,7 +33,7 @@ Rules for both apps:
 ## Theming
 
 **Web.** Light is the default. The sun/moon button in the top bar switches
-to dark, and the choice is saved in `localStorage` under `bankr_theme`. A
+to dark, and the choice is saved in `localStorage` under `centsio_theme`. A
 small script in `index.html` sets `<html data-theme>` before first paint, so
 a dark choice never flashes light. The web app does not follow the system
 appearance.
@@ -41,7 +41,7 @@ appearance.
 **Mobile.** The app follows the system appearance by default. Settings
 (the gear in the top bar) has an **Appearance** control with System, Light
 and Dark. The choice applies app-wide through React Native's `Appearance`
-override, is saved in SecureStore under `bankr_appearance`, and is applied
+override, is saved in SecureStore under `centsio_appearance`, and is applied
 before the first frame. Styles are built once per appearance with
 `makeStyles((colors) => StyleSheet.create(...))`, and components read colors
 with `useColors()`.
@@ -131,13 +131,13 @@ Mobile scale (`type` in `tokens.ts`; the web uses the same sizes where it can):
 | Variant | Size / weight | Use |
 |---|---|---|
 | `display` | 32 / 700 | Rare hero text |
-| `brand` | 26 / 700 | "Bankr" in the top bar |
+| `brand` | 26 / 700 | "Centsio" in the top bar |
 | `title` | 22 / 700 | Screen titles |
 | `heading` | 17 / 600 | Card titles |
 | `body` / `strong` | 15 / 400, 600 | Running text, chat answers |
 | `label` / `tab` | 15 / 500, 600 | Row titles, tab pills |
 | `caption` / `meta` | 13 / 400 | Secondary lines |
-| `section` / `eyebrow` | 12, 11 / 600, uppercase, 0.8 tracking | Labels over groups: "ASK BANKR", "TODAY", "WHERE IT WENT" |
+| `section` / `eyebrow` | 12, 11 / 600, uppercase, 0.8 tracking | Labels over groups: "ASK CENTSIO", "TODAY", "WHERE IT WENT" |
 | `moneyLarge` | 34 / 700, tabular | Headline figures, such as net worth |
 | `money` / `moneySmall` | 15 / 600, 13 / 500, tabular | Amounts in rows and summaries |
 
@@ -159,7 +159,7 @@ Mobile scale (`type` in `tokens.ts`; the web uses the same sizes where it can):
 
 ### Web
 
-- **Top bar:** chat history and the **Bankr** wordmark (22px bold) on the left;
+- **Top bar:** chat history and the **Centsio** wordmark (22px bold) on the left;
   text-only pill tabs in the center (Chat, Transactions, Cash flow, Health,
   Plan, with the open one filled with `signal`; keys 1–4 switch views); the
   period filter, insights bell, theme toggle and profile menu on the right.
@@ -175,7 +175,7 @@ Mobile scale (`type` in `tokens.ts`; the web uses the same sizes where it can):
 
 ### Mobile
 
-- **Top bar:** settings (gear) on the left, **Bankr** in the center, and on
+- **Top bar:** settings (gear) on the left, **Centsio** in the center, and on
   the right chat history on the Chat tab or sync elsewhere. All icons use the
   accent color.
 - **Tabs:** a row of pills under the top bar that scrolls sideways and keeps

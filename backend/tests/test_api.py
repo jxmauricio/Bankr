@@ -41,9 +41,9 @@ def test_oauth_return_differs_by_platform(monkeypatch):
     assert oauth_return_kwargs("android") == {}
 
     monkeypatch.setattr(settings, "plaid_ios_redirect_uri", "https://app.example/plaid")
-    monkeypatch.setattr(settings, "plaid_android_package_name", "com.bankr.app")
+    monkeypatch.setattr(settings, "plaid_android_package_name", "com.centsio.app")
     assert oauth_return_kwargs("ios") == {"redirect_uri": "https://app.example/plaid"}
-    assert oauth_return_kwargs("android") == {"android_package_name": "com.bankr.app"}
+    assert oauth_return_kwargs("android") == {"android_package_name": "com.centsio.app"}
 
 
 def test_link_account_runs_sync_and_returns_summary(client):

@@ -72,7 +72,7 @@ def update_transaction(
     if category_id is not None:
         if txn.is_split:
             raise TransactionEditError("a split transaction is categorized by its splits")
-        txn.bankr_category_id = _category(db, txn, category_id).id
+        txn.category_id = _category(db, txn, category_id).id
         txn.category_source = categorization.MANUAL
         # Twice the same pick for a merchant and its other rows follow.
         if categorization.learn(db, txn.linked_account.user_id, txn):
@@ -122,7 +122,7 @@ def set_splits(db: Session, txn: Transaction, parts: list[dict]) -> list[Transac
             merchant_name=txn.merchant_name,
             original_merchant_name=txn.original_merchant_name,
             raw_aggregator_category=txn.raw_aggregator_category,
-            bankr_category_id=_category(db, txn, part["category_id"]).id,
+            category_id=_category(db, txn, part["category_id"]).id,
             category_source=categorization.MANUAL,
             is_pending=txn.is_pending,
             notes=(part.get("note") or "").strip() or None,

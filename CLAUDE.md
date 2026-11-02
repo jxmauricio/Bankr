@@ -1,4 +1,4 @@
-# Bankr
+# Centsio
 
 ## Log every PR push in Obsidian
 

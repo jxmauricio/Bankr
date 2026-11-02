@@ -119,7 +119,7 @@ struct DashboardView: View {
         }
     }
 
-    private func itemizedCard(title: String, data: BankrAPIClient.ItemizedTransactions?, tint: Color) -> some View {
+    private func itemizedCard(title: String, data: CentsioAPIClient.ItemizedTransactions?, tint: Color) -> some View {
         card {
             HStack {
                 Text(title).font(.subheadline).foregroundStyle(.secondary)

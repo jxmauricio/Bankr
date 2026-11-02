@@ -13,7 +13,7 @@ import { Button, Card, ErrorState, groupPosition, Icon, Initial, ListRow, Loadin
 
 /**
  * One week's recap: what came in and went out, what it did to each goal,
- * where the money went, and Bankr's take on it. Opening it marks the
+ * where the money went, and Centsio's take on it. Opening it marks the
  * week's notification read; the arrows page through earlier weeks.
  */
 export default function RecapScreen() {
@@ -83,7 +83,7 @@ function Recap({ recap }: { recap: WeeklyRecap }) {
           <View style={styles.takeLabel}>
             <Icon name="sparkle" color={colors.accent} size={15} />
             <Text variant="eyebrow" tone="accent">
-              Bankr&apos;s take
+              Centsio&apos;s take
             </Text>
           </View>
           <Text>{recap.summary}</Text>
@@ -112,7 +112,7 @@ function Recap({ recap }: { recap: WeeklyRecap }) {
 
       <View style={styles.actions}>
         <Button
-          label="Ask Bankr about this week"
+          label="Ask Centsio about this week"
           onPress={() => router.dismissTo({ pathname: "/chat", params: { ask: `How did my week of ${recap.label} go?` } })}
         />
       </View>

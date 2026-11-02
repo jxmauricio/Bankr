@@ -80,7 +80,7 @@ export function usePushNotifications() {
     (async () => {
       if (Platform.OS === "android") {
         await Notifications.setNotificationChannelAsync("default", {
-          name: "Bankr",
+          name: "Centsio",
           importance: Notifications.AndroidImportance.DEFAULT,
         });
       }

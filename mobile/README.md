@@ -1,4 +1,4 @@
-# Bankr mobile
+# Centsio mobile
 
 React Native app (Expo SDK 57, Expo Router) for iOS and Android. Like `web/`,
 it holds no secrets and only talks to the backend.
@@ -9,7 +9,7 @@ it holds no secrets and only talks to the backend.
 cd mobile
 npm install
 npx expo run:ios        # first time, or after adding native code: builds the dev client
-npx expo start          # every other time; open the installed Bankr app
+npx expo start          # every other time; open the installed Centsio app
 ```
 
 The app runs as its own development build (`expo-dev-client`), not in Expo
@@ -30,7 +30,7 @@ The visual design is still being worked out, so nothing outside two folders
 knows what the app looks like:
 
 - `src/theme/tokens.ts` — every color, spacing step, radius and text style.
-  Values follow the "Bankr iOS Redesign" canvas in Claude Design
+  Values follow the "Centsio iOS Redesign" canvas in Claude Design
   (https://claude.ai/artifact/LMSyVZe6cymbvqQN6D2HZD): the system font (San
   Francisco on iOS) with tabular figures, and a light and a dark palette that
   follow the system appearance (read through `src/theme/theme.ts`).
@@ -70,7 +70,7 @@ OAuth banks (Chase, Capital One, ...) also need, once:
 - **iOS:** an HTTPS universal link for the app (an apple-app-site-association
   file on a domain you control, plus associated domains in `app.json`), set as
   `PLAID_IOS_REDIRECT_URI` on the backend and registered in the Plaid Dashboard.
-- **Android:** the package name (`com.bankr.app`) registered in the Plaid
+- **Android:** the package name (`com.centsio.app`) registered in the Plaid
   Dashboard and set as `PLAID_ANDROID_PACKAGE_NAME`.
 
 Until then those banks may not link from the app; non-OAuth banks do.

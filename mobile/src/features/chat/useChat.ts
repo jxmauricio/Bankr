@@ -15,7 +15,7 @@ import { resolveGoalProposal } from "@/lib/goalProposal";
 import { useSession } from "@/lib/session";
 
 // SecureStore rejects ":" (the web localStorage key uses one). Dots and hyphens are fine.
-const LAST_CONVERSATION_KEY = "bankr.last-conversation-id";
+const LAST_CONVERSATION_KEY = "centsio.last-conversation-id";
 
 function readLastConversationId(): string | null {
   try {

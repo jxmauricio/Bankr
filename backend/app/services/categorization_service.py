@@ -62,7 +62,7 @@ def hidden_categories(db: Session, user_id: UUID) -> set[UUID]:
 
 
 def categorize(txn, account_type: str | None, ctx: Context) -> bool:
-    """Set txn's bankr_category_id and category_source in place (txn can be a
+    """Set txn's category_id and category_source in place (txn can be a
     Transaction or a row-like namespace). Returns True when Plaid wasn't sure
     and there's no cached second opinion yet: worth asking the classifier."""
     if txn.category_source == MANUAL:
@@ -71,20 +71,20 @@ def categorize(txn, account_type: str | None, ctx: Context) -> bool:
         return False
     key = merchant_key(txn.original_merchant_name)
     if key in ctx.learned and not txn.is_split and txn.split_parent_id is None:
-        txn.bankr_category_id, txn.category_source = ctx.learned[key], LEARNED
+        txn.category_id, txn.category_source = ctx.learned[key], LEARNED
         return False
 
     mapped = ctx.categories[map_raw_category(txn.raw_aggregator_category, float(txn.amount), account_type, txn.original_merchant_name)]
-    txn.bankr_category_id, txn.category_source = mapped.id, AGGREGATOR
+    txn.category_id, txn.category_source = mapped.id, AGGREGATOR
     ask = False
     if needs_second_opinion(txn, mapped):
         guess = ctx.guesses.get(key)
         if guess is None:
             ask = True
         elif trusted(guess):
-            txn.bankr_category_id, txn.category_source = guess.category_id, CLASSIFIER
-    if txn.bankr_category_id in ctx.hidden or txn.bankr_category_id == ctx.categories[UNCATEGORIZED].id:
-        txn.bankr_category_id, txn.category_source = ctx.categories[UNCATEGORIZED].id, FALLBACK
+            txn.category_id, txn.category_source = guess.category_id, CLASSIFIER
+    if txn.category_id in ctx.hidden or txn.category_id == ctx.categories[UNCATEGORIZED].id:
+        txn.category_id, txn.category_source = ctx.categories[UNCATEGORIZED].id, FALLBACK
     return ask
 
 
@@ -96,10 +96,10 @@ def learn(db: Session, user_id: UUID, txn: Transaction) -> bool:
         return False
     row = db.query(LearnedCategory).filter(LearnedCategory.user_id == user_id, LearnedCategory.merchant_key == key).one_or_none()
     if row is None:
-        row = LearnedCategory(user_id=user_id, merchant_key=key, category_id=txn.bankr_category_id, hits=0)
+        row = LearnedCategory(user_id=user_id, merchant_key=key, category_id=txn.category_id, hits=0)
         db.add(row)
-    if row.category_id != txn.bankr_category_id:
-        row.category_id, row.hits = txn.bankr_category_id, 0  # a different pick starts over
+    if row.category_id != txn.category_id:
+        row.category_id, row.hits = txn.category_id, 0  # a different pick starts over
     row.hits += 1
     row.updated_at = datetime.now(timezone.utc)
     db.flush()
@@ -116,9 +116,9 @@ def recategorize(db: Session, user_id: UUID, txns: list[Transaction], categories
     ctx = context(db, user_id, categories, guesses)
     changed = 0
     for txn in txns:
-        before = txn.bankr_category_id
+        before = txn.category_id
         categorize(txn, accounts.get(txn.linked_account_id), ctx)
-        changed += txn.bankr_category_id != before
+        changed += txn.category_id != before
     db.flush()
     return changed
 

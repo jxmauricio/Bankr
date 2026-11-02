@@ -22,7 +22,7 @@ export default function SignInScreen() {
       const response = isSignup ? await signUp(email.trim(), password, inviteCode.trim()) : await login(email.trim(), password);
       signIn(response.session_token);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't reach Bankr. Check your connection.");
+      setError(err instanceof ApiError ? err.message : "Couldn't reach Centsio. Check your connection.");
     } finally {
       setIsBusy(false);
     }
@@ -33,7 +33,7 @@ export default function SignInScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.fill}>
         <View style={styles.hero}>
           <Text variant="title" tone="accent">
-            bankr_
+            centsio_
           </Text>
           <Text variant="display">Ask your money anything.</Text>
           <Text tone="soft">Check every answer.</Text>

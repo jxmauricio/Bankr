@@ -21,16 +21,16 @@ def test_a_re_map_puts_rows_back_where_plaid_says_except_the_users_picks(db, use
     sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
     categories = seed_default_categories(db)
     picked, drifted = _txn(db, "txn_dining"), _txn(db, "txn_groceries")
-    picked.bankr_category_id, picked.category_source = categories["travel_and_vacation"].id, "manual"
-    drifted.bankr_category_id = categories["pets"].id
+    picked.category_id, picked.category_source = categories["travel_and_vacation"].id, "manual"
+    drifted.category_id = categories["pets"].id
     db.commit()
 
     remap_with_current_categories(db)
     db.commit()
     db.expire_all()
 
-    assert _name(db, _txn(db, "txn_dining").bankr_category_id) == "Travel & Vacation"  # the user's pick stays
-    assert _name(db, _txn(db, "txn_groceries").bankr_category_id) == "Groceries"
+    assert _name(db, _txn(db, "txn_dining").category_id) == "Travel & Vacation"  # the user's pick stays
+    assert _name(db, _txn(db, "txn_groceries").category_id) == "Groceries"
 
 
 def test_a_re_map_only_trusts_the_guesses_a_sync_would(db, user):
@@ -51,8 +51,8 @@ def test_a_re_map_only_trusts_the_guesses_a_sync_would(db, user):
     db.commit()
     db.expire_all()
 
-    assert _name(db, _txn(db, "txn_dining").bankr_category_id) == "Coffee Shops"
-    assert _name(db, _txn(db, "txn_groceries").bankr_category_id) == "Groceries"
+    assert _name(db, _txn(db, "txn_dining").category_id) == "Coffee Shops"
+    assert _name(db, _txn(db, "txn_groceries").category_id) == "Groceries"
 
 
 def test_the_move_to_monarch_carries_picks_rules_budgets_and_trackers(db, user):
@@ -73,7 +73,7 @@ def test_the_move_to_monarch_carries_picks_rules_budgets_and_trackers(db, user):
         db.add(old[key])
     db.flush()
     picked = _txn(db, "txn_dining")
-    picked.bankr_category_id, picked.category_source = old["coffee"].id, "manual"
+    picked.category_id, picked.category_source = old["coffee"].id, "manual"
     db.add(Rule(user_id=user.id, merchant_contains="github", set_category_id=old["software"].id))
     db.add_all(
         [
@@ -93,7 +93,7 @@ def test_the_move_to_monarch_carries_picks_rules_budgets_and_trackers(db, user):
 
     categories = seed_default_categories(db)
     dining = db.query(CategoryGroup).filter(CategoryGroup.system_key == "food_and_dining").one()
-    assert _name(db, _txn(db, "txn_dining").bankr_category_id) == "Coffee Shops"  # the user's pick, carried over
+    assert _name(db, _txn(db, "txn_dining").category_id) == "Coffee Shops"  # the user's pick, carried over
     assert db.query(Rule).one().set_category_id == categories["general_shopping"].id
     assert db.query(Goal).one().group_id == dining.id
     # The group budget moves to the new group; both category budgets land on

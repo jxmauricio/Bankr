@@ -5,7 +5,7 @@ import { Appearance } from "react-native";
 /** The user's choice in settings: follow the system, or always light or dark. */
 export type AppearancePref = "system" | "light" | "dark";
 
-const STORAGE_KEY = "bankr_appearance";
+const STORAGE_KEY = "centsio_appearance";
 
 function apply(pref: AppearancePref) {
   // Overrides what useColorScheme() reports app-wide; "unspecified" hands it back to the system.

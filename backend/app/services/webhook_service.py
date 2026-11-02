@@ -23,7 +23,7 @@ new codes over time, and an unrecognized one is not an error):
 - ITEM / LOGIN_REPAIRED: the user fixed it via Plaid's update-mode Link
   flow; flip accounts back to active and sync once.
 
-A webhook for an item_id Bankr doesn't recognize (a stale item, a
+A webhook for an item_id Centsio doesn't recognize (a stale item, a
 never-fully-linked one, or a test payload) is a no-op, not an error --
 Plaid should still get a 2xx so it doesn't retry forever.
 """

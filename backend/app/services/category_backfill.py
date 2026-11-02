@@ -27,7 +27,7 @@ def recategorize_all_transactions(db: Session) -> int:
         Transaction.id,
         Transaction.raw_aggregator_category,
         Transaction.amount,
-        Transaction.bankr_category_id,
+        Transaction.category_id,
         Transaction.merchant_name,
         LinkedAccount.account_type,
     ).join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
@@ -41,7 +41,7 @@ def recategorize_all_transactions(db: Session) -> int:
         category_id = categories[map_raw_category(raw, float(amount), account_type, merchant)].id
         if current != category_id:
             db.query(Transaction).filter(Transaction.id == txn_id).update(
-                {Transaction.bankr_category_id: category_id}, synchronize_session=False
+                {Transaction.category_id: category_id}, synchronize_session=False
             )
             changed += 1
     db.flush()
@@ -128,7 +128,7 @@ def move_to_monarch(db: Session) -> None:
     for key, old in old_categories.items():
         new = categories[MONARCH_CATEGORY_MOVES[key]].id
         for table, column in (
-            ("transactions", "bankr_category_id"),
+            ("transactions", "category_id"),
             ("rules", "set_category_id"),
             ("merchant_category_guesses", "category_id"),
             ("recurring_series", "category_id"),
@@ -222,7 +222,7 @@ def _remap_uncategorized_by_hand(db: Session, categories: dict, txn_ids: list | 
     didn't categorize by hand (or just `txn_ids`, whoever picked them)."""
     rows = db.execute(
         text(
-            "SELECT t.id, t.raw_aggregator_category, t.amount, t.bankr_category_id, t.aggregator_category_confidence, "
+            "SELECT t.id, t.raw_aggregator_category, t.amount, t.category_id, t.aggregator_category_confidence, "
             "t.merchant_name, t.original_merchant_name, t.merchant_overridden, t.is_split, t.split_parent_id, "
             "t.linked_account_id, t.category_source, a.account_type, a.user_id "
             "FROM transactions t JOIN linked_accounts a ON a.id = t.linked_account_id "
@@ -237,10 +237,10 @@ def _remap_uncategorized_by_hand(db: Session, categories: dict, txn_ids: list | 
         if txn.user_id not in contexts:
             contexts[txn.user_id] = categorization.context(db, txn.user_id, categories, guesses)
         categorization.categorize(txn, txn.account_type, contexts[txn.user_id])
-        if (txn.bankr_category_id, txn.category_source) != (row["bankr_category_id"], row["category_source"]):
+        if (txn.category_id, txn.category_source) != (row["category_id"], row["category_source"]):
             db.execute(
-                text("UPDATE transactions SET bankr_category_id = :category, category_source = :source WHERE id = :id"),
-                {"category": txn.bankr_category_id, "source": txn.category_source, "id": txn.id},
+                text("UPDATE transactions SET category_id = :category, category_source = :source WHERE id = :id"),
+                {"category": txn.category_id, "source": txn.category_source, "id": txn.id},
             )
     db.flush()
 
@@ -253,10 +253,10 @@ def learn_from_history(db: Session) -> None:
 
     rows = db.execute(
         text(
-            "SELECT a.user_id, t.original_merchant_name, t.bankr_category_id FROM transactions t "
+            "SELECT a.user_id, t.original_merchant_name, t.category_id FROM transactions t "
             "JOIN linked_accounts a ON a.id = t.linked_account_id "
             "WHERE t.category_source = 'manual' AND NOT t.is_split AND t.split_parent_id IS NULL "
-            "AND t.bankr_category_id IS NOT NULL"
+            "AND t.category_id IS NOT NULL"
         )
     ).all()
     picks: dict = {}

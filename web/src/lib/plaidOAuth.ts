@@ -2,7 +2,7 @@
 // site, then back to PLAID_REDIRECT_URI (/oauth-return?oauth_state_id=...).
 // Plaid requires resuming Link there with the *same* link token, so it's
 // stashed before Link opens and reused on return.
-export const LINK_TOKEN_KEY = "bankr.plaidLinkToken";
+export const LINK_TOKEN_KEY = "centsio.plaidLinkToken";
 export const OAUTH_RETURN_PATH = "/oauth-return";
 
 export function isOAuthReturn() {

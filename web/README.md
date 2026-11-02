@@ -1,6 +1,6 @@
-# Bankr web
+# Centsio web
 
-React + TypeScript app (Vite), the primary Bankr client — see `../ios` for
+React + TypeScript app (Vite), the primary Centsio client — see `../ios` for
 the original native app, now shelved (see `../backend/README.md` for why).
 
 ## Stack
@@ -84,7 +84,7 @@ Full loop tested live in-browser: sign up → CORS-permitted request lands →
 Sandbox UI (institution picker, phone-number step) with a real link token.
 **The Plaid Link click-through itself could not be automated** — Plaid's
 hosted Link UI runs in a cross-origin iframe that doesn't respond to
-synthetic input events (anti-fraud hardening, not a Bankr bug; confirmed via
+synthetic input events (anti-fraud hardening, not a Centsio bug; confirmed via
 `document.elementFromPoint` — clicks land on the iframe element but never
 reach its internal content, even for its own close button). If you click
 through it yourself with `user_good`/`pass_good` it'll work exactly like the

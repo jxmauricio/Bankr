@@ -6,7 +6,7 @@
 # has no Shell tab. Switch to `starter` to keep it awake.
 services:
   - type: web
-    name: bankr-api
+    name: centsio-api
     runtime: docker
     rootDir: backend
     dockerfilePath: ./Dockerfile

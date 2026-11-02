@@ -6,7 +6,7 @@ export function BootScreen({ steps }: { steps: BootStep[] }) {
     <div className="flex min-h-screen items-center justify-center p-6">
       <div role="status" aria-live="polite" className="flex w-full max-w-[360px] flex-col gap-7">
         <span className="font-display text-4xl font-bold tracking-[-0.03em] text-ink">
-          Bankr
+          Centsio
         </span>
         <div className="flex flex-col gap-2.5">
           <span className="text-[15px] text-ink">Securely connecting to your accounts</span>

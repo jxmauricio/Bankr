@@ -69,7 +69,7 @@ def export_feedback(db: Session, rating: str | None = None, since: date | None =
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Export rated Bankr chat replies as JSON lines.")
+    parser = argparse.ArgumentParser(description="Export rated Centsio chat replies as JSON lines.")
     parser.add_argument("--rating", choices=["up", "down"], help="only this rating")
     parser.add_argument("--since", type=date.fromisoformat, help="only ratings on or after YYYY-MM-DD")
     args = parser.parse_args(argv)

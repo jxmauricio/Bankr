@@ -17,7 +17,7 @@ def test_maps_detailed_value_to_its_subcategory_or_primary():
 
 
 def test_falls_back_to_primary_for_unmapped_detailed_value():
-    # PFCv2 could add a new FOOD_AND_DRINK subcategory Bankr doesn't know
+    # PFCv2 could add a new FOOD_AND_DRINK subcategory Centsio doesn't know
     # about yet -- it should still land under Food & Drink, not silently miss.
     assert map_raw_category("food_and_drink_some_new_subcategory", -10.0) == "restaurants_and_bars"
     assert map_raw_category("FOOD_AND_DRINK_VENDING_MACHINES", -2.0) == "restaurants_and_bars"
