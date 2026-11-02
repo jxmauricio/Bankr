@@ -1238,7 +1238,7 @@ function BotMark({ failed = false }: { failed?: boolean }) {
         failed ? "text-negative ring-negative/60" : "text-signal ring-signal/60"
       }`}
     >
-      b_
+      c_
     </div>
   );
 }
