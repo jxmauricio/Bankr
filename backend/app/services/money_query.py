@@ -72,7 +72,7 @@ CATEGORY_SLICES: dict[str, tuple[str, str, frozenset[str]]] = {
 }
 SLICE_NAMES = {name: key for key, (name, _, _) in CATEGORY_SLICES.items()}
 
-# Everyday words for Bankr categories, to category or slice keys. The model
+# Everyday words for Centsio categories, to category or slice keys. The model
 # is told the canonical names, but users say "eating out", and a miss here
 # would otherwise be a confidently wrong $0.
 CATEGORY_ALIASES: dict[str, str] = {
@@ -492,7 +492,7 @@ def _money(value) -> float:
 def _base_query(db: Session, user_id: UUID, window: Window, category_type: str | None = "expense"):
     q = (
         db.query(Transaction)
-        .join(Category, Transaction.bankr_category_id == Category.id)
+        .join(Category, Transaction.category_id == Category.id)
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
         .filter(
             LinkedAccount.user_id == user_id,
@@ -525,7 +525,7 @@ def spend_query(
     always sum exactly to the total."""
     q = _base_query(db, user_id, window, "expense")
     if category is not None:
-        q = q.filter(Transaction.bankr_category_id.in_(category.ids))
+        q = q.filter(Transaction.category_id.in_(category.ids))
 
     outflow = func.sum(case((Transaction.amount < 0, -Transaction.amount), else_=0))
     refunds = func.sum(case((Transaction.amount > 0, Transaction.amount), else_=0))
@@ -803,7 +803,7 @@ def list_transactions(
     q = joins(
         db.query(Transaction, category_name, Category.type, group_name, LinkedAccount)
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
-        .outerjoin(Category, Transaction.bankr_category_id == Category.id),
+        .outerjoin(Category, Transaction.category_id == Category.id),
         outer=True,
     ).filter(
         LinkedAccount.user_id == user_id,
@@ -848,7 +848,7 @@ def transaction_row(txn: Transaction, category_name, category_type, group_name) 
         "amount": _money(txn.amount),
         "merchant_name": txn.merchant_name,
         "original_merchant_name": txn.original_merchant_name,
-        "category_id": str(txn.bankr_category_id) if txn.bankr_category_id else None,
+        "category_id": str(txn.category_id) if txn.category_id else None,
         "category": category_name,
         "parent_category": group_name if group_name != category_name else None,
         "category_type": category_type,
@@ -868,7 +868,7 @@ def _splits_for(db: Session, user_id: UUID, parent_ids: list[UUID]) -> dict[UUID
     rows = (
         joins(
             db.query(Transaction, category_name, Category.type, group_name)
-            .outerjoin(Category, Transaction.bankr_category_id == Category.id),
+            .outerjoin(Category, Transaction.category_id == Category.id),
             outer=True,
         )
         .filter(Transaction.split_parent_id.in_(parent_ids))
@@ -1123,7 +1123,7 @@ def find_transactions(
     (spending); pass "income", "transfer", or None for every type."""
     q = _base_query(db, user_id, window, category_type)
     if category is not None:
-        q = q.filter(Transaction.bankr_category_id.in_(category.ids))
+        q = q.filter(Transaction.category_id.in_(category.ids))
     if merchant:
         q = q.filter(Transaction.merchant_name.ilike(f"%{merchant.strip()}%"))
     if min_amount is not None:

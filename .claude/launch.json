@@ -27,7 +27,7 @@
       "autoPort": false,
       "runtimeArgs": [
         "-c",
-        "cd backend && export DATABASE_URL=postgresql://bankr:bankr@localhost:5432/bankr CORS_ALLOWED_ORIGINS=http://localhost:5183 && .venv/bin/alembic upgrade head && .venv/bin/uvicorn app.main:app --port 8010"
+        "cd backend && export DATABASE_URL=postgresql://centsio:centsio@localhost:5432/centsio CORS_ALLOWED_ORIGINS=http://localhost:5183 && .venv/bin/alembic upgrade head && .venv/bin/uvicorn app.main:app --port 8010"
       ],
       "port": 8010
     },

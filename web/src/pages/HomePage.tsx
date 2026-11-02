@@ -73,7 +73,7 @@ const GREETING = "Ask me anything about your money — what you've spent, what's
 // Not scoped to a user/token: a different account landing on a stale id
 // just 404s inside loadConversation and falls back to the greeting, same as
 // the id being gone for any other reason.
-const LAST_CONVERSATION_KEY = "bankr:last-conversation-id";
+const LAST_CONVERSATION_KEY = "centsio:last-conversation-id";
 
 type Period = "week" | "month" | "year";
 type Topic = "spending" | "income";
@@ -454,7 +454,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
       <header className="relative z-30 flex min-h-16 shrink-0 items-center justify-between gap-1 border-b border-line bg-bg px-1.5 py-2 sm:gap-2 sm:px-6">
         <div className="flex shrink-0 items-center gap-3">
           <ChatHistoryMenu token={token} onSelectConversation={loadConversation} onNewChat={startNewChat} />
-          <span className="hidden font-display text-[22px] font-bold tracking-[-0.02em] text-ink sm:inline">Bankr</span>
+          <span className="hidden font-display text-[22px] font-bold tracking-[-0.02em] text-ink sm:inline">Centsio</span>
           <span className="hidden rounded-full bg-signal-wash px-2.5 py-1 text-[11px] font-semibold tracking-[0.08em] text-signal md:inline">PRIVATE BETA</span>
         </div>
         <div className="absolute left-1/2 hidden -translate-x-1/2 lg:block">
@@ -776,7 +776,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
               </div>
             )}
             <p className="mt-2 text-center text-xs text-ink-faint">
-              Answers come from your linked accounts only. Bankr can read — it can’t move money.
+              Answers come from your linked accounts only. Centsio can read — it can’t move money.
             </p>
           </form>
         </main>
@@ -1195,7 +1195,7 @@ function SearchedBox({ source, onLinkAccount }: { source: ChatSource; onLinkAcco
   );
 }
 
-/** Bankr asking which meaning was intended, as choices to tap rather than a
+/** Centsio asking which meaning was intended, as choices to tap rather than a
  * paragraph to answer. The first is highlighted as the likeliest. */
 function ClarifyChoices({ clarify, onAsk }: { clarify: Clarify; onAsk: (text: string) => void }) {
   return (
@@ -1270,7 +1270,7 @@ function MicIcon() {
 
 function ThinkingIndicator({ label }: { label: string | null }) {
   return (
-    <div className="flex items-center gap-2" role="status" aria-label={label ?? "Bankr is thinking"}>
+    <div className="flex items-center gap-2" role="status" aria-label={label ?? "Centsio is thinking"}>
       <div className="flex items-center gap-1.5">
         <span className="h-1.5 w-1.5 animate-thinking rounded-full bg-signal [animation-delay:0ms]" />
         <span className="h-1.5 w-1.5 animate-thinking rounded-full bg-signal [animation-delay:160ms]" />
@@ -1288,7 +1288,7 @@ function greetingForNow(): string {
   return "Good evening.";
 }
 
-/** Fills the empty stream before the first question: who Bankr is and how to check its answers. */
+/** Fills the empty stream before the first question: who Centsio is and how to check its answers. */
 function FirstConversation({ accountCount }: { accountCount?: number }) {
   const accounts = accountCount ? `your ${accountCount} linked account${accountCount === 1 ? "" : "s"}` : "your linked accounts";
   return (
@@ -1379,7 +1379,7 @@ function AnswerStopped({ onRetry, onEdit }: { onRetry: () => void; onEdit: () =>
   );
 }
 
-/** Voice mode takes over the composer's slot: idle, listening (you), speaking (Bankr). */
+/** Voice mode takes over the composer's slot: idle, listening (you), speaking (Centsio). */
 function VoicePanel({
   state,
   transcript,

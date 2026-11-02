@@ -50,7 +50,7 @@ def _row(db: Session, user: User, txn) -> dict:
     joins, category_name, group_name = mq.category_names(user.id)
     name, ctype, group = (
         joins(db.query(category_name, Category.type, group_name))
-        .filter(Category.id == txn.bankr_category_id)
+        .filter(Category.id == txn.category_id)
         .one_or_none()
         or (None, None, None)
     )

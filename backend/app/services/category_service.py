@@ -188,7 +188,7 @@ def set_hidden(db: Session, user_id: UUID, category_id: UUID, hidden: bool) -> i
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
         .filter(LinkedAccount.user_id == user_id, Transaction.category_source != categorization.MANUAL)
         .filter(
-            Transaction.bankr_category_id == category.id
+            Transaction.category_id == category.id
             if hidden
             else Transaction.category_source == categorization.FALLBACK
         )
@@ -241,7 +241,7 @@ def _delete_category(db: Session, user_id: UUID, category: Category) -> int:
         {RecurringSeries.category_id: None}, synchronize_session=False
     )
 
-    txn_ids = [row.id for row in db.query(Transaction.id).filter(Transaction.bankr_category_id == category.id)]
+    txn_ids = [row.id for row in db.query(Transaction.id).filter(Transaction.category_id == category.id)]
     # A split's parts stay hand-picked (the split is); a whole row isn't any more.
     db.query(Transaction).filter(Transaction.id.in_(txn_ids), Transaction.split_parent_id.is_(None)).update(
         {Transaction.category_source: "aggregator"}, synchronize_session=False

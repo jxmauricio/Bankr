@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { ChatSource, Citation, SourceQuery } from "../lib/api";
 import { BankText } from "./BankLogo";
+import { mask } from "../lib/privacy";
 
 /** How a reply's dollar figures link back to the sources under it. */
 export interface FigureSources {
@@ -59,21 +60,23 @@ export function AssistantText({ text, figures }: { text: string; figures?: Figur
 const MONEY = /(-?\$\d+(?:,\d{3})*(?:\.\d+)?)/g;
 
 function Figure({ text, figures }: { text: string; figures?: FigureSources }) {
+  // `text` stays the real figure for matching citations; only what's shown is masked.
+  const shown = mask(text);
   const number = figures?.citations.find((c) => c.text === text)?.source;
   if (!number && figures?.uncited?.includes(text)) {
     return (
       <span title="Not verified: none of the sources has this figure">
-        <span className="fig-unverified">{text}</span>
+        <span className="fig-unverified">{shown}</span>
         <sup aria-hidden className="ml-px font-mono text-[10px] text-ink-faint">?</sup>
         <span className="sr-only"> (not verified)</span>
       </span>
     );
   }
-  if (!number) return <span className="font-mono text-[0.94em] tabular-nums">{text}</span>;
+  if (!number) return <span className="font-mono text-[0.94em] tabular-nums">{shown}</span>;
   const source = figures?.sources[number - 1];
   const mark = (
     <>
-      <span className="fig text-ink">{text}</span>
+      <span className="fig text-ink">{shown}</span>
       <sup className="ml-px font-mono text-[10px] text-signal">{number}</sup>
     </>
   );
@@ -90,8 +93,8 @@ function Figure({ text, figures }: { text: string; figures?: FigureSources }) {
     <button
       type="button"
       onClick={() => figures?.onOpen(query)}
-      title={`See the transactions behind ${text}`}
-      aria-label={`${text}, source ${number}: ${source.label}. See the transactions`}
+      title={`See the transactions behind ${shown}`}
+      aria-label={`${shown}, source ${number}: ${source.label}. See the transactions`}
       className="cursor-pointer rounded-sm hover:bg-signal-wash"
     >
       {mark}

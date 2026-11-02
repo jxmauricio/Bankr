@@ -76,7 +76,7 @@ def test_labels_take_names_keys_group_labels_and_alternatives():
 
 def _row(merchant, expected, plaid="FOOD_AND_DRINK_RESTAURANT", pipeline=""):
     return {"merchant": merchant, "example_amount": "6", "plaid_category": plaid,
-            "pipeline_bankr": pipeline, "expected_category": expected}
+            "pipeline_centsio": pipeline, "expected_category": expected}
 
 
 def test_score_splits_tuning_from_held_out_and_scores_both_answers():
@@ -141,5 +141,5 @@ def test_export_from_db_uses_the_cached_guess_not_the_users_correction(db, user,
 
     (only,) = rows  # the HIGH-confidence merchant isn't a candidate
     assert (only["merchant_key"], only["count"], only["example_amount"]) == ("moongoat greenhouse", 2, 6.0)
-    assert (only["plaid_bankr"], only["pipeline_bankr"], only["pipeline_confidence"]) == (
+    assert (only["plaid_centsio"], only["pipeline_centsio"], only["pipeline_confidence"]) == (
         "Home Improvement", "Coffee Shops", 0.95)

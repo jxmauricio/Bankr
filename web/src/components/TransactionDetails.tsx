@@ -64,7 +64,7 @@ function goalFor(goals: GoalProgress[], t: TransactionRow): GoalProgress | undef
 }
 
 /**
- * Everything Bankr knows about one transaction. A side drawer over the
+ * Everything Centsio knows about one transaction. A side drawer over the
  * Transactions table on desktop, full screen on phones. ↑ / ↓ step through
  * the rows currently shown; Esc closes.
  */
@@ -301,7 +301,7 @@ export function TransactionDetails({
           onClick={() => onAsk(askText)}
           className="h-11 cursor-pointer rounded-[14px] bg-signal text-[13px] font-semibold text-bg hover:bg-signal-hi"
         >
-          Ask Bankr about this
+          Ask Centsio about this
         </button>
       </div>
     </aside>

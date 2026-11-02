@@ -196,7 +196,7 @@ export default function SignedInLayout() {
     case "loading":
       return <Loading />;
     case "load-failed":
-      return <ErrorState message="Couldn't reach Bankr." onRetry={retry} />;
+      return <ErrorState message="Couldn't reach Centsio." onRetry={retry} />;
     case "link-bank":
       // Linking runs the backend's first sync, so re-reading the gate lands on goal setup or home.
       return (

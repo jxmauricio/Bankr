@@ -1,7 +1,7 @@
 // Pure helpers that keep URLs' query strings and fragments out of error
 // reports. Kept free of imports so they can be exercised without a browser.
 //
-// Why it matters here: Bankr's API calls carry search terms in the query
+// Why it matters here: Centsio's API calls carry search terms in the query
 // (merchant, category), invite links carry a code, and Plaid's OAuth return
 // carries an oauth_state_id -- none of that belongs in a third-party log.
 

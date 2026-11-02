@@ -136,7 +136,7 @@ class PlaidClient:
     def create_link_token(self, user_id: str, platform: LinkPlatform = "web") -> str:
         client = _client()
         request_kwargs = {
-            "client_name": "Bankr",
+            "client_name": "Centsio",
             "language": "en",
             "country_codes": [CountryCode("US")],
             "products": [Products("transactions")],
@@ -386,7 +386,7 @@ def _to_aggregator_transaction(txn) -> AggregatorTransaction:
     return AggregatorTransaction(
         aggregator_transaction_id=txn.transaction_id,
         aggregator_account_id=txn.account_id,
-        # Plaid's sign convention is the opposite of Bankr's internal one:
+        # Plaid's sign convention is the opposite of Centsio's internal one:
         # positive = money out (expense), negative = money in (income).
         # Flip it here, once, at the edge.
         amount=-float(txn.amount),

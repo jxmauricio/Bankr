@@ -2,8 +2,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { fetchCashFlow, type CashFlowBreakdown } from "../lib/api";
 import { PERIODS, periodInfo, type Period } from "../lib/period";
 import { SpendingPaceChart } from "../components/SpendingPaceChart";
+import { mask } from "../lib/privacy";
 
-const whole = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
+const whole = (n: number) => mask("$" + Math.round(n).toLocaleString("en-US"));
 const MAX_CATEGORIES = 8;
 
 type Kind = "income" | "deficit" | "spend" | "transfer" | "kept";

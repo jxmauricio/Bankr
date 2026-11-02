@@ -10,7 +10,7 @@ struct WelcomeView: View {
             Spacer()
 
             VStack(spacing: 8) {
-                Text("Bankr")
+                Text("Centsio")
                     .font(.largeTitle.bold())
                 Text("Simpler than a spreadsheet, smarter than a budget app.")
                     .font(.subheadline)

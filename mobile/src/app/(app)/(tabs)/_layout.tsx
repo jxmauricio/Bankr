@@ -171,7 +171,7 @@ function TopBar({ onChat }: { onChat: boolean }) {
         <ThemeToggle />
       </View>
       <Text variant="brand" accessibilityRole="header">
-        Bankr
+        Centsio
       </Text>
       <View style={styles.side}>
         <View>

@@ -13,7 +13,7 @@ const fieldClass =
   "min-h-10 min-w-0 rounded-xl border border-line bg-raised px-2.5 text-[13px] text-ink outline-none focus:border-signal";
 const linkClass = "cursor-pointer text-sm text-ink-soft hover:text-ink disabled:opacity-60";
 
-/** Settings section: what Bankr remembers about the user across chats (pay
+/** Settings section: what Centsio remembers about the user across chats (pay
  * schedule, priorities, household). The assistant sees these on every
  * message and can only suggest new ones on a card; here the user can add,
  * edit and delete them directly. */
@@ -28,7 +28,7 @@ export function MemorySettings({ token }: { token: string }) {
   useEffect(() => {
     fetchMemory(token)
       .then(setMemory)
-      .catch(() => setError("Couldn't load what Bankr remembers."));
+      .catch(() => setError("Couldn't load what Centsio remembers."));
   }, [token]);
 
   async function run(id: string, action: () => Promise<void>) {
@@ -129,7 +129,7 @@ export function MemorySettings({ token }: { token: string }) {
 
   return (
     <>
-      <h3 className="mt-6 text-sm font-medium text-ink-soft">What Bankr knows about you</h3>
+      <h3 className="mt-6 text-sm font-medium text-ink-soft">What Centsio knows about you</h3>
       <p className="mt-1 text-xs text-ink-faint">
         The assistant keeps these in mind in every chat. It only adds one when you confirm, and never stores account
         numbers or passwords. Your numbers always come from your accounts, not from here.
@@ -148,7 +148,7 @@ export function MemorySettings({ token }: { token: string }) {
       {memory && !atLimit && (
         <form onSubmit={add} className="mt-2 flex flex-wrap gap-2">
           <input
-            aria-label="Something for Bankr to remember"
+            aria-label="Something for Centsio to remember"
             placeholder="e.g. Paid every other Friday"
             value={text}
             maxLength={memory.max_chars}

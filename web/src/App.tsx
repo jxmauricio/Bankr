@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ApiError, fetchGoalProgress, fetchNetWorth } from "./lib/api";
+import { useHideNumbers } from "./lib/privacy";
 import { useSession } from "./lib/session";
 import { loadCategories } from "./lib/useCategories";
 import { AuthPage } from "./pages/AuthPage";
@@ -19,6 +20,7 @@ export function App() {
 
 function PostSignInGate() {
   const { token, signOut } = useSession();
+  useHideNumbers(); // money formatters read the flag; this re-renders everything below when it flips
   const [step, setStep] = useState<OnboardingStep>("loading");
   const [balancesRead, setBalancesRead] = useState(false);
   const [goalsRead, setGoalsRead] = useState(false);
@@ -64,7 +66,7 @@ function PostSignInGate() {
     case "load-failed":
       return (
         <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-          <p className="text-ink-soft">Couldn't reach Bankr.</p>
+          <p className="text-ink-soft">Couldn't reach Centsio.</p>
           <button
             type="button"
             onClick={loadOnboardingState}

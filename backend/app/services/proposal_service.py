@@ -3,7 +3,7 @@
 An external client never changes the user's data. Its write tools draft a
 change with the same validation the in-app agent's propose_* tools use
 (app/agent/tools.py), and this module stores it as a pending McpProposal.
-The change happens only when the user confirms it in Bankr, which runs the
+The change happens only when the user confirms it in Centsio, which runs the
 same service call the in-app confirm cards do.
 """
 
@@ -29,7 +29,7 @@ PENDING = "pending"
 MAX_PENDING = 25
 
 CONFIRM_MESSAGE = (
-    "Saved in Bankr as a proposal. Nothing has changed yet: the user has to open Bankr and confirm it. "
+    "Saved in Centsio as a proposal. Nothing has changed yet: the user has to open Centsio and confirm it. "
     "Tell them that, and don't say it's done."
 )
 
@@ -62,7 +62,7 @@ def draft_recategorization(db: Session, user_id: UUID, transaction_id: str, cate
     except (TransactionNotFound, ValueError):
         return {"error": "no transaction with that id; get ids from find_transactions"}
     if txn.is_split:
-        return {"error": "a split transaction is categorized by its splits; the user can edit them in Bankr"}
+        return {"error": "a split transaction is categorized by its splits; the user can edit them in Centsio"}
     try:
         target = tools._any_category(db, user_id, category)
     except mq.QueryError as e:
@@ -103,7 +103,7 @@ def save(db: Session, user_id: UUID, kind: str, payload: dict, grant_id: UUID | 
     if proposal is None:
         if db.query(McpProposal).filter(McpProposal.user_id == user_id, McpProposal.status == PENDING).count() >= MAX_PENDING:
             return {
-                "error": f"The user already has {MAX_PENDING} proposals waiting in Bankr. "
+                "error": f"The user already has {MAX_PENDING} proposals waiting in Centsio. "
                 "Ask them to confirm or dismiss those first."
             }
         proposal = McpProposal(

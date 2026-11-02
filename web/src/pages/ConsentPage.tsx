@@ -16,7 +16,7 @@ const OPTIONS: { value: Access; title: string; detail: string }[] = [
     value: "write",
     title: "Read + propose changes",
     detail:
-      "Also suggest goals, categorization rules, budget moves and category changes. Nothing changes until you confirm it in Bankr.",
+      "Also suggest goals, categorization rules, budget moves and category changes. Nothing changes until you confirm it in Centsio.",
   },
 ];
 
@@ -39,7 +39,7 @@ export function ConsentPage() {
       .then(setRequest)
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) return signOut();
-        setError(err instanceof ApiError ? err.message : "Couldn't reach Bankr. Check your connection.");
+        setError(err instanceof ApiError ? err.message : "Couldn't reach Centsio. Check your connection.");
       });
   }, [token, requestId, signOut]);
 
@@ -65,7 +65,7 @@ export function ConsentPage() {
       </div>
       <main className="w-full max-w-[440px] rounded-3xl border border-line-strong bg-surface p-6 shadow-modal sm:p-8">
         <div className="flex items-baseline gap-2.5">
-          <span className="font-display text-[22px] font-bold tracking-tight text-ink">Bankr</span>
+          <span className="font-display text-[22px] font-bold tracking-tight text-ink">Centsio</span>
           <span className="font-mono text-[10px] tracking-[0.14em] text-signal">CONNECT AN APP</span>
         </div>
 
@@ -74,7 +74,7 @@ export function ConsentPage() {
         {request && (
           <>
             <h1 className="mt-6 font-display text-2xl font-semibold leading-tight text-ink">
-              {request.client_name} wants to connect to your Bankr account
+              {request.client_name} wants to connect to your Centsio account
             </h1>
             <p className="mt-2 text-sm text-ink-soft">
               Signed in as <span className="text-ink">{request.account_email}</span>.{" "}

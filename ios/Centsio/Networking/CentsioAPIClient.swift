@@ -1,15 +1,15 @@
 import Foundation
 
-enum BankrAPIError: Error {
+enum CentsioAPIError: Error {
     case invalidResponse
     case server(statusCode: Int)
 }
 
-/// Thin wrapper around the Bankr backend. The app never talks to Plaid or
+/// Thin wrapper around the Centsio backend. The app never talks to Plaid or
 /// Claude directly -- every call goes through here so secrets stay
 /// server-side (see backend/README.md).
-struct BankrAPIClient {
-    static let shared = BankrAPIClient()
+struct CentsioAPIClient {
+    static let shared = CentsioAPIClient()
 
     /// Points at a local `uvicorn app.main:app --reload` by default.
     /// Swap for a staging/production URL via build configuration once one exists.
@@ -61,8 +61,8 @@ struct BankrAPIClient {
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw BankrAPIError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw BankrAPIError.server(statusCode: http.statusCode) }
+        guard let http = response as? HTTPURLResponse else { throw CentsioAPIError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw CentsioAPIError.server(statusCode: http.statusCode) }
         return data
     }
 
@@ -244,8 +244,8 @@ struct BankrAPIClient {
         request.httpBody = try encoder.encode(Body(message: message, conversationId: conversationId))
 
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
-        guard let http = response as? HTTPURLResponse else { throw BankrAPIError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw BankrAPIError.server(statusCode: http.statusCode) }
+        guard let http = response as? HTTPURLResponse else { throw CentsioAPIError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw CentsioAPIError.server(statusCode: http.statusCode) }
 
         // An event is an "event:" line then a "data:" line; keepalive comments
         // start with ":" and are ignored.
@@ -262,13 +262,13 @@ struct BankrAPIClient {
                     return try decoder.decode(ChatResponse.self, from: data)
                 case "error":
                     _ = try? decoder.decode(StreamError.self, from: data)
-                    throw BankrAPIError.invalidResponse
+                    throw CentsioAPIError.invalidResponse
                 default:
                     break
                 }
                 event = nil
             }
         }
-        throw BankrAPIError.invalidResponse
+        throw CentsioAPIError.invalidResponse
     }
 }

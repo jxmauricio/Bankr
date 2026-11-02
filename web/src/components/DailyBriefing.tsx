@@ -174,7 +174,7 @@ export function DailyBriefingModal({
             </>
           )}
           <p className="mt-5 text-xs text-ink-faint">
-            Bankr never cancels, contacts a merchant or sends an email for you. Every change here waits for your confirm.
+            Centsio never cancels, contacts a merchant or sends an email for you. Every change here waits for your confirm.
           </p>
         </div>
       </div>
@@ -364,7 +364,7 @@ function HelpPanel({ help }: { help: BriefingHelp }) {
           </pre>
         </div>
       ))}
-      <p className="m-0 text-[11px] text-ink-faint">Copy it into your own email. Bankr doesn't send anything.</p>
+      <p className="m-0 text-[11px] text-ink-faint">Copy it into your own email. Centsio doesn't send anything.</p>
     </div>
   );
 }

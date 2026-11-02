@@ -48,7 +48,7 @@ private struct PostSignInGateView: View {
 
     private var retryView: some View {
         VStack(spacing: 12) {
-            Text("Couldn't reach Bankr.").foregroundStyle(.secondary)
+            Text("Couldn't reach Centsio.").foregroundStyle(.secondary)
             Button("Retry") {
                 loadFailed = false
                 Task { await loadOnboardingState() }
@@ -59,8 +59,8 @@ private struct PostSignInGateView: View {
     private func loadOnboardingState() async {
         guard let token = session.sessionToken else { return }
         do {
-            async let netWorth = BankrAPIClient.shared.fetchNetWorth(sessionToken: token)
-            async let goalProgress = BankrAPIClient.shared.fetchGoalProgress(sessionToken: token)
+            async let netWorth = CentsioAPIClient.shared.fetchNetWorth(sessionToken: token)
+            async let goalProgress = CentsioAPIClient.shared.fetchGoalProgress(sessionToken: token)
             let (netWorthResult, goalResult) = try await (netWorth, goalProgress)
 
             if netWorthResult.current == nil {

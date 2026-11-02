@@ -1,6 +1,6 @@
 """Adapter interface for bank data aggregators.
 
-Bankr runs on Plaid (see plaid_client.py) but every call site in the app
+Centsio runs on Plaid (see plaid_client.py) but every call site in the app
 depends on this Protocol, not on Plaid directly, so swapping aggregators is a
 matter of writing one new adapter rather than a rewrite -- which is exactly
 what happened once already: this app originally ran on Teller, which shut

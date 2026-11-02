@@ -113,10 +113,10 @@ def upgrade() -> None:
     sa.Column('date', sa.Date(), nullable=False),
     sa.Column('merchant_name', sa.String(), nullable=True),
     sa.Column('raw_aggregator_category', sa.String(), nullable=True),
-    sa.Column('bankr_category_id', sa.UUID(), nullable=True),
+    sa.Column('category_id', sa.UUID(), nullable=True),
     sa.Column('is_pending', sa.Boolean(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.ForeignKeyConstraint(['bankr_category_id'], ['categories.id'], ),
+    sa.ForeignKeyConstraint(['category_id'], ['categories.id'], ),
     sa.ForeignKeyConstraint(['linked_account_id'], ['linked_accounts.id'], ),
     sa.PrimaryKeyConstraint('id')
     )

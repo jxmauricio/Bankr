@@ -1,4 +1,4 @@
-merchant,count,example_amount,payment_channel,plaid_category,plaid_confidence,bankr_today,expected,jev,jev_confidence,agrees
+merchant,count,example_amount,payment_channel,plaid_category,plaid_confidence,centsio_today,expected,jev,jev_confidence,agrees
 Hangar,31,44.0,in store,FOOD_AND_DRINK_RESTAURANT,LOW,Restaurants,,Transportation > Auto Maintenance,0.18,False
 Obsidian,24,5.0,in store,GENERAL_SERVICES_OTHER_GENERAL_SERVICES,LOW,Other,,Other,0.38,True
 BILT CARD HOUSING PPD ID: 1844372402,14,2.49,online,RENT_AND_UTILITIES_RENT,LOW,Rent & Housing,,Rent & Housing,0.4,True

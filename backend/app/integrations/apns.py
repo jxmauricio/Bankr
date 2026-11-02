@@ -44,7 +44,7 @@ def send_alert(device_token: str, title: str, body: str, data: dict[str, Any] | 
     token = _jwt()
     if token is None:
         return SKIPPED
-    topic = settings.apns_topic or "com.jxmauricio.bankr"
+    topic = settings.apns_topic or "com.jxmauricio.centsio"
     host = "api.sandbox.push.apple.com" if settings.apns_use_sandbox else "api.push.apple.com"
     payload: dict[str, Any] = {
         "aps": {

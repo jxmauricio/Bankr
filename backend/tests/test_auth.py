@@ -133,7 +133,7 @@ def test_production_refuses_dev_placeholder_secrets():
             database_url="postgresql://x",
             session_jwt_secret="change-me-in-prod",
             token_encryption_key="k",
-            cors_allowed_origins="https://bankr.example.com",
+            cors_allowed_origins="https://centsio.example.com",
         ).check_production_ready()
 
     Settings(
@@ -141,5 +141,5 @@ def test_production_refuses_dev_placeholder_secrets():
         database_url="postgresql://x",
         session_jwt_secret="x" * 32,
         token_encryption_key="k",
-        cors_allowed_origins="https://bankr.example.com",
+        cors_allowed_origins="https://centsio.example.com",
     ).check_production_ready()

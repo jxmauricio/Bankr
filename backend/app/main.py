@@ -48,7 +48,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
                 scheduler.shutdown(wait=False)
 
 
-app = FastAPI(title="Bankr API", lifespan=lifespan)
+app = FastAPI(title="Centsio API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

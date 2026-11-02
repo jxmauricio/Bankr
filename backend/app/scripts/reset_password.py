@@ -51,7 +51,7 @@ def generate_temporary_password() -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Reset a Bankr user's password.")
+    parser = argparse.ArgumentParser(description="Reset a Centsio user's password.")
     parser.add_argument("email")
     parser.add_argument("--prompt", action="store_true", help="type the new password instead of generating one")
     args = parser.parse_args(argv)

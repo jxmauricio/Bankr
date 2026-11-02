@@ -1,12 +1,12 @@
 """Test fixtures.
 
-Uses a real local Postgres database (bankr_test), not sqlite/mocks -- the
+Uses a real local Postgres database (centsio_test), not sqlite/mocks -- the
 schema leans on Postgres-specific types (JSONB, UUID) so a lighter-weight
 substitute would test something different from what actually runs.
 Tables are truncated before every test rather than wrapped in a rollback,
 since app code under test calls db.commit() itself.
 
-Setup: createdb -O bankr bankr_test  (see backend/README.md)
+Setup: createdb -O centsio centsio_test  (see backend/README.md)
 """
 
 import os
@@ -18,7 +18,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 os.environ.setdefault(
-    "DATABASE_URL", "postgresql://bankr:bankr@localhost:5432/bankr_test"
+    "DATABASE_URL", "postgresql://centsio:centsio@localhost:5432/centsio_test"
 )
 os.environ.setdefault("SESSION_JWT_SECRET", "test-secret")
 os.environ.setdefault(

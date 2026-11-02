@@ -1,4 +1,4 @@
-"""Maps a raw aggregator category string to one of Bankr's default
+"""Maps a raw aggregator category string to one of Centsio's default
 categories, by key (seed_categories.DEFAULT_CATEGORIES: "restaurants_and_bars",
 "credit_card_payment"), so renaming a category never changes where anything lands.
 
@@ -6,7 +6,7 @@ Two-tier lookup against Plaid's PFC taxonomy (verified against
 https://plaid.com/documents/transactions-personal-finance-category-taxonomy.csv,
 not assumed, plus the v2 values seen in Plaid's sandbox):
 
-Bankr's categories are Monarch's (see seed_categories.py), which cut across
+Centsio's categories are Monarch's (see seed_categories.py), which cut across
 Plaid's primaries -- GENERAL_SERVICES alone lands in Auto Maintenance, Child
 Care, Education, Insurance and more -- so most detailed values are spelled
 out. Spending at a known software merchant (SOFTWARE_MERCHANTS) is Shopping
@@ -166,7 +166,7 @@ _LIABILITY_ACCOUNT_TYPES = {"credit", "loan"}
 def map_raw_category(
     raw_category: str | None, amount: float, account_type: str | None = None, merchant_name: str | None = None
 ) -> str:
-    """`amount` follows Bankr's internal convention: positive = money in.
+    """`amount` follows Centsio's internal convention: positive = money in.
     `raw_category` is expected to be a Plaid `detailed` PFC value (e.g.
     "FOOD_AND_DRINK_GROCERIES"), but a bare `primary` value works too --
     both resolve through the same two-tier lookup.

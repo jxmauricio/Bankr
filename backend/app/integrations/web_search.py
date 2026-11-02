@@ -96,7 +96,7 @@ class OpenRouterSearchClient:
         self,
         api_key: str,
         model: str,
-        app_name: str = "Bankr",
+        app_name: str = "Centsio",
         site_url: str = "",
         engine: str = "exa",
         mode: str | None = None,
@@ -142,7 +142,7 @@ def build_web_search_client() -> WebSearchClient | None:
     """Brave if its key is set, else OpenRouter's web plugin when the agent
     already runs on OpenRouter. None when neither is available --
     app/agent/tools.py's web_search degrades to a clear error result rather
-    than the app crashing at startup, same as the rest of Bankr's optional
+    than the app crashing at startup, same as the rest of Centsio's optional
     integrations."""
     from app.config import settings
 

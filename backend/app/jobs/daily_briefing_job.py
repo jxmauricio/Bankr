@@ -6,7 +6,7 @@ which items exist and writes their titles from the user's numbers; the model
 only writes one optional line above them. If it can't be reached the
 briefing is still saved, without that line.
 
-Items come from detection Bankr already does, plus a duplicate-charge check:
+Items come from detection Centsio already does, plus a duplicate-charge check:
   review        charges the pipeline couldn't place (Uncategorized), one per
                 merchant, with the classifier's cached guess when there is one
   unusual       get_unusual_transactions' outliers

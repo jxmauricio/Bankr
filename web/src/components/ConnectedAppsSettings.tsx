@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ApiError, fetchMcpConnections, revokeMcpConnection, type McpConnections } from "../lib/api";
 import { formatRelativeTime } from "../lib/format";
 
-/** Settings section: the URL to add Bankr to Claude or ChatGPT, and every connected app with Disconnect. */
+/** Settings section: the URL to add Centsio to Claude or ChatGPT, and every connected app with Disconnect. */
 export function ConnectedAppsSettings({ token }: { token: string }) {
   const [data, setData] = useState<McpConnections | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export function ConnectedAppsSettings({ token }: { token: string }) {
     <>
       <h3 className="mt-6 text-sm font-medium text-ink-soft">Connect to Claude or ChatGPT</h3>
       <p className="mt-2 text-sm text-ink-faint">
-        Add Bankr as a custom connector with this URL, then sign in and choose read only or read + propose
+        Add Centsio as a custom connector with this URL, then sign in and choose read only or read + propose
         changes. Proposed changes wait for you to confirm them here.
       </p>
       {data && (

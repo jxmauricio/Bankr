@@ -1,4 +1,4 @@
-"""Vendor-agnostic interface for the LLM behind Bankr's agent.
+"""Vendor-agnostic interface for the LLM behind Centsio's agent.
 
 Three backends implement this (see providers.py): OpenRouterAgentClient (the
 default -- routes to whatever model OPENROUTER_MODEL names), Anthropic's

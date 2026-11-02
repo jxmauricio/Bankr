@@ -1,4 +1,4 @@
-"""What Bankr remembers about the user: the list in Settings, and the
+"""What Centsio remembers about the user: the list in Settings, and the
 endpoint a confirmed "Remember this?" card in chat posts to."""
 
 from uuid import UUID

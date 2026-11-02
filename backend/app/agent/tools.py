@@ -642,8 +642,8 @@ def propose_goal(
 ) -> dict:
     """Draft a goal for the user to confirm in the chat UI.
 
-    Does not write -- Bankr only creates a Goal row after the user taps
-    Set goal on the card (POST /goals). Bankr tracks up to MAX_ACTIVE_GOALS
+    Does not write -- Centsio only creates a Goal row after the user taps
+    Set goal on the card (POST /goals). Centsio tracks up to MAX_ACTIVE_GOALS
     active goals; this tool reports remaining slots so the UI can add
     another card on the left instead of replacing.
     """
@@ -739,7 +739,7 @@ def propose_rule(
 
 
 def propose_memory(db: Session, user_id: UUID, text: str, kind: str = "other", replaces: str | None = None) -> dict:
-    """Draft a fact for Bankr to remember across conversations, for the user
+    """Draft a fact for Centsio to remember across conversations, for the user
     to confirm on a card. Checked like a saved one (length, room, no account
     numbers or credentials), but nothing is written until they confirm."""
     old = memory_service.find_fact(db, user_id, replaces) if replaces else None
@@ -841,7 +841,7 @@ def get_recent_transactions(db: Session, user_id: UUID, limit: int = 20) -> dict
     rows = (
         db.query(Transaction, Category.name)
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
-        .outerjoin(Category, Transaction.bankr_category_id == Category.id)
+        .outerjoin(Category, Transaction.category_id == Category.id)
         .filter(LinkedAccount.user_id == user_id, Transaction.is_split.is_(False))
         .order_by(Transaction.date.desc())
         .limit(limit)
@@ -871,7 +871,7 @@ def get_unusual_transactions(db: Session, user_id: UUID, stddev_threshold: float
     rows = (
         db.query(Transaction)
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
-        .join(Category, Transaction.bankr_category_id == Category.id)
+        .join(Category, Transaction.category_id == Category.id)
         .filter(
             LinkedAccount.user_id == user_id,
             Category.type == "expense",

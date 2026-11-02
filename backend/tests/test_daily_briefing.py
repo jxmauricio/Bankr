@@ -253,7 +253,7 @@ def test_recategorize_previews_then_applies_the_suggestion(client, db, user):
     assert done["summary"] == "Moved 2 charges from SQ *KOVA CAFE to Coffee Shops."
     db.expire_all()
     for txn_id in ("a", "b"):
-        assert (_row(db, txn_id).bankr_category_id, _row(db, txn_id).category_source) == (categories["coffee_shops"].id, "manual")
+        assert (_row(db, txn_id).category_id, _row(db, txn_id).category_source) == (categories["coffee_shops"].id, "manual")
     assert done["briefing"]["items"][0]["status"] == "done"
 
 

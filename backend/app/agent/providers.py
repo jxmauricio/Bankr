@@ -505,7 +505,7 @@ class OpenRouterAgentClient(OpenAICompatibleAgentClient):
         api_key: str,
         model: str,
         site_url: str = "",
-        app_name: str = "Bankr",
+        app_name: str = "Centsio",
         extended_thinking: bool = False,
         thinking_budget_tokens: int = 2048,
         provider_sort: str = "",

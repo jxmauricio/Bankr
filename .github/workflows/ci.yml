@@ -15,9 +15,9 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: bankr
-          POSTGRES_PASSWORD: bankr
-          POSTGRES_DB: bankr_test
+          POSTGRES_USER: centsio
+          POSTGRES_PASSWORD: centsio
+          POSTGRES_DB: centsio_test
         ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready

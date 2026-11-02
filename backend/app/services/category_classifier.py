@@ -13,7 +13,7 @@ and only those, get a second opinion, once per merchant:
 2. Ask Jev (TypeSafe AI's typed decision model) whether the results describe
    this same business, not another one sharing part of its name. If not,
    retry once with a looser query; if that fails too, drop the results.
-3. Ask Jev to pick one of Bankr's spending categories, each with a short
+3. Ask Jev to pick one of Centsio's spending categories, each with a short
    description, from the merchant's profile (bank text, visits, amounts,
    channel, place, card terminal) and whatever results survived step 2.
    The answer is one of our labels or an error, never prose to parse.
@@ -402,7 +402,7 @@ def classify_merchants(
         if answer.confidence is not None and answer.confidence < settings.jev_min_confidence:
             continue
         for txn in txns:
-            txn.bankr_category_id, txn.category_source = category.id, "classifier"
+            txn.category_id, txn.category_source = category.id, "classifier"
             changed += 1
     if len(pending) > limit:
         logger.info("category classifier: %d merchants left for a later sync", len(pending) - limit)

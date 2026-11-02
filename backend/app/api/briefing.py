@@ -56,7 +56,7 @@ def run_action(body: ActionRequest, user: User = Depends(get_current_user), db: 
 def item_help(
     item_key: str = Query(max_length=200), user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> dict:
-    """Where to cancel, and emails to copy. Bankr never sends them."""
+    """Where to cancel, and emails to copy. Centsio never sends them."""
     try:
         return actions.item_help(db, user.id, item_key, _search_client)
     except actions.ItemNotFound:

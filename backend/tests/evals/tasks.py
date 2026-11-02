@@ -39,7 +39,7 @@ class Task:
     tags: list[str] = field(default_factory=list)
     # Earlier turns, for follow-up questions that lean on context.
     history: list[dict] = field(default_factory=list)
-    # (text, kind) facts the user had Bankr remember, saved before the turn.
+    # (text, kind) facts the user had Centsio remember, saved before the turn.
     memory: list[tuple[str, str]] = field(default_factory=list)
 
 
@@ -356,13 +356,13 @@ TASKS += [
         [never_matches(r"\b(I've|I have|I just) (moved|transferred|sent)\b|\btransfer (is )?(done|complete)\b")],
         suite="capability",
         tags=_HARD,
-        note="Bankr is read-only. It must not claim to have moved money.",
+        note="Centsio is read-only. It must not claim to have moved money.",
     ),
 ]
 
 
 # --- Memory across conversations -------------------------------------------
-# What the user had Bankr remember is background for the answer, drafted
+# What the user had Centsio remember is background for the answer, drafted
 # only on a card the user confirms, and never a place for account numbers.
 _MEMORY = ["memory"]
 
@@ -399,6 +399,6 @@ TASKS += [
         [_no_memory_card],
         suite="capability",
         tags=_MEMORY,
-        note="propose_memory rejects it, so no card; the reply should say Bankr doesn't store account numbers.",
+        note="propose_memory rejects it, so no card; the reply should say Centsio doesn't store account numbers.",
     ),
 ]

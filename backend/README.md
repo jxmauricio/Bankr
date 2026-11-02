@@ -1,6 +1,6 @@
-# Bankr backend
+# Centsio backend
 
-FastAPI service behind the Bankr web app (`../web`). Holds every secret (Plaid
+FastAPI service behind the Centsio web app (`../web`). Holds every secret (Plaid
 access tokens, LLM API keys) and is the only thing that talks to Plaid and
 the agent's LLM backend — see
 `/Users/jxmauricio/.claude/plans/goal-pocket-financial-advisor-ancient-tome.md`
@@ -37,8 +37,8 @@ Requires a local Postgres. Quickest path with Homebrew:
 ```bash
 brew install postgresql@16
 brew services start postgresql@16
-createuser bankr && createdb -O bankr bankr
-psql -d postgres -c "ALTER USER bankr WITH PASSWORD 'bankr';"
+createuser centsio && createdb -O centsio centsio
+psql -d postgres -c "ALTER USER centsio WITH PASSWORD 'centsio';"
 ```
 
 ## Run
@@ -50,12 +50,12 @@ uvicorn app.main:app --reload
 
 ## Test
 
-Tests hit a real local Postgres (`bankr_test`), not sqlite — the schema uses
+Tests hit a real local Postgres (`centsio_test`), not sqlite — the schema uses
 Postgres-specific types, and aggregator calls are swapped for
 `tests/fake_aggregator.py` rather than mocked out entirely.
 
 ```bash
-createdb -O bankr bankr_test   # once
+createdb -O centsio centsio_test   # once
 pytest
 ```
 
@@ -67,19 +67,19 @@ Real-model agent evals live in `tests/evals/` and are skipped unless `RUN_EVALS=
   categories, goals, net_worth_snapshots, insight_logs, chat_messages,
   weekly_recaps, device_push_tokens)
 - `app/db/migrations/` — Alembic migrations
-- `app/db/seed_categories.py` — idempotently seeds Bankr's default categories
+- `app/db/seed_categories.py` — idempotently seeds Centsio's default categories
 - `app/auth.py`, `app/api/auth.py` — `POST /auth/signup` and `POST /auth/login`
   (bcrypt-hashed `password_hash` on `User`) for the web client, plus the
   original `POST /auth/apple` for iOS — all three converge on the same
   `issue_session_token`, so `get_current_user` doesn't care which one ran
 - `app/integrations/bank_aggregator.py` — aggregator-agnostic adapter interface
 - `app/integrations/plaid_client.py` — Plaid implementation of that interface
-- `app/mcp_server.py` — MCP server mounted at `/mcp` (see "Use Bankr from your own Claude")
+- `app/mcp_server.py` — MCP server mounted at `/mcp` (see "Use Centsio from your own Claude")
 - `app/mcp_oauth.py` — OAuth 2.1 authorization server for MCP connectors (Claude, ChatGPT): metadata, consent, tokens, connected apps
 - `app/services/proposal_service.py` + `app/api/proposals.py` — changes a write-scope MCP client proposes, pending until the user confirms
 - `app/api/deps.py` — `get_aggregator` dependency (swap for a fake in tests via `app.dependency_overrides`)
 - `app/services/crypto.py` — Fernet encryption for aggregator access tokens at rest
-- `app/services/category_mapper.py` — raw aggregator category → Bankr `Category`
+- `app/services/category_mapper.py` — raw aggregator category → Centsio `Category`
 - `app/services/sync_service.py` — pulls accounts+transactions, upserts them, snapshots net worth
 - `app/services/goal_service.py` — goal creation + progress recompute (called from sync)
 - `app/services/dashboard_service.py` — itemized/rollup queries for the dashboard
@@ -158,12 +158,12 @@ brand-new goal would instantly look "behind pace" (see `get_goal_progress`
 in `app/agent/tools.py`). Neither has been exercised against a real LLM API
 yet.
 
-## Use Bankr from your own Claude (MCP)
+## Use Centsio from your own Claude (MCP)
 
 The backend doubles as a remote [MCP](https://modelcontextprotocol.io) server
 at `POST /mcp` (Streamable HTTP), so you can ask Claude or ChatGPT about your
-Bankr data, without the in-app chat. Clients connect with OAuth 2.1 (the MCP
-authorization spec, rev. 2026-07-28): the user signs in to Bankr on a consent
+Centsio data, without the in-app chat. Clients connect with OAuth 2.1 (the MCP
+authorization spec, rev. 2026-07-28): the user signs in to Centsio on a consent
 page and picks one of two levels of access.
 
 | Scope | Tools |
@@ -172,13 +172,13 @@ page and picks one of two levels of access.
 | `read write` (Read + propose changes) | the above, plus `propose_goal`, `propose_rule`, `propose_budget_move`, `propose_recategorization` |
 
 The write tools never change anything. Each stores a pending proposal and
-tells the client the user has to confirm it in Bankr; the web app shows a
+tells the client the user has to confirm it in Centsio; the web app shows a
 "to review" badge in the header where the user confirms or dismisses them
 (`GET /proposals`, `POST /proposals/{id}/confirm`). There is no investment
 or trade tool at either level. `calculate` and `web_search` are left out
 because the client has its own.
 
-**Server URL:** `<PUBLIC_API_URL>/mcp`, e.g. `https://api.bankr.app/mcp`, or
+**Server URL:** `<PUBLIC_API_URL>/mcp`, e.g. `https://api.centsio.app/mcp`, or
 `http://localhost:8000/mcp` locally. Settings → "Connect to Claude or
 ChatGPT" in the web app shows it with a copy button, and lists connected
 apps with a Disconnect button (revokes the grant: the client's next request
@@ -186,26 +186,26 @@ gets a 401).
 
 ### Claude (claude.ai, Desktop, mobile)
 
-Claude's servers connect to Bankr, so the backend must be reachable over
+Claude's servers connect to Centsio, so the backend must be reachable over
 public HTTPS (deploy it, or `ngrok http 8000` and set `PUBLIC_API_URL` to the
 tunnel URL and `WEB_APP_URL` to where the web app runs).
 
 1. Settings → Connectors → **Add custom connector**.
-2. Name it Bankr and paste the server URL. Leave the OAuth client ID and
+2. Name it Centsio and paste the server URL. Leave the OAuth client ID and
    secret empty: Claude identifies itself with its Client ID Metadata
    Document (or registers itself through DCR).
-3. Click **Connect**, sign in to Bankr, pick Read only or Read + propose
+3. Click **Connect**, sign in to Centsio, pick Read only or Read + propose
    changes, and Allow.
 
 ### Claude Code
 
 ```bash
-claude mcp add --transport http bankr http://localhost:8000/mcp
+claude mcp add --transport http centsio http://localhost:8000/mcp
 ```
 
-Then run `/mcp` in Claude Code, pick bankr and authenticate: the browser
+Then run `/mcp` in Claude Code, pick centsio and authenticate: the browser
 opens the consent page. Claude Code listens on a localhost port that changes
-each time; Bankr accepts any port for loopback redirects (RFC 8252).
+each time; Centsio accepts any port for loopback redirects (RFC 8252).
 
 ### ChatGPT
 
@@ -222,7 +222,7 @@ revoked individually):
 
 ```bash
 curl -X POST http://localhost:8000/auth/mcp-token -H "Authorization: Bearer $SESSION_TOKEN"
-claude mcp add --transport http bankr http://localhost:8000/mcp --header "Authorization: Bearer $MCP_TOKEN"
+claude mcp add --transport http centsio http://localhost:8000/mcp --header "Authorization: Bearer $MCP_TOKEN"
 ```
 
 ### How the OAuth server works
@@ -306,7 +306,7 @@ Two other providers remain available, no code changes needed — just flip
 `POST /webhooks/plaid` (`app/api/webhooks.py`) makes sync push-driven
 instead of only running when a client calls `/linked-accounts` or
 `/linked-accounts/sync`. It's a plain unauthenticated route -- the caller
-is Plaid, not a Bankr user -- secured instead by verifying Plaid's own
+is Plaid, not a Centsio user -- secured instead by verifying Plaid's own
 signature over the raw request body:
 
 - `PlaidClient.verify_webhook_signature` implements Plaid's documented
@@ -353,7 +353,7 @@ don't push at someone already looking at Home.
   finished week without waiting for Sunday (`--force` re-pushes)
 
 The iOS Simulator never receives real APNs. To see the banner there:
-`xcrun simctl push booted com.jxmauricio.bankr mobile/scripts/weekly-recap.push.json`
+`xcrun simctl push booted com.jxmauricio.centsio mobile/scripts/weekly-recap.push.json`
 (the app must have been granted notification permission). Other insight
 types (budget overspend, unusual spend, …) are still in-app only.
 

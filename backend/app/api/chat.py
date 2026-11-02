@@ -521,7 +521,7 @@ def chat_stream(
             logger.info("Streaming chat turn cancelled by the client")
         except Exception:
             logger.exception("Streaming chat turn failed")
-            events.put(("error", {"message": "Bankr couldn't respond. Try again."}))
+            events.put(("error", {"message": "Centsio couldn't respond. Try again."}))
         finally:
             events.put(None)
 

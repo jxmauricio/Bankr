@@ -760,7 +760,7 @@ export interface WeeklyRecap {
   headline: string;
   /** One line under the headline: spending vs usual and the first savings goal. */
   teaser: string;
-  /** Bankr's take, written by the model; null when it couldn't be reached. */
+  /** Centsio's take, written by the model; null when it couldn't be reached. */
   summary: string | null;
   facts: RecapFacts;
   created_at: string;
@@ -862,7 +862,7 @@ export interface TransactionRecord {
   category_type?: "income" | "expense" | "transfer" | null;
 }
 
-/** Bankr asking which meaning was intended; tapping a choice sends its label. */
+/** Centsio asking which meaning was intended; tapping a choice sends its label. */
 export interface Clarify {
   question: string;
   choices: { label: string }[];
@@ -1056,7 +1056,7 @@ export async function streamChatMessage(
       else if (event === "error") throw new ApiError(500, payload.message);
     }
   }
-  throw new ApiError(500, "Bankr couldn't respond. Try again.");
+  throw new ApiError(500, "Centsio couldn't respond. Try again.");
 }
 
 export interface ConversationSummary {

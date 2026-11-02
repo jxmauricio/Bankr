@@ -35,8 +35,8 @@ export function NotificationSettings({ token }: { token: string }) {
       <h3 className="mt-6 text-sm font-medium text-ink-soft">Push notifications</h3>
       <p className="mt-1 text-xs text-ink-faint">
         {prefs?.device_count
-          ? `Sent to the Bankr app on ${prefs.device_count === 1 ? "your phone" : `${prefs.device_count} phones`}.`
-          : "Sent to the Bankr phone app once you allow notifications there."}
+          ? `Sent to the Centsio app on ${prefs.device_count === 1 ? "your phone" : `${prefs.device_count} phones`}.`
+          : "Sent to the Centsio phone app once you allow notifications there."}
       </p>
       <ul className="mt-2 space-y-1">
         {KINDS.map(({ key, label, detail }) => (

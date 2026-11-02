@@ -6,6 +6,7 @@ import { MemorySettings } from "./MemorySettings";
 import { NotificationSettings } from "./NotificationSettings";
 import { ConnectedAppsSettings } from "./ConnectedAppsSettings";
 import { RulesSettings } from "./RulesSettings";
+import { PrivacySettings } from "./PrivacySettings";
 import { ApiError, deleteAccount, disconnectBank, fetchLinkedBanks, type LinkedBank } from "../lib/api";
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -119,6 +120,8 @@ export function SettingsModal({
           </button>
         </div>
 
+        <PrivacySettings />
+
         <h3 className="mt-5 text-sm font-medium text-ink-soft">Connected banks</h3>
         {banks === null && !bankError && <p className="mt-2 text-sm text-ink-faint">Loading…</p>}
         {banks?.length === 0 && <p className="mt-2 text-sm text-ink-faint">No banks connected.</p>}
@@ -150,7 +153,7 @@ export function SettingsModal({
               {confirmingBankId === bank.id && (
                 <div className="mt-3 rounded-xl bg-raised p-3">
                   <p className="text-sm text-ink-soft">
-                    This removes <BankName bank={bank.institution_name} /> and its transactions from Bankr. You can link it again later.
+                    This removes <BankName bank={bank.institution_name} /> and its transactions from Centsio. You can link it again later.
                   </p>
                   <div className="mt-3 flex gap-2">
                     <button
@@ -212,7 +215,7 @@ export function SettingsModal({
           {!deleting ? (
             <>
               <p className="mt-2 text-sm text-ink-faint">
-                Permanently deletes your Bankr account, goals, chat history and every connected bank.
+                Permanently deletes your Centsio account, goals, chat history and every connected bank.
               </p>
               <button
                 type="button"

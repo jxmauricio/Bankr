@@ -1,6 +1,6 @@
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 
-// Stroke icons from the "Bankr Mobile" design (and the web app's ViewSwitcher).
+// Stroke icons from the "Centsio Mobile" design (and the web app's ViewSwitcher).
 const ICONS = {
   menu: <Path d="M4 7h16M4 12h16M4 17h10" />,
   bell: (

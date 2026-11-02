@@ -41,7 +41,7 @@ import {
 /**
  * Search, a row of filter chips (each opens its sheet), one-tap quick filters,
  * a summary of what's shown, then the rows by day. Ported from the
- * "Transactions · filter chips" board in the Bankr Mobile design.
+ * "Transactions · filter chips" board in the Centsio Mobile design.
  */
 export default function TransactionsScreen() {
   const styles = useStyles();

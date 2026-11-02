@@ -1,7 +1,7 @@
 """Inbound webhooks from bank aggregators.
 
 Unlike every other route in this API, the caller here is Plaid, not a
-Bankr user -- there's no session token, and the request is authenticated
+Centsio user -- there's no session token, and the request is authenticated
 by verifying Plaid's own signature over the raw body instead (see
 PlaidClient.verify_webhook_signature). That's also why this reads
 `request.body()` directly rather than taking a Pydantic model: the

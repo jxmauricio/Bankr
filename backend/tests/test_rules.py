@@ -52,15 +52,15 @@ def test_rule_applies_to_history_and_new_syncs(client, db, user):
     assert r.json()["applied_to"] == 1
     assert r.json()["set_category"] == "Entertainment & Recreation"
     db.expire_all()
-    assert _txn(db, "r1").bankr_category_id == entertainment.id
+    assert _txn(db, "r1").category_id == entertainment.id
     assert _txn(db, "r1").merchant_name == "Ramen"
 
     # A re-sync re-maps r1 from Plaid's category, then the rule wins again;
     # a brand-new charge gets the rule too.
     fake.transactions_by_account["acc_credit"].append(_ramen("r2", date(2026, 8, 9)))
     _sync(db, user, fake)
-    assert _txn(db, "r1").bankr_category_id == entertainment.id
-    assert _txn(db, "r2").bankr_category_id == entertainment.id
+    assert _txn(db, "r1").category_id == entertainment.id
+    assert _txn(db, "r2").category_id == entertainment.id
     assert _txn(db, "r2").merchant_name == "Ramen"
     assert _txn(db, "r2").original_merchant_name == "Ramen Spot"
 
@@ -76,7 +76,7 @@ def test_rule_never_overrides_a_manual_category(client, db, user):
     )
     assert r.json()["applied_to"] == 0
     _sync(db, user, fake)
-    assert _txn(db, "r1").bankr_category_id == shopping.id
+    assert _txn(db, "r1").category_id == shopping.id
 
 
 def test_amount_bounds_and_priority(client, db, user):
@@ -91,8 +91,8 @@ def test_amount_bounds_and_priority(client, db, user):
         json={"merchant_contains": "ramen", "amount_min": 100, "set_category_id": str(travel.id), "priority": 5},
     )
     _sync(db, user, fake)
-    assert _txn(db, "small").bankr_category_id == entertainment.id
-    assert _txn(db, "big").bankr_category_id == travel.id
+    assert _txn(db, "small").category_id == entertainment.id
+    assert _txn(db, "big").category_id == travel.id
 
 
 def test_rule_crud_and_validation(client, db, user):

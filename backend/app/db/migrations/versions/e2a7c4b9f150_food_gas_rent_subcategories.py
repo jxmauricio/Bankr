@@ -42,8 +42,8 @@ def downgrade() -> None:
             WHERE is_system_default AND name IN ({", ".join(f"'{n}'" for n in _SUBCATEGORIES)})
               AND parent_category_id IS NOT NULL
         )
-        UPDATE transactions t SET bankr_category_id = sub.parent_category_id
-        FROM sub WHERE t.bankr_category_id = sub.id
+        UPDATE transactions t SET category_id = sub.parent_category_id
+        FROM sub WHERE t.category_id = sub.id
         """
     )
     for table, column in (

@@ -21,7 +21,7 @@ export function ProfilePage() {
     <div className="min-h-screen px-6 py-12">
       <main className="mx-auto max-w-2xl">
         <a href="/" className="text-sm text-ink-soft transition-colors hover:text-ink">
-          ← Back to Bankr
+          ← Back to Centsio
         </a>
         <h1 className="mt-6 font-display text-3xl font-semibold tracking-tight text-ink">My profile</h1>
         <div className="mt-8">

@@ -1,5 +1,5 @@
 """OAuth 2.1 for the MCP connector, so Claude and ChatGPT can connect to /mcp
-as a custom connector: the user signs in to Bankr, picks read or read +
+as a custom connector: the user signs in to Centsio, picks read or read +
 write on a consent page, and can revoke the connection in Settings.
 
 Follows the MCP authorization spec (rev. 2026-07-28):
@@ -109,7 +109,7 @@ def protected_resource_metadata(request: Request) -> dict:
         "authorization_servers": [api_base(request)],
         "scopes_supported": list(SCOPES),
         "bearer_methods_supported": ["header"],
-        "resource_name": "Bankr",
+        "resource_name": "Centsio",
         "resource_documentation": settings.web_app_origin,
     }
 
@@ -256,7 +256,7 @@ def register_client(body: RegisterRequest, db: Session = Depends(get_db)):
         return _oauth_error("invalid_client_metadata", "only authorization_code and refresh_token are supported")
 
     client = OAuthClient(
-        client_id="bankr_" + secrets.token_urlsafe(24),
+        client_id="centsio_" + secrets.token_urlsafe(24),
         client_name=(body.client_name or "").strip()[:80] or None,
         redirect_uris=uris,
     )

@@ -37,7 +37,7 @@ struct LinkBankAccountView: View {
                     .foregroundStyle(.tint)
                 Text("Link your bank")
                     .font(.title2.bold())
-                Text("Bankr reads your balances and transactions to build your dashboard and track your goal.")
+                Text("Centsio reads your balances and transactions to build your dashboard and track your goal.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -85,7 +85,7 @@ struct LinkBankAccountView: View {
     private func fetchLinkToken() async {
         guard let token = session.sessionToken else { return }
         do {
-            let response = try await BankrAPIClient.shared.fetchLinkToken(sessionToken: token)
+            let response = try await CentsioAPIClient.shared.fetchLinkToken(sessionToken: token)
             buildSession(linkToken: response.linkToken)
         } catch {
             stage = .error("Couldn't start bank linking. Check your connection and try again.")
@@ -121,7 +121,7 @@ struct LinkBankAccountView: View {
         guard let token = session.sessionToken else { return }
         stage = .linking
         do {
-            _ = try await BankrAPIClient.shared.linkAccount(publicToken: publicToken, sessionToken: token)
+            _ = try await CentsioAPIClient.shared.linkAccount(publicToken: publicToken, sessionToken: token)
             onComplete()
         } catch {
             stage = .error("Linked, but syncing failed. Pull to retry from the dashboard.")

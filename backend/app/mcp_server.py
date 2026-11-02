@@ -1,5 +1,5 @@
-"""Bankr as an MCP server, so users can connect their own Claude (or any MCP
-client) to their Bankr data instead of using the in-app chat agent.
+"""Centsio as an MCP server, so users can connect their own Claude (or any MCP
+client) to their Centsio data instead of using the in-app chat agent.
 
 Mounted on the main FastAPI app at POST /mcp (Streamable HTTP, stateless).
 Auth is an OAuth 2.1 access token (app/mcp_oauth.py: how Claude and ChatGPT
@@ -12,7 +12,7 @@ Two scopes:
   app/agent/tools.py, which both share): banking/spending/goal data.
 - write (read + write): also the propose_* tools. They never change
   anything: each stores a pending proposal (app/services/proposal_service.py)
-  that the user has to confirm in Bankr, just as the in-app agent's
+  that the user has to confirm in Centsio, just as the in-app agent's
   proposals wait for a tap on a confirm card.
 Left out on purpose: calculate / web_search (the connecting client already
 has its own). As with the in-app agent, there is no investment or
@@ -40,14 +40,14 @@ from app.mcp_oauth import MCP_PATH, READ, WRITE, McpCaller
 from app.services import proposal_service
 
 INSTRUCTIONS = (
-    "Access to the connected user's Bankr personal-finance data: net worth, "
+    "Access to the connected user's Centsio personal-finance data: net worth, "
     "spending, income, savings/debt goals, and transactions. Amounts are USD. Ground every "
-    "figure in a tool result. Bankr does not provide investment advice, and neither should you "
+    "figure in a tool result. Centsio does not provide investment advice, and neither should you "
     "based on this data."
 )
 WRITE_INSTRUCTIONS = (
     " The propose_* tools never change anything themselves: each saves a proposal the user must "
-    "confirm in the Bankr app. After calling one, tell the user it's waiting for them in Bankr; "
+    "confirm in the Centsio app. After calling one, tell the user it's waiting for them in Centsio; "
     "never say the change is made."
 )
 
@@ -68,8 +68,8 @@ Window = Literal[
     "last_3_months",
 ]
 
-_current_user_id: ContextVar[UUID] = ContextVar("bankr_mcp_user_id")
-_current_caller: ContextVar[McpCaller] = ContextVar("bankr_mcp_caller")
+_current_user_id: ContextVar[UUID] = ContextVar("centsio_mcp_user_id")
+_current_caller: ContextVar[McpCaller] = ContextVar("centsio_mcp_caller")
 
 
 @contextmanager
@@ -95,7 +95,7 @@ def _propose(kind: str, draft: dict, payload: dict | None = None) -> dict:
 
 def build_mcp_server(write: bool = False) -> FastMCP:
     mcp = FastMCP(
-        "Bankr",
+        "Centsio",
         instructions=INSTRUCTIONS + (WRITE_INSTRUCTIONS if write else ""),
         stateless_http=True,
         json_response=True,
@@ -203,9 +203,9 @@ def _add_write_tools(mcp: FastMCP) -> None:
         category: str | None = None,
         window: Literal["this_week", "this_month", "this_year", "last_7_days", "last_30_days", "last_90_days"] | None = None,
     ) -> dict:
-        """Propose a goal for the user to confirm in Bankr: "save" toward target_amount (optional
+        """Propose a goal for the user to confirm in Centsio: "save" toward target_amount (optional
         target_date YYYY-MM-DD and a name like "Emergency fund"), or "track_spending" in a category
-        (optional cap as target_amount). Changes nothing until the user confirms in the Bankr app."""
+        (optional cap as target_amount). Changes nothing until the user confirms in the Centsio app."""
         with _session() as db:
             draft = tools.propose_goal(
                 db, _current_user_id.get(), type=type, target_amount=target_amount, target_date=target_date,
@@ -220,7 +220,7 @@ def _add_write_tools(mcp: FastMCP) -> None:
     def propose_rule(merchant: str, category: str, rename_to: str | None = None) -> dict:
         """Propose a rule "always put transactions whose merchant contains <merchant> in <category>"
         (optionally renaming the merchant), also applied to past transactions. Changes nothing until
-        the user confirms in the Bankr app."""
+        the user confirms in the Centsio app."""
         with _session() as db:
             draft = tools.propose_rule(db, _current_user_id.get(), merchant, category, rename_to)
         return _propose("rule", draft)
@@ -229,7 +229,7 @@ def _add_write_tools(mcp: FastMCP) -> None:
     def propose_budget_move(from_line: str, to_line: str, amount: float, month: str | None = None) -> dict:
         """Propose moving budget money between two lines (a category, or "Flexible") for a month
         (YYYY-MM, default this month), e.g. to cover overspending. Changes nothing until the user
-        confirms in the Bankr app."""
+        confirms in the Centsio app."""
         with _session() as db:
             draft = tools.propose_budget_move(db, _current_user_id.get(), from_line, to_line, amount, month)
         return _propose("budget_move", draft)
@@ -237,7 +237,7 @@ def _add_write_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     def propose_recategorization(transaction_id: str, category: str) -> dict:
         """Propose putting one transaction (its id from find_transactions) in another category.
-        Changes nothing until the user confirms in the Bankr app."""
+        Changes nothing until the user confirms in the Centsio app."""
         with _session() as db:
             draft = proposal_service.draft_recategorization(db, _current_user_id.get(), transaction_id, category)
         return _propose("recategorize", draft)
@@ -321,7 +321,7 @@ class McpEndpoint:
                 more = message.get("more_body", False)
             if _calls_write_tool(body):
                 response = _challenge(
-                    request, 403, "This connection is read-only. Reconnect Bankr with read + write to propose changes.",
+                    request, 403, "This connection is read-only. Reconnect Centsio with read + write to propose changes.",
                     error="insufficient_scope",
                 )
                 await response(scope, receive, send)

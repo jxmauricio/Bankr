@@ -11,7 +11,7 @@ import { makeStyles, useColors } from "@/theme/theme";
 import type { Colors } from "@/theme/tokens";
 import { ErrorState, Icon, Loading, PageHeader, SectionHeader, Text, type IconName } from "@/ui";
 
-/** Everything Bankr told you about, newest first: recaps, insights and alerts. */
+/** Everything Centsio told you about, newest first: recaps, insights and alerts. */
 export default function NotificationsScreen() {
   const styles = useStyles();
   const { insights, unreadCount, loaded, failed, reload, markAllRead } = useNotifications();

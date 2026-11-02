@@ -108,13 +108,13 @@ function describe(p: ActionProposal): { eyebrow: string; title: ReactNode; detai
       };
     case "memory":
       return {
-        eyebrow: p.replaces_id ? "UPDATE WHAT BANKR REMEMBERS?" : "REMEMBER THIS?",
+        eyebrow: p.replaces_id ? "UPDATE WHAT CENTSIO REMEMBERS?" : "REMEMBER THIS?",
         title: p.text,
         detail: p.replaces_text
           ? `Replaces “${p.replaces_text}”. You can change this anytime in Settings.`
-          : `${p.fact_kind_label}. Bankr will keep this in mind across chats; change it anytime in Settings.`,
+          : `${p.fact_kind_label}. Centsio will keep this in mind across chats; change it anytime in Settings.`,
         confirm: p.replaces_id ? "Update" : "Remember",
-        done: "Got it — Bankr will remember that.",
+        done: "Got it — Centsio will remember that.",
       };
   }
 }

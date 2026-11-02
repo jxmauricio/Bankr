@@ -1,4 +1,4 @@
-merchant,count,example_amount,payment_channel,plaid_category,bankr_today,expected,label_source
+merchant,count,example_amount,payment_channel,plaid_category,centsio_today,expected,label_source
 Hangar,31,44.0,in store,FOOD_AND_DRINK_RESTAURANT,Restaurants,Health,you
 Obsidian,24,5.0,in store,GENERAL_SERVICES_OTHER_GENERAL_SERVICES,Other,Software,you (notebook app)
 BILT CARD HOUSING PPD ID: 1844372402,14,2.49,online,RENT_AND_UTILITIES_RENT,Rent & Housing,?,

@@ -24,7 +24,7 @@ export function AuthPage() {
       const response = mode === "signup" ? await signUp(email, password, inviteCode) : await login(email, password);
       signIn(response.session_token);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't reach Bankr. Check your connection.");
+      setError(err instanceof ApiError ? err.message : "Couldn't reach Centsio. Check your connection.");
     } finally {
       setIsBusy(false);
     }
@@ -41,7 +41,7 @@ export function AuthPage() {
       <section className="flex min-w-0 flex-[1_1_480px] flex-col justify-between gap-8 border-line px-6 pb-0 pt-10 sm:gap-12 sm:px-14 sm:py-12 min-[960px]:border-r">
         <div className="flex items-baseline gap-2.5">
           <span className="font-display text-[26px] font-bold tracking-tight text-ink">
-            Bankr
+            Centsio
           </span>
           <span className="font-mono text-[10px] tracking-[0.14em] text-signal">PRIVATE BETA</span>
         </div>
@@ -174,7 +174,7 @@ export function AuthPage() {
             <a href="/privacy" className="text-signal hover:text-signal-hi">
               Privacy notice
             </a>
-            . Bankr is in private beta.
+            . Centsio is in private beta.
           </p>
         </form>
       </section>

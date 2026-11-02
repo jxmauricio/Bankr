@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
-const STORAGE_KEY = "bankr_theme";
+const STORAGE_KEY = "centsio_theme";
 
 export type Theme = "light" | "dark";
 

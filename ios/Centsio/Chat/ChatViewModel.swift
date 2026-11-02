@@ -33,7 +33,7 @@ final class ChatViewModel: ObservableObject {
         }
 
         do {
-            let response = try await BankrAPIClient.shared.streamChatMessage(
+            let response = try await CentsioAPIClient.shared.streamChatMessage(
                 text, conversationId: conversationId, sessionToken: sessionToken
             ) { [weak self] label in
                 self?.statusLabel = label
@@ -41,7 +41,7 @@ final class ChatViewModel: ObservableObject {
             conversationId = response.conversationId
             messages.append(ChatBubble(role: "assistant", text: response.reply))
         } catch {
-            errorMessage = "Couldn't reach Bankr. Try again."
+            errorMessage = "Couldn't reach Centsio. Try again."
         }
     }
 }

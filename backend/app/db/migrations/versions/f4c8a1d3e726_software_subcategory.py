@@ -35,7 +35,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Everything on Software goes back to General Services, then it goes.
     for table, column in (
-        ("transactions", "bankr_category_id"),
+        ("transactions", "category_id"),
         ("rules", "set_category_id"),
         ("merchant_category_guesses", "category_id"),
         ("recurring_series", "category_id"),

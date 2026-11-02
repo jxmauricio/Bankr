@@ -1,4 +1,4 @@
-split,merchant,merchant_key,count,example_amount,payment_channel,plaid_category,plaid_confidence,plaid_bankr,pipeline_bankr,pipeline_confidence,previous_label,expected_category,notes
+split,merchant,merchant_key,count,example_amount,payment_channel,plaid_category,plaid_confidence,plaid_centsio,pipeline_centsio,pipeline_confidence,previous_label,expected_category,notes
 tuning,Hangar,hangar,31,44.0,in store,FOOD_AND_DRINK_RESTAURANT,LOW,Restaurants & Bars,,,Health,,
 tuning,Obsidian,obsidian,24,5.0,in store,GENERAL_SERVICES_OTHER_GENERAL_SERVICES,LOW,Shopping,,,Software,,
 tuning,BILT CARD HOUSING PPD ID: 1844372402,bilt card housing ppd id: 1844372402,14,2.49,online,RENT_AND_UTILITIES_RENT,LOW,Rent,,,?,,

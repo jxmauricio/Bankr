@@ -1,7 +1,8 @@
 import { useEffect, useState, type PointerEvent } from "react";
 import { fetchSpendingPace, type SpendingPace } from "../lib/api";
+import { mask } from "../lib/privacy";
 
-const whole = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
+const whole = (n: number) => mask("$" + Math.round(n).toLocaleString("en-US"));
 
 /** Rounded-up axis max with a step that gives 4–6 gridlines. */
 function niceMax(value: number): { max: number; step: number } {

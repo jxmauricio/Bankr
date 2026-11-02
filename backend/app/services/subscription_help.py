@@ -1,5 +1,5 @@
 """Help with a subscription or a charge the user wants back: where to cancel,
-and an email they can copy. Bankr never cancels or sends anything itself.
+and an email they can copy. Centsio never cancels or sends anything itself.
 
 The cancel page comes from a short curated list first. A merchant it doesn't
 know is looked up once with web search (only the merchant's name is ever

@@ -75,7 +75,7 @@ def test_drains_every_page(monkeypatch):
     assert result.next_cursor == "c3"
     assert api.cursors == [None, "c1", "c2"]
     first = result.added[0]
-    assert first.amount == -12.5  # flipped to Bankr's money-in-positive convention
+    assert first.amount == -12.5  # flipped to Centsio's money-in-positive convention
     assert first.raw_category == "TRANSPORTATION_GAS"
 
     # PFCv2 requested explicitly on every page -- category_mapper.py's

@@ -1,4 +1,4 @@
-# Bankr
+# Centsio
 
 An AI-first personal finance app: link your bank accounts, track net worth,
 set a goal, and ask a chat agent about your money instead of digging through
@@ -31,8 +31,8 @@ pip install -r requirements-dev.txt   # runtime deps + pytest
 cp .env.example .env        # then fill in tokens, see below
 # local Postgres, if you don't already have one:
 brew install postgresql@16 && brew services start postgresql@16
-createuser bankr && createdb -O bankr bankr
-psql -d postgres -c "ALTER USER bankr WITH PASSWORD 'bankr';"
+createuser centsio && createdb -O centsio centsio
+psql -d postgres -c "ALTER USER centsio WITH PASSWORD 'centsio';"
 alembic upgrade head
 uvicorn app.main:app --reload    # http://localhost:8000
 
@@ -130,7 +130,7 @@ lint/build on every PR.
 | `DATABASE_URL` | Prod Supabase *Session pooler* URL (see `backend/.env.example`). |
 | `SESSION_JWT_SECRET` | `openssl rand -hex 32` -- never reuse the dev value. |
 | `TOKEN_ENCRYPTION_KEY` | Fresh Fernet key (command in "Tokens developers need"). Losing it means re-linking every bank. |
-| `CORS_ALLOWED_ORIGINS` | Comma-separated web origins, e.g. `https://bankr.vercel.app`. |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated web origins, e.g. `https://centsio.vercel.app`. |
 | `SIGNUP_INVITE_CODES` | Comma-separated codes; blank means open signup. |
 | `PLAID_CLIENT_ID` / `PLAID_SECRET` / `PLAID_ENV` | Production keys + `production` once Plaid approves; `sandbox` for a staging pass first. |
 | `PLAID_WEBHOOK_URL` | `https://<render-host>/webhooks/plaid` |

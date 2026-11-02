@@ -1,4 +1,4 @@
-"""Bankr's conversational agent: tool-use loop over a swappable LLM backend.
+"""Centsio's conversational agent: tool-use loop over a swappable LLM backend.
 
 Grounding pattern: the model never receives raw transactions or a financial
 dump in its context. It calls narrow tools (app/agent/tools.py) that query
@@ -45,7 +45,7 @@ from app.services import money_query as mq
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are Bankr's financial insights assistant. You help young \
+SYSTEM_PROMPT = """You are Centsio's financial insights assistant. You help young \
 professionals understand their spending, income, and progress toward up to \
 five savings and spending-tracker goals they've set.
 
@@ -427,7 +427,7 @@ TOOL_DEFINITIONS = [
     ToolSpec(
         name="get_recurring",
         description=(
-            "Recurring bills, subscriptions and paychecks Bankr has detected: upcoming charges with dates "
+            "Recurring bills, subscriptions and paychecks Centsio has detected: upcoming charges with dates "
             "and amounts, monthly totals of confirmed ones, and price changes. Use for \"what bills are "
             "coming up\", \"how much do I pay in subscriptions\", \"did anything go up\"."
         ),
@@ -490,7 +490,7 @@ TOOL_DEFINITIONS = [
     ToolSpec(
         name="propose_memory",
         description=(
-            "Draft a durable fact about the user for Bankr to remember across conversations (pay schedule, "
+            "Draft a durable fact about the user for Centsio to remember across conversations (pay schedule, "
             "priorities, household, preferences). The user confirms on a card; nothing is saved until then. "
             "Never for account or card numbers, passwords, or ID numbers."
         ),
@@ -901,7 +901,7 @@ def _date_context(db: Session, user_id: UUID) -> str:
 
 
 def _memory_context(db: Session, user_id: UUID) -> str:
-    """What the user has had Bankr remember, rebuilt every turn. Goes after
+    """What the user has had Centsio remember, rebuilt every turn. Goes after
     the static prompt so it never breaks the cached prefix. The facts are
     the user's own notes: quoted as data, not followed as instructions."""
     facts = memory_service.user_facts(db, user_id)

@@ -60,7 +60,7 @@ export function LinkBankPage({ onLinked }: { onLinked: () => void }) {
         <section className="flex min-w-0 flex-[1_1_420px] flex-col gap-7">
           <StepEyebrow>STEP 1 OF 2</StepEyebrow>
           <h1 className="font-display text-[34px] font-normal leading-[1.08] tracking-[-0.02em] text-ink sm:text-[46px]">
-            Link the accounts you want Bankr to read.
+            Link the accounts you want Centsio to read.
           </h1>
           <p className="max-w-[480px] text-base leading-relaxed text-ink-soft">
             Checking, savings and credit cards give the clearest picture. You can add or remove banks later in Settings.
@@ -94,15 +94,15 @@ export function LinkBankPage({ onLinked }: { onLinked: () => void }) {
           aria-label="How your data is protected"
           className="flex min-w-0 flex-[1_1_340px] flex-col gap-[22px] rounded-3xl border border-line bg-surface p-7"
         >
-          <h2 className="font-display text-[22px] font-medium text-ink">What Bankr can and can’t do</h2>
+          <h2 className="font-display text-[22px] font-medium text-ink">What Centsio can and can’t do</h2>
           <Assurance icon={<EyeIcon />} title="Read-only">
-            Bankr sees balances and transactions. It can’t move money, pay bills or trade.
+            Centsio sees balances and transactions. It can’t move money, pay bills or trade.
           </Assurance>
           <Assurance icon={<LockIcon size={22} />} title="Your bank login stays with Plaid">
-            You sign in to your bank inside Plaid. Bankr never sees your bank password.
+            You sign in to your bank inside Plaid. Centsio never sees your bank password.
           </Assurance>
           <Assurance icon={<MaskIcon />} title="Account numbers stay masked">
-            Everywhere in Bankr you’ll only see the last four digits.
+            Everywhere in Centsio you’ll only see the last four digits.
           </Assurance>
           <Assurance icon={<TrashIcon />} title="Leave anytime">
             Unlink a bank or delete your account and data from Settings.

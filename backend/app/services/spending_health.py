@@ -1,6 +1,6 @@
 """Spending health: average category spend as a share of income, scored
 against widely cited rules of thumb (HUD housing, 50/30/20, common budget
-shares). These are guidelines, not advice — Bankr is not a financial advisor.
+shares). These are guidelines, not advice — Centsio is not a financial advisor.
 
 Income is money that hit linked accounts (closer to take-home than gross),
 so a 30% housing bar here is tighter than HUD’s original gross-income

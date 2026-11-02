@@ -11,7 +11,7 @@ export const PERIODS: { value: Period; label: string; short: string; window: str
   { value: "last_year", label: "Last year", short: "Last year", window: "last_year" },
 ];
 
-const KEY = "bankr:period";
+const KEY = "centsio:period";
 
 export function periodInfo(period: Period) {
   return PERIODS.find((p) => p.value === period) ?? PERIODS[0];

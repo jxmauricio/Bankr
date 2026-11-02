@@ -1,4 +1,4 @@
-"""What Bankr remembers about the user: saved only by the user (in Settings
+"""What Centsio remembers about the user: saved only by the user (in Settings
 or by confirming a card), shown to the agent after the static prompt,
 never holding account numbers or credentials, and never another user's."""
 

@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 
 // The backend session JWT lives in the Keychain (iOS) / Keystore (Android),
 // not plain storage. Same key as the web app's localStorage entry.
-const STORAGE_KEY = "bankr_session_token";
+const STORAGE_KEY = "centsio_session_token";
 
 interface SessionContextValue {
   token: string | null;

@@ -132,7 +132,7 @@ export function CategoriesSettings({ token }: { token: string }) {
                 run(item.id, async () => {
                   const { recategorized } = await deleteCategory(token, item.id);
                   if (recategorized)
-                    return `Deleted ${item.name}. ${recategorized} transaction${recategorized === 1 ? "" : "s"} went back to Bankr's category for ${recategorized === 1 ? "it" : "them"}.`;
+                    return `Deleted ${item.name}. ${recategorized} transaction${recategorized === 1 ? "" : "s"} went back to Centsio's category for ${recategorized === 1 ? "it" : "them"}.`;
                 })
               }
               className="cursor-pointer text-sm text-ink-soft hover:text-negative disabled:opacity-60"
