@@ -129,10 +129,6 @@ function targetFor(insight: Insight): Href | null {
   switch (insight.type) {
     case "weekly_recap":
       return insight.subject_id ? `/recap/${insight.subject_id}` : null;
-    case "budget_overspend":
-    case "goal_drift":
-    case "price_change":
-      return "/plan";
     case "unusual_transaction":
       return "/transactions";
     default:

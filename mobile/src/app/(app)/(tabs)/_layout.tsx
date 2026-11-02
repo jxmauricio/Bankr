@@ -15,7 +15,7 @@ import { makeStyles, useColors, useScheme } from "@/theme/theme";
 import { Icon, IconButton, Text, type IconName } from "@/ui";
 
 /**
- * Five views, Chat in the middle: Home, Cash flow, Chat, Transactions, Plan.
+ * Four views: Home, Cash flow, Chat, Transactions.
  * Settings, a light/dark toggle and one action up top; a floating Liquid
  * Glass tab bar along the bottom. Swiping slides to the next tab.
  */
@@ -47,7 +47,6 @@ const TABS = [
   { name: "cash-flow", href: "/cash-flow", label: "Cash flow", icon: "flow" },
   { name: "chat", href: "/chat", label: "Chat", icon: "chat" },
   { name: "transactions", href: "/transactions", label: "Transactions", icon: "list" },
-  { name: "plan", href: "/plan", label: "Plan", icon: "calendar" },
 ] as const satisfies readonly { name: string; href: string; label: string; icon: IconName }[];
 
 /**

@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 
 /** Home's views. Kept in the URL hash so Back and a refresh land where you were. */
-export type View = "chat" | "transactions" | "cashflow" | "health" | "plan";
+export type View = "chat" | "transactions" | "cashflow" | "health";
 
 export const VIEWS: { id: View; label: string; key: string }[] = [
   { id: "chat", label: "Chat", key: "1" },
   { id: "transactions", label: "Transactions", key: "2" },
   { id: "cashflow", label: "Cash flow", key: "3" },
   { id: "health", label: "Health", key: "4" },
-  { id: "plan", label: "Plan", key: "5" },
 ];
 
 function fromHash(): View {
@@ -44,7 +43,7 @@ export function useView(): [View, (view: View) => void] {
     };
   }, []);
 
-  // 1–5 switch views, unless a field has focus or a dialog is open.
+  // 1–4 switch views, unless a field has focus or a dialog is open.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;

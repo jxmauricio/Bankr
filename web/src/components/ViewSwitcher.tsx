@@ -26,14 +26,6 @@ function ViewIcon({ view, size = 17 }: { view: View; size?: number }) {
       </svg>
     );
   }
-  if (view === "plan") {
-    return (
-      <svg {...common}>
-        <rect x="4" y="5" width="16" height="15" rx="2" />
-        <path d="M4 10h16M9 3v4M15 3v4" />
-      </svg>
-    );
-  }
   return (
     <svg {...common}>
       <path d="M3 6c8 0 8 6 18 6M3 6c8 0 8 12 18 12M3 6c8 0 10-2 18-2" />
