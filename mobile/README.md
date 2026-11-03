@@ -90,7 +90,7 @@ Simulator never receives real APNs, so use `scripts/sim-push-recap.sh` there.
 
 ## Not built yet
 
-Standalone goal setup, the Health and Plan tabs, transaction editing, voice
+Standalone goal setup, the Health tab, transaction editing, voice
 mode, the daily briefing screen (a briefing push opens the notifications list;
 its fixes are on the web), and the OAuth universal link above. A new account
 sets its first goal on the web for now.

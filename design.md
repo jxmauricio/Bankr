@@ -161,7 +161,7 @@ Mobile scale (`type` in `tokens.ts`; the web uses the same sizes where it can):
 
 - **Top bar:** chat history and the **Centsio** wordmark (22px bold) on the left;
   text-only pill tabs in the center (Chat, Transactions, Cash flow, Health,
-  Plan, with the open one filled with `signal`; keys 1–4 switch views); the
+  with the open one filled with `signal`; keys 1–4 switch views); the
   period filter, insights bell, theme toggle and profile menu on the right.
 - **Money rail:** a 340px column on the right (desktop only) with net worth,
   upcoming bills and goals as cards. On smaller screens it becomes a sheet

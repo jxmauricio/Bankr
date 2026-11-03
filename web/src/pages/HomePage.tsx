@@ -56,7 +56,6 @@ import { RowAmount } from "../components/TransactionSearch";
 import { useView } from "../lib/useView";
 import { ViewTabBar, ViewTabs } from "../components/ViewSwitcher";
 import { TransactionsView, type TransactionFilter } from "./TransactionsView";
-import { PlanView } from "./PlanView";
 import { HealthView } from "./HealthView";
 import { UpcomingBills } from "../components/UpcomingBills";
 import { InsightsBell } from "../components/InsightsBell";
@@ -141,17 +140,12 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
   const [moneyOpen, setMoneyOpen] = useState(false);
   const flow = useCashFlow(token, period, monthRollup);
   const [view, setView] = useView();
-  const [planFocus, setPlanFocus] = useState<"budget" | "recurring" | null>(null);
   const [txFocusId, setTxFocusId] = useState<string | null>(null);
-  // Bumped by Plan edits so the rail's bills line catches up.
+  // Bumped by syncs and confirmed proposals so the rail's bills line catches up.
   const [planVersion, setPlanVersion] = useState(0);
   const [showBriefing, setShowBriefing] = useState(false);
   // Bumped when the briefing is closed after a fix, so its card and the bell catch up.
   const [briefingVersion, setBriefingVersion] = useState(0);
-  function openPlan(section: "budget" | "recurring" | null = null) {
-    setPlanFocus(section);
-    setView("plan");
-  }
   const [txFilter, setTxFilter] = useState<TransactionFilter>({ category: null, query: "" });
   const streamRef = useRef<HTMLDivElement>(null);
   const voice = useVoiceMode({
@@ -485,8 +479,6 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
               version={briefingVersion}
               onOpenInsight={(insight) => {
                 if (insight.type === "daily_briefing") setShowBriefing(true);
-                else if (insight.type === "budget_overspend") openPlan("budget");
-                else if (insight.type === "price_change") openPlan("recurring");
                 else if (insight.type === "unusual_transaction" && insight.subject_id) {
                   setTxFocusId(insight.subject_id);
                   setView("transactions");
@@ -610,7 +602,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
           {token && (
             <DailyBriefingCard token={token} refreshKey={monthRollup} version={briefingVersion} onOpen={() => setShowBriefing(true)} />
           )}
-          {token && <UpcomingBills token={token} refreshKey={monthRollup} version={planVersion} onOpen={() => openPlan("recurring")} />}
+          {token && <UpcomingBills token={token} refreshKey={monthRollup} version={planVersion} />}
           {goalsSection}
         </aside>
 
@@ -657,12 +649,6 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
               onOpenTransactions={openTransactions}
               onOpenCashFlow={() => setView("cashflow")}
             />
-          </main>
-        )}
-
-        {token && view === "plan" && (
-          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <PlanView token={token} refreshKey={monthRollup} focus={planFocus} onChanged={() => setPlanVersion((n) => n + 1)} />
           </main>
         )}
 

@@ -4,18 +4,16 @@ import { formatMoney } from "../lib/format";
 
 const WEEK_MS = 7 * 86_400_000;
 
-/** Money rail line: bills due in the next 7 days. Opens Plan. */
+/** Money rail line: bills due in the next 7 days. */
 export function UpcomingBills({
   token,
   refreshKey,
   version,
-  onOpen,
 }: {
   token: string;
   refreshKey?: unknown;
   /** Bump to refetch after a change elsewhere. */
   version?: number;
-  onOpen: () => void;
 }) {
   const [data, setData] = useState<RecurringOverview | null>(null);
 
@@ -39,11 +37,7 @@ export function UpcomingBills({
   if (!due.length && !data.suggested_count) return null;
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex w-full cursor-pointer flex-col gap-1 card p-4 text-left hover:bg-raised"
-    >
+    <div className="flex w-full flex-col gap-1 card p-4 text-left">
       <span className="font-mono text-[11px] tracking-[0.12em] text-ink-faint">BILLS THIS WEEK</span>
       {due.length ? (
         <span className="text-sm text-ink">
@@ -61,6 +55,6 @@ export function UpcomingBills({
           {data.suggested_count} recurring charge{data.suggested_count === 1 ? "" : "s"} to review →
         </span>
       )}
-    </button>
+    </div>
   );
 }
