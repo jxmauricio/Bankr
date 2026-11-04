@@ -11,7 +11,7 @@ known software merchants (category_mapper.SOFTWARE_MERCHANTS) move to it.
 from typing import Sequence, Union
 
 from alembic import op
-from sqlalchemy.orm import Session
+
 
 
 # revision identifiers, used by Alembic.
@@ -25,11 +25,11 @@ _PARENT = "(SELECT parent_category_id FROM categories WHERE is_system_default AN
 
 
 def upgrade() -> None:
-    # Imported here, not at module top, so `alembic history` etc. don't
-    # need the app importable.
-    from app.services.category_backfill import remap_with_current_categories
-
-    remap_with_current_categories(Session(bind=op.get_bind()))
+    # This used to re-map transactions with the app code of its time, which
+    # has since moved on to later schemas and broke databases still before
+    # it. c8e1f5a2d697 seeds the subcategories this added, and c9e4a2f7d051
+    # and e8b1d4f2a690 re-map every transaction the user didn't pick by hand.
+    pass
 
 
 def downgrade() -> None:

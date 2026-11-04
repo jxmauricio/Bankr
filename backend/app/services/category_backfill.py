@@ -20,6 +20,13 @@ from app.services.category_mapper import map_raw_category
 from app.services import categorization_service as categorization
 
 
+def _txn_category_column(db: Session) -> str:
+    """transactions' category column: bankr_category_id until g3d7b1e9a542
+    renamed it, on databases built before that; category_id otherwise."""
+    columns = {c["name"] for c in inspect(db.get_bind()).get_columns("transactions")}
+    return "bankr_category_id" if "bankr_category_id" in columns else "category_id"
+
+
 def recategorize_all_transactions(db: Session) -> int:
     categories = seed_default_categories(db)
     columns = {c["name"] for c in inspect(db.get_bind()).get_columns("transactions")}
@@ -120,6 +127,7 @@ def move_to_monarch(db: Session) -> None:
 
     Works in SQL, like the rest of this module, so the migration that calls
     it keeps running as the schema grows."""
+    txn_column = _txn_category_column(db)
     old_categories = _keyed(db, "categories", MONARCH_CATEGORY_MOVES)
     old_groups = _keyed(db, "category_groups", MONARCH_GROUP_MOVES)
     categories = seed_default_categories(db)
@@ -128,7 +136,7 @@ def move_to_monarch(db: Session) -> None:
     for key, old in old_categories.items():
         new = categories[MONARCH_CATEGORY_MOVES[key]].id
         for table, column in (
-            ("transactions", "category_id"),
+            ("transactions", txn_column),
             ("rules", "set_category_id"),
             ("merchant_category_guesses", "category_id"),
             ("recurring_series", "category_id"),
@@ -220,9 +228,11 @@ def remap_transactions(db: Session, txn_ids: list) -> None:
 def _remap_uncategorized_by_hand(db: Session, categories: dict, txn_ids: list | None = None) -> None:
     """Run categorization_service's pipeline again over every row the user
     didn't categorize by hand (or just `txn_ids`, whoever picked them)."""
+    txn_column = _txn_category_column(db)
     rows = db.execute(
         text(
-            "SELECT t.id, t.raw_aggregator_category, t.amount, t.category_id, t.aggregator_category_confidence, "
+            f"SELECT t.id, t.raw_aggregator_category, t.amount, t.{txn_column} AS category_id, "
+            "t.aggregator_category_confidence, "
             "t.merchant_name, t.original_merchant_name, t.merchant_overridden, t.is_split, t.split_parent_id, "
             "t.linked_account_id, t.category_source, a.account_type, a.user_id "
             "FROM transactions t JOIN linked_accounts a ON a.id = t.linked_account_id "
@@ -239,7 +249,7 @@ def _remap_uncategorized_by_hand(db: Session, categories: dict, txn_ids: list | 
         categorization.categorize(txn, txn.account_type, contexts[txn.user_id])
         if (txn.category_id, txn.category_source) != (row["category_id"], row["category_source"]):
             db.execute(
-                text("UPDATE transactions SET category_id = :category, category_source = :source WHERE id = :id"),
+                text(f"UPDATE transactions SET {txn_column} = :category, category_source = :source WHERE id = :id"),
                 {"category": txn.category_id, "source": txn.category_source, "id": txn.id},
             )
     db.flush()
@@ -251,12 +261,13 @@ def learn_from_history(db: Session) -> None:
     or more are learned at once (categorization_service.LEARN_AFTER)."""
     from app.services.category_classifier import merchant_key
 
+    txn_column = _txn_category_column(db)
     rows = db.execute(
         text(
-            "SELECT a.user_id, t.original_merchant_name, t.category_id FROM transactions t "
+            f"SELECT a.user_id, t.original_merchant_name, t.{txn_column} FROM transactions t "
             "JOIN linked_accounts a ON a.id = t.linked_account_id "
             "WHERE t.category_source = 'manual' AND NOT t.is_split AND t.split_parent_id IS NULL "
-            "AND t.category_id IS NOT NULL"
+            f"AND t.{txn_column} IS NOT NULL"
         )
     ).all()
     picks: dict = {}
