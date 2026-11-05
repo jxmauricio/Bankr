@@ -8,9 +8,13 @@
     "scheme": "centsio",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "com.jxmauricio.centsio",
-      "appleTeamId": "C8XQ9B9W25",
+      "bundleIdentifier": "com.centsio.app",
+      "buildNumber": "5",
+      "appleTeamId": "RPM8V29G4A",
       "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "entitlements": {
         "aps-environment": "development"
       }

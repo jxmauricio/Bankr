@@ -30,6 +30,12 @@ services:
       # Audience the iOS app's Sign in with Apple tokens must carry: its bundle ID.
       - key: APPLE_CLIENT_ID
         value: com.centsio.app
+      # TestFlight and App Store builds get production APNs tokens. Pushes also
+      # need APNS_KEY_ID, APNS_TEAM_ID and the .p8 key, set in the dashboard.
+      - key: APNS_TOPIC
+        value: com.centsio.app
+      - key: APNS_USE_SANDBOX
+        value: "false"
       - key: PLAID_CLIENT_ID
         sync: false
       - key: PLAID_SECRET

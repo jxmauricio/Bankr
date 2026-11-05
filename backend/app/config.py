@@ -173,7 +173,7 @@ class Settings(BaseSettings):
     apns_key_id: str = ""
     apns_team_id: str = ""
     apns_auth_key_path: str = ""
-    apns_topic: str = "com.jxmauricio.centsio"
+    apns_topic: str = "com.centsio.app"
     apns_use_sandbox: bool = True
 
     # Days ahead a subscription renewal (or a trial's first charge) shows up

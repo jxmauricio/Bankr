@@ -3,9 +3,11 @@
 // streaming uses expo/fetch, since React Native's own fetch can't stream a body.
 import { fetch as streamingFetch } from "expo/fetch";
 
-// The iOS simulator reaches the Mac's localhost; a physical phone needs the
-// Mac's LAN address (or a tunnel) here instead.
-export const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
+// Development builds default to the Mac's localhost, which the iOS simulator
+// reaches; a physical phone needs the Mac's LAN address (or a tunnel) here
+// instead. Release builds (TestFlight, the App Store) default to production.
+export const BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || (__DEV__ ? "http://localhost:8000" : "https://centsio-api.onrender.com");
 
 // FastAPI's own HTTPException(detail=...) sends a plain string, but Pydantic
 // validation errors send a list of {msg, loc, ...} objects instead.

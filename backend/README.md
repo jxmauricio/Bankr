@@ -353,7 +353,7 @@ don't push at someone already looking at Home.
   finished week without waiting for Sunday (`--force` re-pushes)
 
 The iOS Simulator never receives real APNs. To see the banner there:
-`xcrun simctl push booted com.jxmauricio.centsio mobile/scripts/weekly-recap.push.json`
+`xcrun simctl push booted com.centsio.app mobile/scripts/weekly-recap.push.json`
 (the app must have been granted notification permission). Other insight
 types (budget overspend, unusual spend, …) are still in-app only.
 
