@@ -4,4 +4,4 @@
 set -e
 DEVICE="${1:-booted}"
 PAYLOAD="$(cd "$(dirname "$0")" && pwd)/weekly-recap.push.json"
-xcrun simctl push "$DEVICE" com.jxmauricio.centsio "$PAYLOAD"
+xcrun simctl push "$DEVICE" com.centsio.app "$PAYLOAD"
