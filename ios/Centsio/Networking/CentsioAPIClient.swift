@@ -11,9 +11,14 @@ enum CentsioAPIError: Error {
 struct CentsioAPIClient {
     static let shared = CentsioAPIClient()
 
-    /// Points at a local `uvicorn app.main:app --reload` by default.
-    /// Swap for a staging/production URL via build configuration once one exists.
-    var baseURL = URL(string: "http://localhost:8000")!
+    /// Comes from `CentsioAPIBaseURL` in Info.plist, set per build configuration
+    /// in project.yml: a local uvicorn for Debug, the Render deploy for Release.
+    var baseURL: URL = {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: "CentsioAPIBaseURL") as? String,
+              let url = URL(string: value), url.scheme != nil
+        else { return URL(string: "http://localhost:8000")! }
+        return url
+    }()
 
     private var decoder: JSONDecoder {
         let decoder = JSONDecoder()
