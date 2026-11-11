@@ -34,6 +34,19 @@ const ICONS = {
   chevronLeft: <Path d="m15 6-6 6 6 6" />,
   chevronRight: <Path d="m9 6 6 6-6 6" />,
   chevronDown: <Path d="m6 9 6 6 6-6" />,
+  /** Double chevron: week paging, not the same mark as Back. */
+  skipLeft: (
+    <>
+      <Path d="m11 6-6 6 6 6" />
+      <Path d="m19 6-6 6 6 6" />
+    </>
+  ),
+  skipRight: (
+    <>
+      <Path d="m13 6 6 6-6 6" />
+      <Path d="m5 6 6 6-6 6" />
+    </>
+  ),
   check: <Path d="m5 12 5 5 9-10" />,
   home: (
     <>
@@ -93,6 +106,12 @@ const ICONS = {
     <>
       <Rect x="4" y="5" width="16" height="15" rx="2" />
       <Path d="M4 10h16M9 3v4M15 3v4" />
+    </>
+  ),
+  person: (
+    <>
+      <Circle cx="12" cy="8" r="4" />
+      <Path d="M4 20c1.5-4 4.2-6 8-6s6.5 2 8 6" />
     </>
   ),
 } as const;

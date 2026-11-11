@@ -1,6 +1,7 @@
-import { ActivityIndicator, Pressable, StyleSheet } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 import { radius } from "@/theme/tokens";
 import { makeStyles, useColors } from "@/theme/theme";
+import { CentSpinner } from "./CentSpinner";
 import { Icon, type IconName } from "./Icon";
 
 /** A 44pt square holding one icon: header actions, the composer's send. Always give it a label. */
@@ -41,7 +42,7 @@ export function IconButton({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={iconColor} />
+        <CentSpinner size={plain ? 22 : 18} color={iconColor} />
       ) : (
         <Icon name={icon} color={iconColor} size={plain ? 24 : 20} />
       )}

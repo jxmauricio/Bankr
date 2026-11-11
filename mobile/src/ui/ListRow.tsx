@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, View, type ViewStyle } from "react-native";
-import { radius, space } from "@/theme/tokens";
+import { space } from "@/theme/tokens";
 import { makeStyles } from "@/theme/theme";
 import { Text } from "./Text";
 
@@ -95,16 +95,13 @@ const useStyles = makeStyles((colors) =>
     row: { flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 64, paddingVertical: space.sm, paddingHorizontal: space.lg },
     plain: { borderBottomColor: colors.line, borderBottomWidth: StyleSheet.hairlineWidth },
     grouped: {
-      marginHorizontal: space.lg,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.bg,
       borderColor: colors.line,
-      borderLeftWidth: 1,
-      borderRightWidth: 1,
     },
-    groupTop: { borderTopWidth: 1, borderTopLeftRadius: radius.md + 2, borderTopRightRadius: radius.md + 2 },
-    groupBottom: { borderBottomWidth: 1, borderBottomLeftRadius: radius.md + 2, borderBottomRightRadius: radius.md + 2 },
+    groupTop: { borderTopWidth: StyleSheet.hairlineWidth },
+    groupBottom: { borderBottomWidth: StyleSheet.hairlineWidth },
     groupDivider: { borderBottomWidth: StyleSheet.hairlineWidth },
-    pressed: { backgroundColor: colors.raised },
+    pressed: { opacity: 0.6 },
     text: { flex: 1, gap: 2 },
     initial: { alignItems: "center", justifyContent: "center", backgroundColor: colors.raised },
     section: {

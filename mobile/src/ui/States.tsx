@@ -1,14 +1,13 @@
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { space } from "@/theme/tokens";
-import { useColors } from "@/theme/theme";
 import { Button } from "./Button";
+import { CentSpinner } from "./CentSpinner";
 import { Text } from "./Text";
 
 export function Loading() {
-  const colors = useColors();
   return (
     <View style={styles.center}>
-      <ActivityIndicator color={colors.accent} />
+      <CentSpinner />
     </View>
   );
 }

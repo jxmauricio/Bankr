@@ -9,6 +9,7 @@ from app.auth import get_current_user
 from app.db.base import get_db
 from app.db.models import User
 from app.services.dashboard_service import (
+    get_holdings,
     get_itemized_transactions,
     get_net_worth_history,
     get_period_rollup,
@@ -31,6 +32,13 @@ def _query_error(e: QueryError) -> HTTPException:
 @router.get("/net-worth")
 def net_worth(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     return get_net_worth_history(db, user.id)
+
+
+@router.get("/holdings")
+def holdings(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+    """Positions in linked brokerages. Price is Plaid's last close, refreshed
+    on bank sync -- not a live quote."""
+    return get_holdings(db, user.id)
 
 
 @router.get("/spending")

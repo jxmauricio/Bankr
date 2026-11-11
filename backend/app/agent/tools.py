@@ -104,6 +104,8 @@ def get_net_worth(db: Session, user_id: UUID) -> dict:
             "type": a.account_type,
             "kind": "liability" if is_liability else "asset",
             "balance": round(float(a.current_balance or 0), 2),
+            "available_balance": round(float(a.available_balance), 2) if a.available_balance is not None else None,
+            "credit_limit": round(float(a.credit_limit), 2) if a.credit_limit is not None else None,
         }
         if a.status != "active":
             excluded.append({**entry, "reason": f"account is {a.status}; reconnect to include it"})

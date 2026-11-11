@@ -6,7 +6,7 @@ import { useNotifications } from "@/features/notifications/NotificationsContext"
 import { PushSettings } from "@/features/notifications/PushSettings";
 import type { Insight } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/format";
-import { radius, space } from "@/theme/tokens";
+import { space } from "@/theme/tokens";
 import { makeStyles, useColors } from "@/theme/theme";
 import type { Colors } from "@/theme/tokens";
 import { ErrorState, Icon, Loading, PageHeader, SectionHeader, Text, type IconName } from "@/ui";
@@ -147,18 +147,15 @@ const useStyles = makeStyles((colors) =>
       flexDirection: "row",
       alignItems: "flex-start",
       gap: space.md,
-      marginHorizontal: space.lg,
       paddingHorizontal: space.lg,
       paddingVertical: space.md + 2,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.bg,
       borderColor: colors.line,
-      borderLeftWidth: 1,
-      borderRightWidth: 1,
     },
-    top: { borderTopWidth: 1, borderTopLeftRadius: radius.md + 2, borderTopRightRadius: radius.md + 2 },
-    bottom: { borderBottomWidth: 1, borderBottomLeftRadius: radius.md + 2, borderBottomRightRadius: radius.md + 2 },
+    top: { borderTopWidth: StyleSheet.hairlineWidth },
+    bottom: { borderBottomWidth: StyleSheet.hairlineWidth },
     divider: { borderBottomWidth: StyleSheet.hairlineWidth },
-    rowPressed: { backgroundColor: colors.raised },
+    rowPressed: { opacity: 0.6 },
     icon: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
     message: { flex: 1 },
     meta: { alignItems: "flex-end", gap: 6 },

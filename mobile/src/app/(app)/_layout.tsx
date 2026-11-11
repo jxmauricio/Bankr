@@ -19,7 +19,7 @@ import { consumePendingOpen, subscribePushOpen } from "@/features/notifications/
 import { PeriodProvider } from "@/features/period/PeriodContext";
 import { TransactionFiltersProvider } from "@/features/transactions/FiltersContext";
 import { useColors } from "@/theme/theme";
-import { Button, ComingSoon, ErrorState, Loading, Screen } from "@/ui";
+import { ErrorState, Loading } from "@/ui";
 
 // Plaid refreshes from the bank only a few times a day and webhooks push the
 // rest, so polling faster than this mostly finds nothing new.
@@ -30,12 +30,12 @@ const RESYNC_ON_RETURN_MS = 60 * 1000;
 type Gate =
   | { step: "loading" }
   | { step: "load-failed" }
-  | { step: "link-bank" | "set-goal" }
+  | { step: "link-bank" }
   | { step: "home"; netWorth: NetWorthHistory; goals: GoalProgressResponse };
 
 /**
- * Same onboarding gate as the web app's PostSignInGate: no balances means no
- * bank yet, no goals means goal setup, otherwise the tabs.
+ * Signed-in gate: no balances means no bank yet; otherwise the tabs, even
+ * with no goals (those can be added from Home or chat).
  */
 export default function SignedInLayout() {
   const colors = useColors();
@@ -56,7 +56,6 @@ export default function SignedInLayout() {
         ([netWorth, goals]) => {
           if (cancelled) return;
           if (netWorth.current === null) setGate({ step: "link-bank" });
-          else if (!goals.goals?.length) setGate({ step: "set-goal" });
           else setGate({ step: "home", netWorth, goals });
         },
         (err: unknown) => {
@@ -198,7 +197,7 @@ export default function SignedInLayout() {
     case "load-failed":
       return <ErrorState message="Couldn't reach Centsio." onRetry={retry} />;
     case "link-bank":
-      // Linking runs the backend's first sync, so re-reading the gate lands on goal setup or home.
+      // Linking runs the backend's first sync, so re-reading the gate lands on home.
       return (
         <LinkBankScreen
           onLinked={() => {
@@ -206,15 +205,6 @@ export default function SignedInLayout() {
             retry();
           }}
         />
-      );
-    case "set-goal":
-      // Goal setup isn't on mobile yet (chat can create goals once home is reachable); finish it on the web.
-      return (
-        <Screen edges={["top", "bottom"]}>
-          <ComingSoon title="Set a goal" detail="Goal setup isn't in the app yet. Finish it on the web, then come back." />
-          <Button label="Check again" variant="secondary" onPress={retry} />
-          <Button label="Sign out" variant="ghost" onPress={signOut} />
-        </Screen>
       );
     case "home":
       return (
@@ -228,6 +218,7 @@ export default function SignedInLayout() {
                     <Stack.Screen name="notifications" />
                     <Stack.Screen name="recap/[week]" />
                     <Stack.Screen name="money" options={sheet([0.6, 1], colors.bg)} />
+                    <Stack.Screen name="goal-new" options={sheet([0.92, 1], colors.bg)} />
                     <Stack.Screen name="history" options={sheet([0.6, 1], colors.bg)} />
                     <Stack.Screen name="source" options={sheet([0.75, 1], colors.bg)} />
                     <Stack.Screen name="filter-date" options={sheet([0.92], colors.bg)} />

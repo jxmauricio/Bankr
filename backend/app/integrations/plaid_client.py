@@ -34,6 +34,7 @@ from plaid.model.accounts_get_request import AccountsGetRequest
 from plaid.model.country_code import CountryCode
 from plaid.model.institutions_get_by_id_request import InstitutionsGetByIdRequest
 from plaid.model.institutions_get_by_id_request_options import InstitutionsGetByIdRequestOptions
+from plaid.model.investments_holdings_get_request import InvestmentsHoldingsGetRequest
 from plaid.model.item_get_request import ItemGetRequest
 from plaid.model.item_remove_request import ItemRemoveRequest
 from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchangeRequest
@@ -50,6 +51,7 @@ from plaid.model.webhook_verification_key_get_request import WebhookVerification
 from app.config import settings
 from app.integrations.bank_aggregator import (
     AggregatorAccount,
+    AggregatorHolding,
     AggregatorTransaction,
     LinkPlatform,
     TransactionSyncResult,
@@ -177,6 +179,7 @@ class PlaidClient:
                     ),
                     current_balance=float(balances.current or 0),
                     available_balance=float(balances.available) if balances.available is not None else None,
+                    credit_limit=float(balances.limit) if getattr(balances, "limit", None) is not None else None,
                     name=account.official_name or account.name,
                     mask=account.mask,
                     institution_logo=institution_logo,
@@ -204,6 +207,49 @@ class PlaidClient:
         except Exception:
             logger.warning("plaid: couldn't fetch logo for institution %s", institution_id, exc_info=True)
             return None
+
+    def list_holdings(self, access_token: str) -> list[AggregatorHolding] | None:
+        """Plaid's last close per position. None when this Item has no
+        investments product, so a sync doesn't wipe positions we already have."""
+        client = _client()
+        try:
+            response = client.investments_holdings_get(InvestmentsHoldingsGetRequest(access_token=access_token))
+        except plaid.ApiException as e:
+            if _plaid_error_code(e) in (
+                "INVALID_PRODUCT",
+                "PRODUCTS_NOT_SUPPORTED",
+                "ITEM_NOT_SUPPORTED",
+                "NO_INVESTMENT_ACCOUNTS",
+            ):
+                return None
+            logger.warning("plaid: holdings/get failed", exc_info=True)
+            return None
+
+        securities = {s.security_id: s for s in response.securities}
+        holdings: list[AggregatorHolding] = []
+        for holding in response.holdings:
+            security = securities.get(holding.security_id)
+            price = holding.institution_price
+            as_of = holding.institution_price_as_of
+            if price is None and security is not None:
+                price = security.close_price
+            if as_of is None and security is not None:
+                as_of = security.close_price_as_of
+            holdings.append(
+                AggregatorHolding(
+                    aggregator_account_id=holding.account_id,
+                    security_id=holding.security_id,
+                    ticker=security.ticker_symbol if security else None,
+                    name=security.name if security else None,
+                    quantity=float(holding.quantity or 0),
+                    price=float(price) if price is not None else None,
+                    value=float(holding.institution_value or 0),
+                    cost_basis=float(holding.cost_basis) if holding.cost_basis is not None else None,
+                    price_as_of=as_of,
+                    security_type=str(security.type) if security is not None and security.type is not None else None,
+                )
+            )
+        return holdings
 
     def sync_transactions(self, access_token: str, cursor: str | None) -> TransactionSyncResult:
         """Drain /transactions/sync from `cursor` until has_more is false.

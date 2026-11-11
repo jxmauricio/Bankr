@@ -204,6 +204,8 @@ export interface AccountBalance {
   type: string;
   kind: "asset" | "liability";
   balance: number;
+  available_balance?: number | null;
+  credit_limit?: number | null;
   reason?: string;
 }
 
@@ -218,6 +220,26 @@ export interface NetWorthHistory {
 }
 
 export const fetchNetWorth = (token: string) => request<NetWorthHistory>("/dashboard/net-worth", { token });
+
+export interface Holding {
+  ticker: string | null;
+  name: string | null;
+  quantity: number;
+  price: number | null;
+  value: number;
+  price_as_of: string | null;
+  security_type: string | null;
+  institution: string;
+  account_name: string | null;
+}
+
+export interface HoldingsResponse {
+  holdings: Holding[];
+  as_of: string | null;
+}
+
+/** Positions with Plaid's last close, refreshed on bank sync. */
+export const fetchHoldings = (token: string) => request<HoldingsResponse>("/dashboard/holdings", { token });
 
 export interface PeriodRollup {
   period: string;

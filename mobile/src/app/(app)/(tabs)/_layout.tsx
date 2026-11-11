@@ -15,9 +15,9 @@ import { makeStyles, useColors, useScheme } from "@/theme/theme";
 import { Icon, IconButton, Text, type IconName } from "@/ui";
 
 /**
- * Four views: Home, Cash flow, Chat, Transactions.
- * Settings, a light/dark toggle and one action up top; a floating Liquid
- * Glass tab bar along the bottom. Swiping slides to the next tab.
+ * Five views: Home, Cash flow, Chat, Transactions, Profile.
+ * Light/dark and one action up top; a floating Liquid Glass tab bar along
+ * the bottom. Swiping slides to the next tab.
  */
 export default function TabsLayout() {
   const styles = useStyles();
@@ -47,6 +47,7 @@ const TABS = [
   { name: "cash-flow", href: "/cash-flow", label: "Cash flow", icon: "flow" },
   { name: "chat", href: "/chat", label: "Chat", icon: "chat" },
   { name: "transactions", href: "/transactions", label: "Transactions", icon: "list" },
+  { name: "profile", href: "/profile", label: "Profile", icon: "person" },
 ] as const satisfies readonly { name: string; href: string; label: string; icon: IconName }[];
 
 /**
@@ -156,8 +157,8 @@ function Page({ index, loaded, render }: { index: number; loaded: boolean; rende
 }
 
 /**
- * Settings and light/dark on the left; notifications, then chat history on
- * the Chat tab or sync from the bank elsewhere, on the right.
+ * Light/dark on the left; notifications, then chat history on the Chat tab
+ * or sync from the bank elsewhere, on the right. Profile lives in the tab bar.
  */
 function TopBar({ onChat }: { onChat: boolean }) {
   const styles = useStyles();
@@ -166,7 +167,6 @@ function TopBar({ onChat }: { onChat: boolean }) {
   return (
     <View style={styles.bar}>
       <View style={styles.side}>
-        <IconButton icon="settings" label="Accounts and goals" variant="plain" onPress={() => router.push("/money")} />
         <ThemeToggle />
       </View>
       <Text variant="brand" accessibilityRole="header">

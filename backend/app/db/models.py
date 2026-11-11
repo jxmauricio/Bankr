@@ -71,6 +71,9 @@ class LinkedAccount(Base):
     # can be shown as the visible sum of its parts. For credit/loan this is
     # the amount owed, as a positive number.
     current_balance: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    # Remaining spendable (deposits) or remaining credit (cards). Credit line is credit_limit.
+    available_balance: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    credit_limit: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     balance_as_of: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Encrypted at rest; never returned to the client. See app/integrations/plaid_client.py.
     access_token_ref: Mapped[str] = mapped_column(Text)
@@ -91,6 +94,7 @@ class LinkedAccount(Base):
 
     user: Mapped["User"] = relationship(back_populates="linked_accounts")
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="linked_account")
+    holdings: Mapped[list["InvestmentHolding"]] = relationship(back_populates="linked_account")
 
 
 class CategoryGroup(Base):
@@ -202,6 +206,34 @@ class Transaction(Base):
 
     linked_account: Mapped["LinkedAccount"] = relationship(back_populates="transactions")
     category: Mapped["Category | None"] = relationship()
+
+
+class InvestmentHolding(Base):
+    """One brokerage position. Price is Plaid's last close at sync time, not
+    a live quote -- same cadence as account balances."""
+
+    __tablename__ = "investment_holdings"
+    __table_args__ = (UniqueConstraint("linked_account_id", "security_id"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    linked_account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("linked_accounts.id", ondelete="CASCADE"), index=True
+    )
+    security_id: Mapped[str] = mapped_column(String)
+    ticker: Mapped[str | None] = mapped_column(String, nullable=True)
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    quantity: Mapped[float] = mapped_column(Numeric(18, 8))
+    price: Mapped[float | None] = mapped_column(Numeric(14, 4), nullable=True)
+    value: Mapped[float] = mapped_column(Numeric(14, 2))
+    cost_basis: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    price_as_of: Mapped[date | None] = mapped_column(Date, nullable=True)
+    security_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    linked_account: Mapped["LinkedAccount"] = relationship(back_populates="holdings")
 
 
 class Goal(Base):

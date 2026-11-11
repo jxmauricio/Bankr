@@ -62,11 +62,16 @@ function Recap({ recap }: { recap: WeeklyRecap }) {
   return (
     <>
       <View style={styles.intro}>
-        <View style={styles.weekRow}>
+        <View style={styles.pager}>
           <WeekArrow direction="previous" onPress={() => goToWeek(recap.previous_week_start)} disabled={!recap.previous_week_start} />
-          <Text variant="section" tone="soft">
-            {recap.label}
-          </Text>
+          <View style={styles.pagerLabel}>
+            <Text variant="caption" tone="faint" align="center">
+              Week of
+            </Text>
+            <Text variant="heading" align="center" numberOfLines={1}>
+              {recap.label}
+            </Text>
+          </View>
           <WeekArrow direction="next" onPress={() => goToWeek(recap.next_week_start)} disabled={!recap.next_week_start} />
         </View>
         <Text variant="title" align="center">
@@ -131,9 +136,13 @@ function WeekArrow({ direction, onPress, disabled }: { direction: "previous" | "
       disabled={disabled}
       onPress={onPress}
       hitSlop={6}
-      style={({ pressed }) => [styles.arrow, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.arrow, pressed && styles.pressed, disabled && styles.arrowOff]}
     >
-      <Icon name={direction === "previous" ? "chevronLeft" : "chevronRight"} color={disabled ? colors.line : colors.accent} size={18} />
+      <Icon
+        name={direction === "previous" ? "skipLeft" : "skipRight"}
+        color={disabled ? colors.inkFaint : colors.ink}
+        size={16}
+      />
     </Pressable>
   );
 }
@@ -386,8 +395,17 @@ const useStyles = makeStyles((colors) =>
     // Grouped rows and section headers bring their own side margins.
     content: { paddingTop: space.xs, paddingBottom: space.xxl, gap: space.lg },
     intro: { paddingHorizontal: space.lg, gap: 6 },
-    weekRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-    arrow: { width: 44, height: 32, alignItems: "center", justifyContent: "center" },
+    pager: { flexDirection: "row", alignItems: "center", gap: space.sm },
+    pagerLabel: { flex: 1, minWidth: 0, gap: 2 },
+    arrow: {
+      width: 40,
+      height: 40,
+      borderRadius: radius.md,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.raised,
+    },
+    arrowOff: { opacity: 0.4 },
     pressed: { opacity: 0.6 },
     takeLabel: { flexDirection: "row", alignItems: "center", gap: 6 },
     totals: { flexDirection: "row", gap: space.sm },

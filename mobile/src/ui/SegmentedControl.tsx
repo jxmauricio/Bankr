@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { radius, space } from "@/theme/tokens";
+import { space } from "@/theme/tokens";
 import { makeStyles } from "@/theme/theme";
 import { Text } from "./Text";
 
@@ -40,15 +40,21 @@ export function SegmentedControl<T extends string>({
 
 const useStyles = makeStyles((colors) =>
   StyleSheet.create({
-    track: { flexDirection: "row", gap: 2, padding: 3, borderRadius: radius.md, backgroundColor: colors.surface },
+    track: {
+      flexDirection: "row",
+      borderBottomColor: colors.line,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      backgroundColor: colors.bg,
+    },
     option: {
       flex: 1,
-      minHeight: 38,
+      minHeight: 40,
       alignItems: "center",
       justifyContent: "center",
       paddingHorizontal: space.xs,
-      borderRadius: radius.md - 3,
+      borderBottomWidth: 2,
+      borderBottomColor: "transparent",
     },
-    selected: { backgroundColor: colors.raised },
+    selected: { borderBottomColor: colors.ink },
   })
 );

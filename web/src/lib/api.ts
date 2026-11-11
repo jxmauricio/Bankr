@@ -197,6 +197,8 @@ export interface AccountBalance {
   type: string;
   kind: "asset" | "liability";
   balance: number;
+  available_balance?: number | null;
+  credit_limit?: number | null;
   reason?: string;
 }
 

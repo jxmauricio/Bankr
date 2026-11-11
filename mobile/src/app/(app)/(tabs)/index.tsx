@@ -1,5 +1,7 @@
 import { RefreshControl, ScrollView, StyleSheet } from "react-native";
-import { HealthBoard } from "@/features/health/HealthBoard";
+import { CreditCardGallery } from "@/features/money/CreditCardGallery";
+import { GoalsStrip } from "@/features/money/GoalsStrip";
+import { InvestmentsStrip } from "@/features/money/InvestmentsStrip";
 import { useMoney } from "@/features/money/MoneyContext";
 import { NetWorthCard } from "@/features/money/NetWorthCard";
 import { RecapCard } from "@/features/recap/RecapCard";
@@ -9,7 +11,7 @@ import { makeStyles, useColors } from "@/theme/theme";
 import { Screen } from "@/ui";
 
 /**
- * Home: this week's recap, net worth, then health and goals. Chat, transactions
+ * Home: this week's recap, net worth, accounts, then goals. Chat, transactions
  * and the other boards each have their own tab.
  */
 export default function HomeScreen() {
@@ -26,7 +28,9 @@ export default function HomeScreen() {
       >
         <RecapCard />
         <NetWorthCard />
-        <HealthBoard />
+        <InvestmentsStrip />
+        <CreditCardGallery />
+        <GoalsStrip />
       </ScrollView>
     </Screen>
   );
@@ -34,6 +38,6 @@ export default function HomeScreen() {
 
 const useStyles = makeStyles(() =>
   StyleSheet.create({
-    content: { padding: space.lg, paddingBottom: space.xxl + space.sm, gap: space.md },
+    content: { paddingBottom: space.xxl + space.sm },
   })
 );

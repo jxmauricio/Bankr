@@ -1,4 +1,7 @@
-from app.db.models import LinkedAccount, NetWorthSnapshot, Transaction
+from datetime import date
+
+from app.db.models import InvestmentHolding, LinkedAccount, NetWorthSnapshot, Transaction
+from app.integrations.bank_aggregator import AggregatorAccount, AggregatorHolding
 from app.services.sync_service import sync_user_accounts
 from tests.fake_aggregator import FakeAggregatorClient
 
@@ -154,3 +157,73 @@ def test_a_webhook_supplied_item_id_is_stored_and_then_reused(db, user):
     assert aggregator.get_item_id_calls == []  # never needed a backfill
     item_ids = {la.item_id for la in db.query(LinkedAccount).filter(LinkedAccount.user_id == user.id)}
     assert item_ids == {"item-from-webhook"}
+
+
+def _brokerage() -> AggregatorAccount:
+    return AggregatorAccount(
+        aggregator_account_id="acc_brokerage",
+        institution_name="Fake Brokerage",
+        account_type="investment",
+        current_balance=1500.0,
+        available_balance=1500.0,
+        name="Individual",
+    )
+
+
+def _apple_lot() -> AggregatorHolding:
+    return AggregatorHolding(
+        aggregator_account_id="acc_brokerage",
+        security_id="sec_aapl",
+        ticker="AAPL",
+        name="Apple Inc",
+        quantity=10,
+        price=150.0,
+        value=1500.0,
+        price_as_of=date(2026, 11, 10),
+        security_type="equity",
+    )
+
+
+def test_sync_stores_brokerage_holdings(db, user):
+    aggregator = FakeAggregatorClient(accounts=[_brokerage()], holdings=[_apple_lot()], transactions_by_account={})
+    sync_user_accounts(db, user.id, "fake-token", aggregator=aggregator)
+
+    row = db.query(InvestmentHolding).one()
+    assert row.ticker == "AAPL"
+    assert float(row.price) == 150.0
+    assert float(row.value) == 1500.0
+    assert row.price_as_of == date(2026, 11, 10)
+
+
+def test_sync_replaces_holdings_on_success(db, user):
+    first = FakeAggregatorClient(accounts=[_brokerage()], holdings=[_apple_lot()], transactions_by_account={})
+    sync_user_accounts(db, user.id, "fake-token", aggregator=first)
+
+    sold = AggregatorHolding(
+        aggregator_account_id="acc_brokerage",
+        security_id="sec_msft",
+        ticker="MSFT",
+        name="Microsoft",
+        quantity=2,
+        price=400.0,
+        value=800.0,
+        price_as_of=date(2026, 11, 11),
+        security_type="equity",
+    )
+    later = FakeAggregatorClient(accounts=[_brokerage()], holdings=[sold], transactions_by_account={})
+    sync_user_accounts(db, user.id, "fake-token", aggregator=later)
+
+    rows = db.query(InvestmentHolding).all()
+    assert [r.ticker for r in rows] == ["MSFT"]
+
+
+def test_unavailable_holdings_do_not_wipe_existing(db, user):
+    first = FakeAggregatorClient(accounts=[_brokerage()], holdings=[_apple_lot()], transactions_by_account={})
+    sync_user_accounts(db, user.id, "fake-token", aggregator=first)
+
+    later = FakeAggregatorClient(
+        accounts=[_brokerage()], holdings_unavailable=True, transactions_by_account={}
+    )
+    sync_user_accounts(db, user.id, "fake-token", aggregator=later)
+
+    assert db.query(InvestmentHolding).one().ticker == "AAPL"

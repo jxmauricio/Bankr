@@ -122,6 +122,8 @@ export const type = {
   brand: { fontSize: 26, fontWeight: "700", letterSpacing: -0.6 },
   /** Uppercase label over a group of cards or rows ("ASK CENTSIO", "TODAY"). */
   section: { fontSize: 12, fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase" },
+  /** Home board titles: bigger than an eyebrow so sections read as separate. */
+  sectionTitle: { fontSize: 20, fontWeight: "700", letterSpacing: -0.4 },
   /** Bold inside a chat answer: the key number. */
   strong: { fontSize: 15, fontWeight: "600", lineHeight: 22 },
   /** Small uppercase label over a headline figure ("OCT 1–16 · FOOD"). */

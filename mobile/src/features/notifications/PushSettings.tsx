@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { StyleSheet, Switch, View } from "react-native";
 import { fetchNotificationSettings, updateNotificationSettings, type NotificationSettings } from "@/lib/api";
 import { useToken } from "@/lib/session";
-import { radius, space } from "@/theme/tokens";
+import { space } from "@/theme/tokens";
 import { makeStyles, useColors } from "@/theme/theme";
 import { SectionHeader, Text } from "@/ui";
 
@@ -13,8 +13,8 @@ const KINDS: { key: Kind; label: string; detail: string }[] = [
   { key: "weekly_recap", label: "Weekly recap", detail: "Sunday evenings" },
 ];
 
-/** Which pushes this account gets, under the notifications list. */
-export function PushSettings() {
+/** Which pushes this account gets. `embedded` drops the section chrome for a parent card. */
+export function PushSettings({ embedded = false }: { embedded?: boolean }) {
   const token = useToken();
   const styles = useStyles();
   const colors = useColors();
@@ -37,27 +37,29 @@ export function PushSettings() {
     }
   }
 
+  const rows = KINDS.map(({ key, label, detail }, i) => (
+    <View key={key} style={[styles.row, i > 0 && styles.divider, embedded && styles.rowFlush]}>
+      <View style={styles.text}>
+        <Text variant="label">{label}</Text>
+        <Text variant="meta" tone="soft">
+          {detail}
+        </Text>
+      </View>
+      <Switch
+        accessibilityLabel={label}
+        value={prefs[key]}
+        onValueChange={(on) => toggle(key, on)}
+        trackColor={{ true: colors.accent, false: colors.line }}
+      />
+    </View>
+  ));
+
+  if (embedded) return <View>{rows}</View>;
+
   return (
     <View style={styles.root}>
       <SectionHeader title="Push notifications" />
-      <View style={styles.card}>
-        {KINDS.map(({ key, label, detail }, i) => (
-          <View key={key} style={[styles.row, i > 0 && styles.divider]}>
-            <View style={styles.text}>
-              <Text variant="label">{label}</Text>
-              <Text variant="meta" tone="soft">
-                {detail}
-              </Text>
-            </View>
-            <Switch
-              accessibilityLabel={label}
-              value={prefs[key]}
-              onValueChange={(on) => toggle(key, on)}
-              trackColor={{ true: colors.accent, false: colors.line }}
-            />
-          </View>
-        ))}
-      </View>
+      <View style={styles.card}>{rows}</View>
     </View>
   );
 }
@@ -66,13 +68,13 @@ const useStyles = makeStyles((colors) =>
   StyleSheet.create({
     root: { marginTop: space.lg },
     card: {
-      marginHorizontal: space.lg,
-      borderWidth: 1,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: colors.line,
-      borderRadius: radius.md + 2,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.bg,
     },
     row: { flexDirection: "row", alignItems: "center", gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.md },
+    rowFlush: { paddingHorizontal: 0 },
     divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
     text: { flex: 1, gap: 2 },
   })

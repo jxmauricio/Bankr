@@ -12,7 +12,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.agent.tools import get_net_worth
-from app.db.models import NetWorthSnapshot
+from app.db.models import InvestmentHolding, LinkedAccount, NetWorthSnapshot
 from app.services import money_query as mq
 
 
@@ -43,6 +43,35 @@ def get_net_worth_history(db: Session, user_id: UUID, limit: int = 90) -> dict:
             {"date": s.date.isoformat(), "net_worth": float(s.net_worth)}
             for s in reversed(snapshots)
         ],
+    }
+
+
+def get_holdings(db: Session, user_id: UUID) -> dict:
+    """Brokerage positions with the close price from the last bank sync."""
+    rows = (
+        db.query(InvestmentHolding)
+        .join(LinkedAccount)
+        .filter(InvestmentHolding.user_id == user_id, LinkedAccount.status == "active")
+        .order_by(InvestmentHolding.value.desc())
+        .all()
+    )
+    as_of_dates = [r.price_as_of for r in rows if r.price_as_of]
+    return {
+        "holdings": [
+            {
+                "ticker": r.ticker,
+                "name": r.name,
+                "quantity": float(r.quantity or 0),
+                "price": float(r.price) if r.price is not None else None,
+                "value": float(r.value or 0),
+                "price_as_of": r.price_as_of.isoformat() if r.price_as_of else None,
+                "security_type": r.security_type,
+                "institution": r.linked_account.institution_name,
+                "account_name": r.linked_account.name,
+            }
+            for r in rows
+        ],
+        "as_of": max(as_of_dates).isoformat() if as_of_dates else None,
     }
 
 

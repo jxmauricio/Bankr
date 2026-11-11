@@ -212,7 +212,7 @@ const useStyles = makeStyles((colors) =>
     chips: { gap: space.sm, paddingHorizontal: space.lg, paddingTop: space.sm + 2, paddingBottom: space.sm + 2 },
     quick: { gap: 6, paddingHorizontal: space.lg, paddingBottom: space.sm + 2 },
     listContent: { paddingBottom: space.xxl },
-    summary: { marginHorizontal: space.lg, marginTop: space.xs, gap: space.md },
+    summary: { gap: space.md },
     totals: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     total: { flex: 1, gap: 2 },
     totalEnd: { alignItems: "flex-end" },

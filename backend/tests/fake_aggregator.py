@@ -2,6 +2,7 @@ from datetime import date
 
 from app.integrations.bank_aggregator import (
     AggregatorAccount,
+    AggregatorHolding,
     AggregatorTransaction,
     TransactionSyncResult,
 )
@@ -18,6 +19,8 @@ class FakeAggregatorClient:
         item_id: str | None = None,
         verify_webhook_result: bool = True,
         fail_remove_for: set[str] | None = None,
+        holdings: list[AggregatorHolding] | None = None,
+        holdings_unavailable: bool = False,
     ):
         self.accounts = accounts if accounts is not None else self._default_accounts()
         self.transactions_by_account = (
@@ -33,6 +36,8 @@ class FakeAggregatorClient:
         self.removed_tokens: list[str] = []
         # Access tokens whose remove_item raises, to simulate Plaid failing.
         self.fail_remove_for = fail_remove_for or set()
+        self.holdings = holdings or []
+        self.holdings_unavailable = holdings_unavailable
 
     @staticmethod
     def _default_accounts() -> list[AggregatorAccount]:
@@ -50,6 +55,7 @@ class FakeAggregatorClient:
                 account_type="credit",
                 current_balance=400.0,
                 available_balance=1600.0,
+                credit_limit=2000.0,
             ),
         ]
 
@@ -98,6 +104,11 @@ class FakeAggregatorClient:
 
     def list_accounts(self, access_token: str) -> list[AggregatorAccount]:
         return self.accounts
+
+    def list_holdings(self, access_token: str) -> list[AggregatorHolding] | None:
+        if self.holdings_unavailable:
+            return None
+        return list(self.holdings)
 
     def sync_transactions(self, access_token: str, cursor: str | None) -> TransactionSyncResult:
         """Always returns the full canned set as `added` -- sync upserts, so

@@ -19,9 +19,28 @@ class AggregatorAccount:
     account_type: str  # checking | savings | credit | loan | investment
     current_balance: float
     available_balance: float | None
+    # Plaid's balances.limit; credit cards use it as the line. None on checking.
+    credit_limit: float | None = None
     name: str | None = None
     mask: str | None = None  # last 4 digits, shown so the user can recognize the account
     institution_logo: str | None = None  # base64 PNG of the bank's logo
+
+
+@dataclass
+class AggregatorHolding:
+    """One position in a brokerage account. `price` is the last close Plaid
+    sent, not a live quote -- refreshed on the same cadence as balances."""
+
+    aggregator_account_id: str
+    security_id: str
+    ticker: str | None
+    name: str | None
+    quantity: float
+    price: float | None
+    value: float
+    cost_basis: float | None = None
+    price_as_of: date | None = None
+    security_type: str | None = None
 
 
 @dataclass
@@ -83,6 +102,11 @@ class BankAggregatorClient(Protocol):
 
     def list_accounts(self, access_token: str) -> list[AggregatorAccount]:
         """Return all accounts the user granted access to under this enrollment."""
+        ...
+
+    def list_holdings(self, access_token: str) -> list[AggregatorHolding] | None:
+        """Brokerage positions, or None when this login has no investments
+        product (don't treat that as 'sold everything')."""
         ...
 
     def sync_transactions(self, access_token: str, cursor: str | None) -> TransactionSyncResult:

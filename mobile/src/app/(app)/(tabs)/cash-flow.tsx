@@ -51,7 +51,9 @@ export default function CashFlowScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: tabInset + space.md }]}
         refreshControl={<RefreshControl refreshing={isSyncing} onRefresh={syncFromBank} tintColor={colors.accent} />}
       >
-        <SegmentedControl label="Period" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
+        <View style={styles.period}>
+          <SegmentedControl label="Period" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
+        </View>
         <Text variant="caption" tone="soft" style={styles.intro}>
           Where your money came from and where it went{f ? ` · ${f.label}` : ""}. Tap a category to see its transactions.
         </Text>
@@ -121,8 +123,9 @@ export default function CashFlowScreen() {
 
 const useStyles = makeStyles((colors) =>
   StyleSheet.create({
-    content: { padding: space.lg, paddingBottom: space.xxl, gap: space.md },
-    intro: { paddingHorizontal: space.xs },
+    content: { paddingBottom: space.xxl },
+    period: { paddingTop: space.sm },
+    intro: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.sm },
     placeholder: { height: 320 },
     rows: { paddingTop: space.md + 2, paddingBottom: space.xs, gap: 0 },
     rowsHeader: { flexDirection: "row", justifyContent: "space-between", paddingBottom: space.xs },

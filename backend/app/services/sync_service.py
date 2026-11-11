@@ -14,9 +14,9 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import LinkedAccount, NetWorthSnapshot, Transaction
+from app.db.models import InvestmentHolding, LinkedAccount, NetWorthSnapshot, Transaction
 from app.db.seed_categories import seed_default_categories
-from app.integrations.bank_aggregator import AggregatorTransaction, BankAggregatorClient
+from app.integrations.bank_aggregator import AggregatorHolding, AggregatorTransaction, BankAggregatorClient
 from app.services.category_classifier import (
     LOW_CONFIDENCE,
     build_profile,
@@ -84,6 +84,8 @@ def sync_user_accounts(
         linked.mask = acc.mask
         linked.account_type = acc.account_type
         linked.current_balance = acc.current_balance
+        linked.available_balance = acc.available_balance
+        linked.credit_limit = acc.credit_limit
         linked.balance_as_of = now
         linked.access_token_ref = encrypted_token
         linked.last_synced_at = now
@@ -91,6 +93,11 @@ def sync_user_accounts(
         linked_by_aggregator_id[acc.aggregator_account_id] = linked
     db.flush()
     linked_accounts = list(linked_by_aggregator_id.values())
+
+    if any(la.account_type == "investment" for la in linked_accounts):
+        fetched = aggregator.list_holdings(access_token)
+        if fetched is not None:
+            _replace_holdings(db, user_id, linked_by_aggregator_id, fetched)
 
     # One cursor per bank login, shared by all its accounts -- any of them
     # holds the current value. A brand-new login has none: full history.
@@ -261,6 +268,41 @@ def _carry_over_edits(db: Session, pending_aggregator_id: str, posted: Transacti
     for child in db.query(Transaction).filter(Transaction.split_parent_id == pending.id):
         child.split_parent_id = posted.id
     db.flush()
+
+
+def _replace_holdings(
+    db: Session,
+    user_id: UUID,
+    linked_by_aggregator_id: dict[str, LinkedAccount],
+    holdings: list[AggregatorHolding],
+) -> None:
+    """Swap this login's positions for what Plaid just sent. Called only when
+    list_holdings succeeded -- a missing investments product must not wipe."""
+    account_ids = [la.id for la in linked_by_aggregator_id.values()]
+    db.query(InvestmentHolding).filter(InvestmentHolding.linked_account_id.in_(account_ids)).delete(
+        synchronize_session=False
+    )
+    now = datetime.now(timezone.utc)
+    for holding in holdings:
+        linked = linked_by_aggregator_id.get(holding.aggregator_account_id)
+        if linked is None:
+            continue
+        db.add(
+            InvestmentHolding(
+                user_id=user_id,
+                linked_account_id=linked.id,
+                security_id=holding.security_id,
+                ticker=holding.ticker,
+                name=holding.name,
+                quantity=holding.quantity,
+                price=holding.price,
+                value=holding.value,
+                cost_basis=holding.cost_basis,
+                price_as_of=holding.price_as_of,
+                security_type=holding.security_type,
+                updated_at=now,
+            )
+        )
 
 
 def _balance_totals(db: Session, user_id: UUID) -> tuple[float, float]:

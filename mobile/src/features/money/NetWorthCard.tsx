@@ -1,11 +1,12 @@
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming } from "react-native-reanimated";
 import Svg, { Circle, Path } from "react-native-svg";
 import { formatMoney } from "@/lib/format";
-import { radius, space } from "@/theme/tokens";
+import { space } from "@/theme/tokens";
 import { makeStyles, useColors } from "@/theme/theme";
-import { Text } from "@/ui";
+import { Card, RegisterAmount, Text } from "@/ui";
 import { useMoney } from "./MoneyContext";
 
 const RANGES = [
@@ -19,6 +20,8 @@ const RANGES = [
 type RangeId = (typeof RANGES)[number]["id"];
 
 const CHART_HEIGHT = 84;
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 /**
  * Net worth, its change over the chosen range, and a line of the history.
@@ -45,10 +48,11 @@ export function NetWorthCard() {
   const up = (change ?? 0) >= 0;
 
   return (
-    <View style={styles.card}>
+    <Card>
+      <Text variant="sectionTitle">Net worth</Text>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Your money"
+        accessibilityLabel={`Your money, ${netWorth.current === null ? "unknown" : formatMoney(netWorth.current)}`}
         onPress={() => router.push("/money")}
         style={({ pressed }) => [styles.figure, pressed && styles.pressed]}
       >
@@ -57,16 +61,19 @@ export function NetWorthCard() {
             {up ? "↗" : "↘"} {pct !== null ? `${Math.abs(pct).toFixed(1)}%` : formatMoney(Math.abs(change))}
           </Text>
         )}
-        <Text variant="moneyLarge" style={styles.amount}>
-          {netWorth.current === null ? "—" : formatMoney(netWorth.current)}
-        </Text>
-        <Text variant="caption" tone="soft">
-          net worth
-        </Text>
+        {netWorth.current === null ? (
+          <Text variant="moneyLarge" style={styles.amount}>
+            —
+          </Text>
+        ) : (
+          <View style={styles.ticker}>
+            <RegisterAmount value={netWorth.current} />
+          </View>
+        )}
       </Pressable>
 
       <View style={styles.chart} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-        {width > 0 && points.length > 1 && <Line points={points} width={width} color={up ? colors.positive : colors.negative} />}
+        {width > 0 && points.length > 1 && <Line key={range} points={points} width={width} color={up ? colors.positive : colors.negative} />}
       </View>
 
       <View accessibilityRole="radiogroup" accessibilityLabel="Range" style={styles.ranges}>
@@ -87,7 +94,7 @@ export function NetWorthCard() {
           );
         })}
       </View>
-    </View>
+    </Card>
   );
 }
 
@@ -103,33 +110,62 @@ function Line({ points, width, color }: { points: number[]; width: number; color
   ]);
   const line = xy.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
   const [lastX, lastY] = xy[xy.length - 1];
+  const length = Math.max(
+    1,
+    xy.reduce((n, p, i) => (i === 0 ? 0 : n + Math.hypot(p[0] - xy[i - 1][0], p[1] - xy[i - 1][1])), 0)
+  );
+
+  const drawn = useSharedValue(0);
+  useEffect(() => {
+    drawn.set(0);
+    drawn.set(withTiming(1, { duration: 1100, easing: Easing.out(Easing.cubic) }));
+  }, [drawn]);
+
+  const lineProps = useAnimatedProps(() => ({
+    strokeDashoffset: length * (1 - drawn.get()),
+  }));
+  const fillProps = useAnimatedProps(() => ({
+    opacity: 0.1 * drawn.get(),
+  }));
+  const dotProps = useAnimatedProps(() => ({
+    opacity: drawn.get() > 0.88 ? (drawn.get() - 0.88) / 0.12 : 0,
+  }));
+
   return (
     <Svg width={width} height={CHART_HEIGHT} accessibilityElementsHidden>
-      <Path d={`${line} L${lastX} ${CHART_HEIGHT} L${pad} ${CHART_HEIGHT} Z`} fill={color} fillOpacity={0.08} />
-      <Path d={line} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-      <Circle cx={lastX} cy={lastY} r={4.5} fill={colors.surface} stroke={color} strokeWidth={2.5} />
+      <AnimatedPath d={`${line} L${lastX} ${CHART_HEIGHT} L${pad} ${CHART_HEIGHT} Z`} fill={color} fillOpacity={0} animatedProps={fillProps} />
+      <AnimatedPath
+        d={line}
+        fill="none"
+        stroke={color}
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeDasharray={`${length} ${length}`}
+        animatedProps={lineProps}
+      />
+      <AnimatedCircle cx={lastX} cy={lastY} r={4.5} fill={colors.raised} stroke={color} strokeWidth={2.5} opacity={0} animatedProps={dotProps} />
     </Svg>
   );
 }
 
 const useStyles = makeStyles((colors) =>
   StyleSheet.create({
-    card: {
-      backgroundColor: colors.surface,
-      borderColor: colors.line,
-      borderWidth: 1,
-      borderRadius: radius.md + 2,
-      paddingTop: space.lg + 2,
-      paddingBottom: space.md + 2,
-      paddingHorizontal: space.lg,
-      gap: space.md,
-    },
     figure: { alignItems: "center", gap: 2 },
     pressed: { opacity: 0.6 },
     amount: { fontSize: 36 },
+    ticker: { height: 40, overflow: "hidden", borderRadius: 1 },
     chart: { height: CHART_HEIGHT },
     ranges: { flexDirection: "row", justifyContent: "center", gap: 6 },
-    range: { minWidth: 44, height: 30, paddingHorizontal: space.md, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-    rangeOn: { backgroundColor: colors.raised },
+    range: {
+      minWidth: 44,
+      height: 30,
+      paddingHorizontal: space.md,
+      alignItems: "center",
+      justifyContent: "center",
+      borderBottomWidth: 2,
+      borderBottomColor: "transparent",
+    },
+    rangeOn: { borderBottomColor: colors.ink },
   })
 );

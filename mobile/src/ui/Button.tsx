@@ -1,9 +1,10 @@
-import { ActivityIndicator, Pressable, StyleSheet } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 import { radius, space } from "@/theme/tokens";
 import { makeStyles, useColors } from "@/theme/theme";
+import { CentSpinner } from "./CentSpinner";
 import { Text } from "./Text";
 
-type Variant = "primary" | "secondary" | "ghost";
+type Variant = "primary" | "secondary" | "ghost" | "danger";
 
 export function Button({
   label,
@@ -30,9 +31,9 @@ export function Button({
       style={({ pressed }) => [styles.base, styles[variant], (pressed || inactive) && styles.dimmed]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === "primary" ? colors.onAccent : colors.ink} />
+        <CentSpinner size={20} color={variant === "primary" ? colors.onAccent : variant === "danger" ? colors.negative : colors.ink} />
       ) : (
-        <Text variant="label" tone={variant === "primary" ? "onAccent" : "default"}>
+        <Text variant="label" tone={variant === "primary" ? "onAccent" : variant === "danger" ? "negative" : "default"}>
           {label}
         </Text>
       )}
@@ -52,6 +53,7 @@ const useStyles = makeStyles((colors) =>
     primary: { backgroundColor: colors.accent },
     secondary: { backgroundColor: colors.raised },
     ghost: { backgroundColor: "transparent" },
+    danger: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.negative },
     dimmed: { opacity: 0.6 },
   })
 );
