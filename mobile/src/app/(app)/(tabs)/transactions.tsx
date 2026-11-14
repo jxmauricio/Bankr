@@ -3,7 +3,9 @@ import { useMemo } from "react";
 import { RefreshControl, SectionList, StyleSheet, View } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import { useMoney } from "@/features/money/MoneyContext";
+import { RecurringList } from "@/features/transactions/RecurringList";
 import { useTransactionFilters } from "@/features/transactions/FiltersContext";
+import { useTransactionsPage } from "@/features/transactions/transactionsPage";
 import {
   applyFilters,
   dateLabel,
@@ -33,17 +35,37 @@ import {
   Screen,
   SearchField,
   SectionHeader,
+  SegmentedControl,
   Text,
   ToggleChip,
   type GroupPosition,
 } from "@/ui";
 
 /**
- * Search, a row of filter chips (each opens its sheet), one-tap quick filters,
- * a summary of what's shown, then the rows by day. Ported from the
- * "Transactions · filter chips" board in the Centsio Mobile design.
+ * Recurring payments, or the line-by-line list (search, chips, rows by day).
  */
 export default function TransactionsScreen() {
+  const styles = useStyles();
+  const [page, setPage] = useTransactionsPage();
+
+  return (
+    // The tab bar above owns the top inset.
+    <Screen padded={false} edges={[]}>
+      <SegmentedControl
+        label="Transactions view"
+        value={page}
+        onChange={setPage}
+        options={[
+          { value: "recurring", label: "Recurring" },
+          { value: "activity", label: "Transactions" },
+        ]}
+      />
+      <View style={styles.page}>{page === "recurring" ? <RecurringList /> : <Activity />}</View>
+    </Screen>
+  );
+}
+
+function Activity() {
   const styles = useStyles();
   const colors = useColors();
   const tabInset = useFloatingTabInset();
@@ -66,7 +88,6 @@ export default function TransactionsScreen() {
   const directionLabel = filters.direction === "all" ? "In / Out" : filters.direction === "in" ? "Money in" : "Money out";
 
   const filtered = isFiltered(filters);
-  /** Back to this month, every transaction, empty search. */
   const reset = () => update(DEFAULT_FILTERS);
 
   function toggleQuick(id: QuickId) {
@@ -74,8 +95,7 @@ export default function TransactionsScreen() {
   }
 
   return (
-    // The tab bar above owns the top inset.
-    <Screen padded={false} edges={[]}>
+    <View style={styles.page}>
       <View style={styles.search}>
         <SearchField
           value={filters.query}
@@ -95,6 +115,14 @@ export default function TransactionsScreen() {
           onPress={() => router.push("/filter-category")}
           onClear={() => update({ categories: [] })}
         />
+        {filters.merchants.length > 0 ? (
+          <FilterChip
+            label={filters.merchants.length === 1 ? filters.merchants[0] : `${filters.merchants.length} vendors`}
+            active
+            onPress={() => update({ merchants: [] })}
+            onClear={() => update({ merchants: [] })}
+          />
+        ) : null}
         <FilterChip
           label={accountLabel}
           active={filters.accountIds.length > 0}
@@ -178,7 +206,7 @@ export default function TransactionsScreen() {
           }
         />
       )}
-    </Screen>
+    </View>
   );
 }
 
@@ -206,6 +234,7 @@ function TransactionItem({ transaction, group }: { transaction: TransactionRow; 
 
 const useStyles = makeStyles((colors) =>
   StyleSheet.create({
+    page: { flex: 1 },
     search: { paddingHorizontal: space.lg, paddingTop: space.md + 2 },
     // Horizontal rows keep their height; the list below takes what's left.
     row: { flexGrow: 0, flexShrink: 0 },

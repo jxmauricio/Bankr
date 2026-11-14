@@ -104,6 +104,38 @@ def test_abandon_goal_removes_it_from_active_list_and_frees_a_slot(db, user):
     assert get_goal_progress(db, user.id)["active_count"] == 5
 
 
+def test_spending_trackers_do_not_count_toward_the_five_goal_cap(db, user, monkeypatch):
+    from datetime import datetime, timezone
+
+    from app.services import money_query
+    from app.services.goal_service import GoalLimitReached
+
+    monkeypatch.setattr(money_query, "_now", lambda: datetime(2026, 8, 20, 16, tzinfo=timezone.utc))
+    sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
+
+    for category in (
+        "Food & Dining",
+        "Housing",
+        "Auto & Transport",
+        "Shopping",
+        "Travel & Lifestyle",
+        "Health & Wellness",
+    ):
+        create_goal(db, user.id, "track_spending", 0, None, category=category, window="this_month")
+
+    assert get_goal_progress(db, user.id)["active_count"] == 0
+    for i in range(5):
+        create_goal(db, user.id, "save", 100.0 + i, None)
+    assert get_goal_progress(db, user.id)["active_count"] == 5
+    try:
+        create_goal(db, user.id, "save", 50.0, None)
+        raise AssertionError("expected GoalLimitReached")
+    except GoalLimitReached:
+        pass
+    extra = create_goal(db, user.id, "track_spending", 0, None, category="Education", window="this_month")
+    assert extra.status == "active"
+
+
 def test_track_spending_goal_progress_is_category_spend_this_month(db, user, monkeypatch):
     from datetime import datetime, timezone
 
@@ -221,3 +253,65 @@ def test_track_spending_ahead_of_pace_before_the_cap(db, user, monkeypatch):
     assert progress["remaining_amount"] == 14.5
     assert progress["over_budget"] is False
     assert progress["on_pace"] is False
+
+
+def test_orphaned_dining_tracker_follows_the_eating_out_alias(db, user, monkeypatch):
+    """A tracker stored as name 'Dining' with no category id (the keys
+    migration missed aliases) must show live eating-out spend, not the
+    frozen number left on the row."""
+    from datetime import datetime, timezone
+
+    from app.db.models import Goal
+    from app.services import money_query
+    from app.services.goal_service import TRACK_SPENDING
+
+    monkeypatch.setattr(money_query, "_now", lambda: datetime(2026, 8, 20, 16, tzinfo=timezone.utc))
+    sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
+
+    goal = Goal(
+        user_id=user.id,
+        type=TRACK_SPENDING,
+        name="Dining",
+        target_amount=500,
+        starting_amount=0,
+        current_progress_amount=1382.82,
+        status="active",
+        window="this_month",
+    )
+    db.add(goal)
+    db.commit()
+
+    progress = get_goal_progress(db, user.id)["goals"][0]
+    assert progress["name"] == "Dining"
+    assert progress["category"] == "Eating Out"
+    assert progress["current_progress_amount"] == 45.0  # Ramen Spot; groceries stay in Food & Dining
+    assert progress["over_budget"] is False
+
+
+def test_orphaned_tracker_with_no_category_does_not_keep_stale_spend(db, user, monkeypatch):
+    from datetime import datetime, timezone
+
+    from app.db.models import Goal
+    from app.services import money_query
+    from app.services.goal_service import TRACK_SPENDING
+
+    monkeypatch.setattr(money_query, "_now", lambda: datetime(2026, 8, 20, 16, tzinfo=timezone.utc))
+    sync_user_accounts(db, user.id, "fake-token", aggregator=FakeAggregatorClient())
+
+    db.add(
+        Goal(
+            user_id=user.id,
+            type=TRACK_SPENDING,
+            name="Not a real category",
+            target_amount=500,
+            starting_amount=0,
+            current_progress_amount=1382.82,
+            status="active",
+            window="this_month",
+        )
+    )
+    db.commit()
+
+    progress = get_goal_progress(db, user.id)["goals"][0]
+    assert progress["current_progress_amount"] == 0.0
+    assert progress["category"] is None

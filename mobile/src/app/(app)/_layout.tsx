@@ -219,6 +219,10 @@ export default function SignedInLayout() {
                     <Stack.Screen name="recap/[week]" />
                     <Stack.Screen name="money" options={sheet([0.6, 1], colors.bg)} />
                     <Stack.Screen name="goal-new" options={sheet([0.92, 1], colors.bg)} />
+                    <Stack.Screen name="track-new" options={sheet([0.92, 1], colors.bg)} />
+                    <Stack.Screen name="money-left" options={sheet([0.92, 1], colors.bg)} />
+                    <Stack.Screen name="recurring-edit" options={sheet([0.92, 1], colors.bg)} />
+                    <Stack.Screen name="visuals" />
                     <Stack.Screen name="history" options={sheet([0.6, 1], colors.bg)} />
                     <Stack.Screen name="source" options={sheet([0.75, 1], colors.bg)} />
                     <Stack.Screen name="filter-date" options={sheet([0.92], colors.bg)} />

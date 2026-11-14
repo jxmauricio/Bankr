@@ -14,8 +14,8 @@ export function GoalsStrip() {
   const styles = useStyles();
   const token = useToken();
   const { goals, refresh } = useMoney();
-  const list = goals.goals;
-  const atLimit = goals.active_count >= goals.max_goals;
+  const list = goals.goals.filter((g) => g.type !== "track_spending");
+  const atLimit = list.length >= goals.max_goals;
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   function add() {
@@ -24,7 +24,7 @@ export function GoalsStrip() {
 
   function confirmRemove(goal: GoalProgress) {
     const title = goal.name ?? goal.label ?? goal.category ?? "this goal";
-    Alert.alert(`Delete ${title}?`, "This stops tracking it. Your transactions stay put.", [
+    Alert.alert(`Delete ${title}?`, "This removes the goal. Your transactions stay put.", [
       { text: "Keep", style: "cancel" },
       {
         text: "Delete",
@@ -65,7 +65,7 @@ export function GoalsStrip() {
       </View>
       {list.length === 0 ? (
         <Pressable accessibilityRole="button" onPress={add}>
-          <Text tone="soft">No goals yet. Add a savings goal or a spending tracker.</Text>
+          <Text tone="soft">No goals yet. Add a savings goal.</Text>
         </Pressable>
       ) : (
         list.map((g) => (
@@ -84,28 +84,20 @@ export function GoalsStrip() {
 function GoalRow({ goal, busy, onRemove }: { goal: GoalProgress; busy: boolean; onRemove: () => void }) {
   const styles = useStyles();
   const colors = useColors();
-  const capped = goal.target_amount > 0;
   const fraction = Math.min(1, Math.max(0, goal.progress_fraction ?? 0));
-  const tracking = goal.type === "track_spending";
-  const barColor = tracking
-    ? goal.over_budget
-      ? colors.negative
-      : colors.accent
-    : goal.on_pace === false
-      ? colors.warn
-      : colors.positive;
+  const barColor = goal.on_pace === false ? colors.warn : colors.positive;
 
   return (
     <View style={[styles.goal, busy && styles.busy]}>
       <View style={styles.top}>
         <Text variant="strong" numberOfLines={1} style={styles.flex}>
-          {goal.name ?? goal.label ?? goal.category ?? "Goal"}
+          {goal.name ?? goal.label ?? "Goal"}
         </Text>
         <Text variant="moneySmall" tone="soft">
-          {capped ? `${whole(goal.current_progress_amount)} of ${whole(goal.target_amount)}` : `${whole(goal.current_progress_amount)} spent`}
+          {`${whole(goal.current_progress_amount)} of ${whole(goal.target_amount)}`}
         </Text>
       </View>
-      {capped && <FillBar fraction={fraction} color={barColor} />}
+      <FillBar fraction={fraction} color={barColor} />
       <View style={styles.top}>
         <Text variant="caption" tone="soft" style={styles.flex}>
           {goalNote(goal)}
@@ -126,13 +118,6 @@ function monthYear(iso: string): string {
 }
 
 function goalNote(goal: GoalProgress): string {
-  const period = goal.window_label ?? "";
-  if (goal.type === "track_spending") {
-    if (goal.target_amount <= 0) return period;
-    const remaining = goal.remaining_amount ?? goal.target_amount - goal.current_progress_amount;
-    const left = remaining < 0 ? `Over by ${whole(-remaining)}` : `${whole(remaining)} left`;
-    return period ? `${left} · ${period}` : left;
-  }
   const remaining = goal.target_amount - goal.current_progress_amount;
   if (remaining <= 0) return "Reached";
   if (!goal.target_date) return `${Math.round((goal.progress_fraction ?? 0) * 100)}% of the way`;

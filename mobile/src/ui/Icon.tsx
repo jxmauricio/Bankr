@@ -83,6 +83,42 @@ const ICONS = {
     </>
   ),
   flow: <Path d="M3 6c8 0 8 6 18 6M3 6c8 0 8 12 18 12M3 6c8 0 10-2 18-2" />,
+  pie: (
+    <>
+      <Circle cx="12" cy="12" r="8" />
+      <Path d="M12 4v8" />
+      <Path d="M12 12l6.9 4" />
+      <Path d="M12 12l-6.9 4" />
+    </>
+  ),
+  bars: (
+    <>
+      <Rect x="4" y="11" width="4" height="9" />
+      <Rect x="10" y="5" width="4" height="15" />
+      <Rect x="16" y="9" width="4" height="11" />
+    </>
+  ),
+  wallet: (
+    <>
+      <Rect x="3" y="7" width="18" height="12" rx="2" />
+      <Path d="M16 13h3" />
+    </>
+  ),
+  plus: <Path d="M12 5v14M5 12h14" />,
+  pencil: (
+    <>
+      <Path d="M4 20h4L19 9l-4-4L4 16v4Z" />
+      <Path d="m15 5 4 4" />
+    </>
+  ),
+  /** Budget tab: a bill with a dollar sign. */
+  budget: (
+    <>
+      <Rect x="5" y="3" width="14" height="18" rx="2" />
+      <Path d="M12 8v8" />
+      <Path d="M14.5 9.4c0-1-1.1-1.6-2.5-1.6s-2.5.6-2.5 1.6 1 1.4 2.5 1.4 2.5.6 2.5 1.6-1.1 1.6-2.5 1.6-2.5-.6-2.5-1.6" />
+    </>
+  ),
   pulse: <Path d="M3 12h4l2-6 3 12 2-6h7" />,
   sparkle: (
     <>

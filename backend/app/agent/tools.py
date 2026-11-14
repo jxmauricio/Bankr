@@ -34,6 +34,7 @@ from app.services.goal_service import (
     TRACKING_WINDOWS,
     GoalValidationError,
     list_active_goals,
+    list_active_save_goals,
     normalize_goal_kind,
     spend_for_tracker,
     tracker_category,
@@ -488,16 +489,25 @@ def _progress_for(db: Session, user_id: UUID, goal: Goal) -> dict:
 
 
 def _tracker_progress(db: Session, user_id: UUID, goal: Goal) -> dict:
-    spent = float(goal.current_progress_amount)
+    # Live spend only. A stored current_progress_amount can be months stale
+    # when the tracker lost its category id (name-only rows from the keys
+    # migration) — Budget was showing that frozen number next to real
+    # Food & Dining spend from Transactions.
+    spent = 0.0
     spend: dict = {}
     category_name = None
     try:
-        category = tracker_category(db, user_id, goal)
-        if category is not None:
-            category_name = category.name
-            if goal.window:
-                spend = spend_for_tracker(db, user_id, category, goal.window)
-                spent = float(spend["total_spent"])
+        if goal.window and goal.merchant:
+            today = mq.today_for_user(db, user_id)
+            spend = mq.spend_query(db, user_id, mq.resolve_window(today, goal.window), merchant=goal.merchant)
+            spent = float(spend["total_spent"])
+        else:
+            category = tracker_category(db, user_id, goal)
+            if category is not None:
+                category_name = category.name
+                if goal.window:
+                    spend = spend_for_tracker(db, user_id, category, goal.window)
+                    spent = float(spend["total_spent"])
     except mq.QueryError:
         pass
 
@@ -515,8 +525,9 @@ def _tracker_progress(db: Session, user_id: UUID, goal: Goal) -> dict:
     result = {
         "id": str(goal.id),
         "type": goal.type,
-        "name": goal.name or category_name or "Spending",
+        "name": goal.name or goal.merchant or category_name or "Spending",
         "category": category_name,
+        "merchant": goal.merchant,
         "window": goal.window,
         "window_label": TRACKING_WINDOW_LABELS.get(goal.window or "", goal.window),
         "window_start": spend.get("start"),
@@ -542,7 +553,7 @@ def get_goal_progress(db: Session, user_id: UUID) -> dict:
     payloads = [_progress_for(db, user_id, goal) for goal in goals]
     result: dict = {
         "goals": payloads,
-        "active_count": len(payloads),
+        "active_count": sum(1 for g in goals if g.type == SAVE),
         "max_goals": MAX_ACTIVE_GOALS,
     }
     if not payloads:
@@ -645,9 +656,9 @@ def propose_goal(
     """Draft a goal for the user to confirm in the chat UI.
 
     Does not write -- Centsio only creates a Goal row after the user taps
-    Set goal on the card (POST /goals). Centsio tracks up to MAX_ACTIVE_GOALS
-    active goals; this tool reports remaining slots so the UI can add
-    another card on the left instead of replacing.
+    Set goal on the card (POST /goals). Savings goals are capped at
+    MAX_ACTIVE_GOALS; spending trackers are not. Remaining slots are for
+    savings goals so the UI can add another card instead of replacing.
     """
     parsed = _parse_goal_proposal(
         db,
@@ -662,22 +673,23 @@ def propose_goal(
     if "error" in parsed:
         return parsed
 
-    existing = list_active_goals(db, user_id)
-    at_limit = len(existing) >= MAX_ACTIVE_GOALS
+    saves = list_active_save_goals(db, user_id)
+    tracking = parsed.get("type") == TRACK_SPENDING
+    at_limit = (not tracking) and len(saves) >= MAX_ACTIVE_GOALS
     proposal = {
         **parsed,
         "replaces_existing": False,
         "at_limit": at_limit,
-        "active_count": len(existing),
-        "slots_remaining": max(MAX_ACTIVE_GOALS - len(existing), 0),
+        "active_count": len(saves),
+        "slots_remaining": max(MAX_ACTIVE_GOALS - len(saves), 0),
     }
     if at_limit:
         return {
             "status": "at_limit",
             "proposal": proposal,
             "message": (
-                f"The user already has {MAX_ACTIVE_GOALS} active goals, the maximum. "
-                "Do not tell them to confirm a new one."
+                f"The user already has {MAX_ACTIVE_GOALS} active savings goals, the maximum. "
+                "Do not tell them to confirm a new one. Spending trackers are unlimited."
             ),
         }
     return {

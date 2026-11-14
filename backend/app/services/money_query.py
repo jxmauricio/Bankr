@@ -519,6 +519,7 @@ def spend_query(
     category: ResolvedCategory | None = None,
     group_by: str | None = None,
     top_n: int | None = None,
+    merchant: str | None = None,
 ) -> dict:
     """group_by: None | "category" (top-level, subcategories rolled up) |
     "subcategory" (leaf) | "merchant". Groups are sorted biggest first and
@@ -526,6 +527,8 @@ def spend_query(
     q = _base_query(db, user_id, window, "expense")
     if category is not None:
         q = q.filter(Transaction.category_id.in_(category.ids))
+    if merchant and merchant.strip():
+        q = q.filter(Transaction.merchant_name.ilike(f"%{merchant.strip()}%"))
 
     outflow = func.sum(case((Transaction.amount < 0, -Transaction.amount), else_=0))
     refunds = func.sum(case((Transaction.amount > 0, Transaction.amount), else_=0))

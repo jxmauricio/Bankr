@@ -304,11 +304,11 @@ function Chips({
   const styles = useStyles();
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-      {options.map((o) => {
+      {options.map((o, i) => {
         const selected = o.value === value;
         return (
           <Pressable
-            key={o.value}
+            key={`${o.value}-${i}`}
             accessibilityRole="radio"
             accessibilityState={{ checked: selected }}
             onPress={() => onChange(o.value)}

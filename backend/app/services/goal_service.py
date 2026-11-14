@@ -31,7 +31,7 @@ LEGACY_SAVE_NAMES = {
 }
 ACCEPTED_GOAL_TYPES = GOAL_TYPES | set(LEGACY_SAVE_NAMES)
 DEFAULT_SAVE_NAME = "Savings"
-MAX_ACTIVE_GOALS = 5
+MAX_ACTIVE_GOALS = 5  # savings goals only; spending trackers are uncapped
 
 # Rolling windows that make sense as a live tracker. Past-only windows
 # (last_month, yesterday) are excluded -- those periods are already over.
@@ -88,6 +88,16 @@ def list_active_goals(db: Session, user_id: UUID) -> list[Goal]:
     )
 
 
+def list_active_save_goals(db: Session, user_id: UUID) -> list[Goal]:
+    """Savings goals that count toward the five-slot cap. Trackers do not."""
+    return (
+        db.query(Goal)
+        .filter(Goal.user_id == user_id, Goal.status == "active", Goal.type == SAVE)
+        .order_by(Goal.created_at.asc())
+        .all()
+    )
+
+
 def spend_for_tracker(db: Session, user_id: UUID, category: mq.ResolvedCategory, window_name: str) -> dict:
     """Category spend in a named window -- the live number for a tracker."""
     window = mq.resolve_window(mq.today_for_user(db, user_id), window_name)
@@ -96,12 +106,32 @@ def spend_for_tracker(db: Session, user_id: UUID, category: mq.ResolvedCategory,
 
 def tracker_category(db: Session, user_id: UUID, goal: Goal) -> mq.ResolvedCategory | None:
     """What a spending tracker watches, or None for a savings goal. Raises
-    QueryError if its category is gone."""
+    QueryError if its stored category is gone.
+
+    Trackers created before category ids (or left behind when a rename
+    dropped the old name column) may only have `goal.name`. Resolve that
+    the same way Centsio does, including aliases like "dining" → Eating Out,
+    so Budget and chat don't keep a frozen spend figure.
+    """
     if goal.category_slice:
         return mq.resolve_category(db, goal.category_slice, user_id)
     if goal.group_id or goal.category_id:
         return mq.resolve_stored(db, user_id, group_id=goal.group_id, category_id=goal.category_id)
-    return None
+    if goal.merchant or not (goal.name or "").strip():
+        return None
+    try:
+        return mq.resolve_category(db, goal.name, user_id)
+    except mq.QueryError:
+        return None
+
+
+def _reattach_tracker(goal: Goal, category: mq.ResolvedCategory) -> None:
+    """Fill in ids on a name-only tracker so the next sync doesn't rely on the name."""
+    if goal.category_slice or goal.group_id or goal.category_id:
+        return
+    goal.group_id = category.group_id
+    goal.category_id = category.category_id
+    goal.category_slice = category.slice
 
 
 def normalize_goal_kind(goal_type: str | None, name: str | None, category: str | None = None) -> tuple[str, str]:
@@ -126,17 +156,48 @@ def create_goal(
     category: str | None = None,
     window: str | None = None,
     name: str | None = None,
+    merchant: str | None = None,
 ) -> Goal:
-    if len(list_active_goals(db, user_id)) >= MAX_ACTIVE_GOALS:
-        raise GoalLimitReached(f"You can have up to {MAX_ACTIVE_GOALS} active goals.")
-
     kind, title = normalize_goal_kind(goal_type, name, category)
+    if kind == SAVE and len(list_active_save_goals(db, user_id)) >= MAX_ACTIVE_GOALS:
+        raise GoalLimitReached(f"You can have up to {MAX_ACTIVE_GOALS} active goals.")
     if kind == TRACK_SPENDING:
-        goal = _new_spending_tracker(db, user_id, target_amount, category, window, title)
+        goal = _apply_spending_tracker(db, user_id, target_amount, category, window, title, merchant=merchant)
+        db.add(goal)
     else:
         goal = _new_savings_goal(db, user_id, target_amount, target_date, title)
+        db.add(goal)
 
-    db.add(goal)
+    db.commit()
+    db.refresh(goal)
+    return goal
+
+
+def update_goal(
+    db: Session,
+    user_id: UUID,
+    goal_id: UUID,
+    *,
+    target_amount: float,
+    category: str | None = None,
+    merchant: str | None = None,
+    window: str | None = None,
+    name: str | None = None,
+) -> Goal:
+    """Change an active spending tracker's name, limit, window, or what it watches."""
+    goal = (
+        db.query(Goal)
+        .filter(Goal.id == goal_id, Goal.user_id == user_id, Goal.status == "active")
+        .one_or_none()
+    )
+    if goal is None:
+        raise GoalNotFound()
+    if goal.type != TRACK_SPENDING:
+        raise GoalValidationError("only a spending tracker can be edited this way")
+    title = (name or "").strip()
+    _apply_spending_tracker(
+        db, user_id, target_amount, category, window, title, merchant=merchant, goal=goal
+    )
     db.commit()
     db.refresh(goal)
     return goal
@@ -179,20 +240,24 @@ def _new_savings_goal(
     )
 
 
-def _new_spending_tracker(
+def _apply_spending_tracker(
     db: Session,
     user_id: UUID,
     target_amount: float,
     category: str | None,
     window: str | None,
     name: str,
+    merchant: str | None = None,
+    goal: Goal | None = None,
 ) -> Goal:
-    if not category or not str(category).strip():
-        raise GoalValidationError("category is required for a spending tracker")
-    try:
-        resolved = mq.resolve_category(db, category, user_id)
-    except mq.QueryError as e:
-        raise GoalValidationError(str(e), extra=e.extra) from e
+    merch = (merchant or "").strip() or None
+    cat = (category or "").strip() or None
+    if merch and cat:
+        raise GoalValidationError("use a category or a vendor, not both")
+    if not merch and not cat:
+        raise GoalValidationError("category or merchant is required for a spending tracker")
+    if merch and len(merch) < 2:
+        raise GoalValidationError("merchant needs at least 2 characters")
 
     window_name = window or DEFAULT_TRACKING_WINDOW
     if window_name not in TRACKING_WINDOWS:
@@ -200,31 +265,61 @@ def _new_spending_tracker(
     if target_amount < 0:
         raise GoalValidationError("target_amount must be zero or positive")
 
+    if goal is None:
+        goal = Goal(
+            user_id=user_id,
+            type=TRACK_SPENDING,
+            target_date=None,
+            starting_amount=0,
+            status="active",
+        )
+
+    if merch:
+        today = mq.today_for_user(db, user_id)
+        spent = mq.spend_query(db, user_id, mq.resolve_window(today, window_name), merchant=merch)["total_spent"]
+        goal.name = name.strip() if name and name.strip() else merch
+        goal.target_amount = target_amount
+        goal.current_progress_amount = spent
+        goal.merchant = merch
+        goal.window = window_name
+        goal.group_id = None
+        goal.category_id = None
+        goal.category_slice = None
+        return goal
+
+    try:
+        resolved = mq.resolve_category(db, cat, user_id)
+    except mq.QueryError as e:
+        raise GoalValidationError(str(e), extra=e.extra) from e
+
     spent = spend_for_tracker(db, user_id, resolved, window_name)["total_spent"]
-    title = name.strip() if name and name.strip() else resolved.name
-    return Goal(
-        user_id=user_id,
-        type=TRACK_SPENDING,
-        name=title,
-        target_amount=target_amount,
-        target_date=None,
-        starting_amount=0,
-        current_progress_amount=spent,
-        status="active",
-        group_id=resolved.group_id,
-        category_id=resolved.category_id,
-        category_slice=resolved.slice,
-        window=window_name,
-    )
+    goal.name = name.strip() if name and name.strip() else resolved.name
+    goal.target_amount = target_amount
+    goal.current_progress_amount = spent
+    goal.merchant = None
+    goal.window = window_name
+    goal.group_id = resolved.group_id
+    goal.category_id = resolved.category_id
+    goal.category_slice = resolved.slice
+    return goal
 
 
 def recompute_goal_progress(db: Session, user_id: UUID, snapshot: NetWorthSnapshot) -> None:
     for goal in list_active_goals(db, user_id):
         if goal.type == TRACK_SPENDING:
             try:
-                category = tracker_category(db, user_id, goal)
-                if category is None or not goal.window:
+                if not goal.window:
                     continue
+                if goal.merchant:
+                    today = mq.today_for_user(db, user_id)
+                    goal.current_progress_amount = mq.spend_query(
+                        db, user_id, mq.resolve_window(today, goal.window), merchant=goal.merchant
+                    )["total_spent"]
+                    continue
+                category = tracker_category(db, user_id, goal)
+                if category is None:
+                    continue
+                _reattach_tracker(goal, category)
                 goal.current_progress_amount = spend_for_tracker(db, user_id, category, goal.window)["total_spent"]
             except mq.QueryError:
                 continue

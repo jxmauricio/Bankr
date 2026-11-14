@@ -586,7 +586,7 @@ export function HomePage({ onNoBanksLeft }: { onNoBanksLeft: () => void }) {
       {creatingGoal && token && (
         <CreateGoalModal
           token={token}
-          atLimit={goals.length >= 5}
+          atLimit={goals.filter((g) => g.type !== "track_spending").length >= 5}
           onClose={() => setCreatingGoal(false)}
           onCreated={refreshGoalProgress}
         />

@@ -49,6 +49,11 @@ export function spendCategoryNames(categories: CategoryNode[]): string[] {
   return categories.filter((c) => c.type === "expense").flatMap((c) => [c.name, ...c.children.map((k) => k.name)]);
 }
 
+/** Expense groups with their subcategory names, for a searchable picker. */
+export function spendCategoryGroups(categories: CategoryNode[]): { name: string; children: string[] }[] {
+  return categories.filter((c) => c.type === "expense").map((c) => ({ name: c.name, children: c.children.map((k) => k.name) }));
+}
+
 /** The current name for a category given by key ("restaurants") or name:
  * goal proposals name categories by key, so they survive a rename. */
 export function categoryName(categories: CategoryNode[], keyOrName: string): string {

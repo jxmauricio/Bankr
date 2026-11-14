@@ -57,7 +57,7 @@ export function ChatChart({ chart }: { chart: ChartSpec }) {
       ) : (
         <Pressable onPress={openCashFlow} style={styles.footer}>
           <Text variant="caption" tone="accent">
-            See the income and spending behind this in Cash flow →
+            See the income and spending behind this →
           </Text>
         </Pressable>
       )}

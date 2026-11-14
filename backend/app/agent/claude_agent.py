@@ -337,7 +337,7 @@ TOOL_DEFINITIONS = [
     ),
     ToolSpec(
         name="get_goal_progress",
-        description="Get the user's active financial goals (up to 5) and progress toward each, including savings pace and spending-tracker totals.",
+        description="Get the user's active financial goals (up to 5 savings goals, plus any spending trackers) and progress toward each, including savings pace and spending-tracker totals.",
         parameters={"type": "object", "properties": {}},
     ),
     ToolSpec(
@@ -383,8 +383,8 @@ TOOL_DEFINITIONS = [
             "set or work toward a named savings target (a trip, an emergency fund, paying off debt) or "
             "to track itemized spending in a category over a time window. Only two types: save and "
             "track_spending. Paying off debt / savings / emergency fund belong in name, not type. "
-            "Does not create the goal -- the user confirms on a card. Adds a new active goal "
-            "alongside existing ones (up to 5)."
+            "Does not create the goal -- the user confirms on a card. Savings goals sit "
+            "alongside existing ones (up to 5). Spending trackers are unlimited."
         ),
         parameters={
             "type": "object",

@@ -83,6 +83,26 @@ def test_detects_monthly_weekly_yearly_and_income(db, user):
     assert all(s.status == "suggested" for s in found.values())
 
 
+def test_gym_dues_still_detect_with_small_extra_charges(db, user):
+    """A $199 membership plus $5 locker fees at the same merchant is still monthly."""
+    _sync(
+        db,
+        user,
+        [
+            *_monthly("gym", "Dstmrtlats", -199.0, "PERSONAL_CARE_GYMS_AND_FITNESS_CENTERS", day=28),
+            _t("fee1", date(2026, 9, 10), -5.0, "Dstmrtlats", "GENERAL_MERCHANDISE_OTHER"),
+            _t("fee2", date(2026, 8, 20), -3.0, "Dstmrtlats", "GENERAL_MERCHANDISE_OTHER"),
+            _t("fee3", date(2026, 6, 23), -5.0, "Dstmrtlats", "GENERAL_MERCHANDISE_OTHER"),
+        ],
+    )
+    detect_recurring(db, user.id)
+    found = _by_name(db, user)
+    gym = found["dstmrtlats"]
+    assert gym.cadence == "monthly"
+    assert float(gym.last_amount) == 199.0
+    assert gym.kind == "bill"
+
+
 def test_software_and_streaming_are_subscriptions_other_services_are_bills(db, user):
     other = "GENERAL_SERVICES_OTHER_GENERAL_SERVICES"
     _sync(
@@ -110,6 +130,13 @@ def test_user_choices_survive_redetection(client, db, user):
 
     r = client.patch(f"/recurring/{found['netflix'].id}", json={"status": "confirmed", "kind": "subscription"})
     assert r.status_code == 200 and r.json()["status"] == "confirmed"
+    edited = client.patch(
+        f"/recurring/{found['netflix'].id}",
+        json={"name": "Netflix Family", "cadence": "monthly", "last_amount": 22.99, "next_expected_date": "2026-10-05"},
+    ).json()
+    assert edited["name"] == "Netflix Family"
+    assert edited["last_amount"] == 22.99
+    assert edited["next_expected_date"] == "2026-10-05"
     client.patch(f"/recurring/{found['hulu'].id}", json={"status": "dismissed"})
 
     detect_recurring(db, user.id)
@@ -119,11 +146,11 @@ def test_user_choices_survive_redetection(client, db, user):
     assert found["hulu"].status == "dismissed"
 
     overview = client.get("/recurring").json()
-    assert [s["name"] for s in overview["series"]] == ["Netflix"]
+    assert [s["name"] for s in overview["series"]] == ["Netflix Family"]
     assert overview["monthly"]["subscriptions"] == 15.49
     assert overview["upcoming"][0] == {
         "series_id": str(found["netflix"].id),
-        "name": "Netflix",
+        "name": "Netflix Family",
         "kind": "subscription",
         "status": "confirmed",
         "date": "2026-10-05",
