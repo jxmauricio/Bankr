@@ -9,7 +9,7 @@ import { useResource } from "@/lib/useResource";
 import { useFloatingTabInset } from "@/theme/tabBar";
 import { space } from "@/theme/tokens";
 import { makeStyles, useColors } from "@/theme/theme";
-import { Card, ErrorState, Icon, Initial, ListRow, Loading, Text } from "@/ui";
+import { Card, ErrorState, Icon, ListRow, Loading, MerchantMark, Text } from "@/ui";
 
 const CADENCE: Record<string, string> = {
   weekly: "Weekly",
@@ -73,7 +73,7 @@ function RecurringRow({ series, onPress }: { series: RecurringSeries; onPress: (
   return (
     <ListRow
       onPress={onPress}
-      leading={<Initial name={series.name} />}
+      leading={<MerchantMark name={series.name} />}
       title={series.name}
       subtitle={bits.join(" · ")}
       trailing={

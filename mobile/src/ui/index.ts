@@ -8,6 +8,7 @@ export { FilterChip, ResetChip, ToggleChip } from "./FilterChip";
 export { Icon, type IconName } from "./Icon";
 export { IconButton } from "./IconButton";
 export { groupPosition, Initial, ListRow, SectionHeader, type GroupPosition } from "./ListRow";
+export { MerchantMark } from "./MerchantMark";
 export { PageHeader } from "./PageHeader";
 export { Panel } from "./Panel";
 export { RegisterAmount } from "./RegisterAmount";

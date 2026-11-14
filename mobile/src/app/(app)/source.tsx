@@ -5,7 +5,7 @@ import { fetchQuery, type SourceQuery } from "@/lib/api";
 import { describeRowAmount, formatDate, formatMoney } from "@/lib/format";
 import { useResource } from "@/lib/useResource";
 import { space } from "@/theme/tokens";
-import { ErrorState, Initial, ListRow, Loading, Text, TextField } from "@/ui";
+import { ErrorState, ListRow, Loading, MerchantMark, Text, TextField } from "@/ui";
 
 /**
  * The transactions behind a chat answer's figure, source, record or chart bar,
@@ -52,7 +52,7 @@ export default function SourceSheet() {
             : describeRowAmount(item.amount, group);
         return (
           <ListRow
-            leading={<Initial name={item.merchant_name ?? item.category ?? "Transaction"} />}
+            leading={<MerchantMark name={item.merchant_name ?? item.category ?? "Transaction"} />}
             title={item.merchant_name ?? item.category ?? "Transaction"}
             subtitle={[
               formatDate(item.date),

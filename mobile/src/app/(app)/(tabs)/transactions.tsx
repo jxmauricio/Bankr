@@ -28,8 +28,8 @@ import {
   ErrorState,
   FilterChip,
   groupPosition,
-  Initial,
   ListRow,
+  MerchantMark,
   Loading,
   ResetChip,
   Screen,
@@ -220,7 +220,7 @@ function TransactionItem({ transaction, group }: { transaction: TransactionRow; 
   return (
     <ListRow
       group={group}
-      leading={<Initial name={merchantOf(transaction)} />}
+      leading={<MerchantMark name={merchantOf(transaction)} />}
       title={merchantOf(transaction)}
       subtitle={subtitle}
       trailing={
