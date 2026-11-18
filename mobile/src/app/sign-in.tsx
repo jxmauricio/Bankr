@@ -1,25 +1,24 @@
+import { useRouter } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from "react-native";
-import { ApiError, login, signUp } from "@/lib/api";
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
+import { ApiError, login } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { space } from "@/theme/tokens";
-import { Button, Screen, Text, TextField } from "@/ui";
+import { Button, Screen, Text, TextField, Wordmark } from "@/ui";
 
 export default function SignInScreen() {
+  const router = useRouter();
   const { signIn } = useSession();
-  const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
-  const isSignup = mode === "signup";
 
   async function submit() {
     setError(null);
     setIsBusy(true);
     try {
-      const response = isSignup ? await signUp(email.trim(), password, inviteCode.trim()) : await login(email.trim(), password);
+      const response = await login(email.trim(), password);
       signIn(response.session_token);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't reach Centsio. Check your connection.");
@@ -32,11 +31,9 @@ export default function SignInScreen() {
     <Screen edges={["top", "bottom"]}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.fill}>
         <View style={styles.hero}>
-          <Text variant="title" tone="accent">
-            centsio_
-          </Text>
-          <Text variant="display">Ask your money anything.</Text>
-          <Text tone="soft">Check every answer.</Text>
+          <Wordmark />
+          <Text variant="display">Log in.</Text>
+          <Text tone="soft">Welcome back.</Text>
         </View>
 
         <View style={styles.form}>
@@ -55,23 +52,16 @@ export default function SignInScreen() {
             value={password}
             onChangeText={setPassword}
             secureTextEntry
-            autoComplete={isSignup ? "new-password" : "current-password"}
-            textContentType={isSignup ? "newPassword" : "password"}
+            autoComplete="current-password"
+            textContentType="password"
           />
-          {isSignup && (
-            <TextField label="Invite code" value={inviteCode} onChangeText={setInviteCode} autoCapitalize="none" />
-          )}
           {error && (
             <Text variant="caption" tone="negative" accessibilityRole="alert">
               {error}
             </Text>
           )}
-          <Button label={isSignup ? "Create account" : "Sign in"} onPress={submit} loading={isBusy} />
-          <Pressable onPress={() => setMode(isSignup ? "login" : "signup")} style={styles.switch}>
-            <Text variant="caption" tone="soft" align="center">
-              {isSignup ? "Have an account? Sign in" : "New here? Create an account"}
-            </Text>
-          </Pressable>
+          <Button label="Sign in" onPress={submit} loading={isBusy} />
+          <Button label="Back" variant="ghost" onPress={() => router.replace("/")} />
         </View>
       </KeyboardAvoidingView>
     </Screen>
@@ -82,5 +72,4 @@ const styles = StyleSheet.create({
   fill: { flex: 1, justifyContent: "space-between" },
   hero: { gap: space.sm, paddingTop: space.xxl },
   form: { gap: space.md },
-  switch: { paddingVertical: space.sm },
 });

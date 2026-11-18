@@ -92,6 +92,38 @@ export interface Profile {
 
 export const fetchProfile = (token: string) => request<Profile>("/auth/me", { token });
 
+export interface FinancialProfileStatus {
+  completed: boolean;
+  markdown: string | null;
+}
+
+export type OnboardingOccupation = "salaried" | "contractor" | "student";
+export type OnboardingKnowledge = "nothing" | "somewhat" | "expert";
+export type OnboardingLifestyle = "strict" | "balanced" | "ball";
+export type OnboardingHousing = "rent" | "mortgage" | "none";
+
+export interface OnboardingAnswers {
+  age: number;
+  occupation: OnboardingOccupation;
+  monthly_income: number;
+  cash: number;
+  emergency_fund: number;
+  housing: OnboardingHousing;
+  housing_payment: number;
+  debts: { name: string; owed: number; paid_off: number }[];
+  investments: { name: string; amount: number }[];
+  goals: { name: string; target?: number | null; saved?: number | null }[];
+  knowledge: OnboardingKnowledge;
+  lifestyle: OnboardingLifestyle;
+}
+
+export const fetchFinancialProfile = (token: string) => request<FinancialProfileStatus>("/financial-profile", { token });
+
+export const saveFinancialProfile = (
+  token: string,
+  body: { path: "questions"; answers: OnboardingAnswers } | { path: "story"; story: string }
+) => request<FinancialProfileStatus>("/financial-profile", { method: "PUT", token, body });
+
 // --- Linked accounts ---
 
 export interface LinkTokenResponse {

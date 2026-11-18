@@ -18,4 +18,5 @@ export { SegmentedControl } from "./SegmentedControl";
 export { Sheet } from "./Sheet";
 export { ComingSoon, ErrorState, Loading } from "./States";
 export { Text } from "./Text";
+export { Wordmark } from "./Wordmark";
 export { TextField } from "./TextField";

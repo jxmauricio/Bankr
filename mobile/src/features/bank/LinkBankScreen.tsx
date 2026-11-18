@@ -1,7 +1,7 @@
 import { StyleSheet, View } from "react-native";
 import { useSession } from "@/lib/session";
 import { space } from "@/theme/tokens";
-import { Button, Screen, Text } from "@/ui";
+import { Button, Screen, Text, Wordmark } from "@/ui";
 import { useLinkBank } from "./useLinkBank";
 
 /** Onboarding's first step: no bank yet, so link one through Plaid. */
@@ -12,9 +12,7 @@ export function LinkBankScreen({ onLinked }: { onLinked: () => void }) {
   return (
     <Screen edges={["top", "bottom"]}>
       <View style={styles.hero}>
-        <Text variant="title" tone="accent">
-          centsio_
-        </Text>
+        <Wordmark />
         <Text variant="display">Link your bank.</Text>
         <Text tone="soft">
           Centsio reads your balances and transactions through Plaid, read-only. It can&apos;t move money, and you can disconnect any time.

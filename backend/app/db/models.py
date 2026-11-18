@@ -34,6 +34,11 @@ class User(Base):
     # where "this month" / "last week" start and end -- a UTC server
     # otherwise puts a 9pm Pacific purchase on the 1st into the wrong month.
     timezone: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Onboarding answers, rendered as financial_profile.md and prepended to
+    # every chat turn. Null until they finish (questions or a free-text story).
+    financial_profile: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    financial_profile_md: Mapped[str | None] = mapped_column(Text, nullable=True)
+    onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     linked_accounts: Mapped[list["LinkedAccount"]] = relationship(back_populates="user")
