@@ -32,7 +32,7 @@ export default function RootLayout() {
   );
 }
 
-/** Signed out sees only sign-in; signed in sees only the app. */
+/** Signed out: welcome, questionnaire, or login. Signed in: the app. */
 function RootStack() {
   usePushNotifications();
   const colors = useColors();
@@ -40,6 +40,8 @@ function RootStack() {
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Protected guard={!isAuthenticated}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="onboard" />
         <Stack.Screen name="sign-in" />
       </Stack.Protected>
       <Stack.Protected guard={isAuthenticated}>

@@ -16,6 +16,7 @@ from datetime import date, datetime, timedelta, timezone
 from statistics import mean, median, pstdev
 from uuid import UUID
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.db.models import Category, CategoryGroup, LinkedAccount, RecurringSeries, Transaction
@@ -71,6 +72,16 @@ def next_after(last: date, cadence: str) -> date:
     return last + timedelta(days=CADENCES[cadence][0])
 
 
+def prev_before(last: date, cadence: str) -> date:
+    if cadence == "monthly":
+        return add_months(last, -1)
+    if cadence == "quarterly":
+        return add_months(last, -3)
+    if cadence == "yearly":
+        return add_months(last, -12)
+    return last - timedelta(days=CADENCES[cadence][0])
+
+
 def is_active(series: RecurringSeries, today: date) -> bool:
     """Still expected: the next charge isn't more than one full cycle late."""
     gap, tolerance, _ = CADENCES[series.cadence]
@@ -102,6 +113,18 @@ def _match_cadence(gaps: list[int]) -> str | None:
     return None
 
 
+def _steadier_charges(charges: list[_Charge]) -> list[_Charge]:
+    """Keep the repeating amount (gym dues) and drop one-off extras at the
+    same merchant (a $5 locker fee next to $199 membership)."""
+    if len(charges) < 3:
+        return charges
+    center = median(c.amount for c in charges)
+    if center <= 0:
+        return charges
+    band = [c for c in charges if abs(c.amount - center) <= center * MAX_VARIATION]
+    return band if len(band) >= 3 else charges
+
+
 def _detect_group(charges: list[_Charge], direction: str) -> dict | None:
     # Same-day duplicates (a split, a retry) are one occurrence.
     by_day: dict[date, _Charge] = {}
@@ -110,7 +133,7 @@ def _detect_group(charges: list[_Charge], direction: str) -> dict | None:
             by_day[c.date].amount += c.amount
         else:
             by_day[c.date] = _Charge(c.date, c.amount, c.name, c.category_id, c.categories)
-    series = list(by_day.values())
+    series = _steadier_charges(list(by_day.values()))
     if len(series) < 2:
         return None
     gaps = [(b.date - a.date).days for a, b in zip(series, series[1:])]
@@ -150,13 +173,13 @@ def _charges(db: Session, user_id: UUID, since: date) -> dict[tuple[str, str], l
     rows = (
         db.query(Transaction, Category.system_key, Category.type, CategoryGroup.system_key)
         .join(LinkedAccount, Transaction.linked_account_id == LinkedAccount.id)
-        .join(Category, Transaction.category_id == Category.id)
-        .join(CategoryGroup, Category.group_id == CategoryGroup.id)
+        .outerjoin(Category, Transaction.category_id == Category.id)
+        .outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id)
         .filter(
             LinkedAccount.user_id == user_id,
             Transaction.date >= since,
             Transaction.is_pending.is_(False),
-            Category.type != "transfer",
+            or_(Category.type.is_(None), Category.type != "transfer"),
             *mq.counted_filters(),
         )
         .all()
@@ -278,6 +301,7 @@ def series_dict(s: RecurringSeries, today: date) -> dict:
         "monthly_amount": mq._money(monthly_amount(s)),
         "occurrences": s.occurrences,
         "is_active": is_active(s, today),
+        "in_budget": bool(s.in_budget),
         "price_changed": s.kind == "subscription"
         and abs(float(s.last_amount) - float(s.typical_amount)) > PRICE_CHANGE_THRESHOLD * float(s.typical_amount),
     }

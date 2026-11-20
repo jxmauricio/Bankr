@@ -172,7 +172,7 @@ def build_mcp_server(write: bool = False) -> FastMCP:
 
     @mcp.tool()
     def get_goal_progress() -> dict:
-        """Get the user's active financial goals (up to 5) and progress toward each, including whether they're on pace."""
+        """Get the user's active financial goals (up to 5 savings goals, plus spending trackers) and progress toward each, including whether they're on pace."""
         with _session() as db:
             return tools.get_goal_progress(db, _current_user_id.get())
 

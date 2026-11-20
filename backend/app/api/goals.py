@@ -19,6 +19,7 @@ from app.services.goal_service import (
     abandon_goal,
     create_goal,
     tracker_category,
+    update_goal,
 )
 
 router = APIRouter(prefix="/goals", tags=["goals"])
@@ -29,6 +30,15 @@ class CreateGoalRequest(BaseModel):
     target_amount: float = 0
     target_date: date | None = None
     category: str | None = None
+    merchant: str | None = None
+    window: str | None = None
+    name: str | None = None
+
+
+class UpdateGoalRequest(BaseModel):
+    target_amount: float = 0
+    category: str | None = None
+    merchant: str | None = None
     window: str | None = None
     name: str | None = None
 
@@ -43,6 +53,7 @@ class GoalResponse(BaseModel):
     current_progress_amount: float
     status: str
     category: str | None = None
+    merchant: str | None = None
     window: str | None = None
 
 
@@ -67,6 +78,7 @@ def set_goal(
             body.target_amount,
             body.target_date,
             category=body.category,
+            merchant=body.merchant,
             window=body.window,
             name=body.name,
         )
@@ -77,18 +89,34 @@ def set_goal(
         )
     except GoalValidationError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from e
-    return GoalResponse(
-        id=str(goal.id),
-        type=goal.type,
-        name=goal.name,
-        target_amount=float(goal.target_amount),
-        target_date=goal.target_date,
-        starting_amount=float(goal.starting_amount),
-        current_progress_amount=float(goal.current_progress_amount),
-        status=goal.status,
-        category=category.name if (category := tracker_category(db, user.id, goal)) else None,
-        window=goal.window,
-    )
+    return _goal_response(db, user.id, goal)
+
+
+@router.patch("/{goal_id}", response_model=GoalResponse)
+def patch_goal(
+    goal_id: UUID,
+    body: UpdateGoalRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GoalResponse:
+    if body.target_amount < 0:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "target_amount must be zero or positive")
+    try:
+        goal = update_goal(
+            db,
+            user.id,
+            goal_id,
+            target_amount=body.target_amount,
+            category=body.category,
+            merchant=body.merchant,
+            window=body.window,
+            name=body.name,
+        )
+    except GoalNotFound:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Goal not found")
+    except GoalValidationError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from e
+    return _goal_response(db, user.id, goal)
 
 
 @router.delete("/{goal_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -101,3 +129,20 @@ def delete_goal(
         abandon_goal(db, user.id, goal_id)
     except GoalNotFound:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Goal not found")
+
+
+def _goal_response(db: Session, user_id: UUID, goal) -> GoalResponse:
+    category = tracker_category(db, user_id, goal)
+    return GoalResponse(
+        id=str(goal.id),
+        type=goal.type,
+        name=goal.name,
+        target_amount=float(goal.target_amount),
+        target_date=goal.target_date,
+        starting_amount=float(goal.starting_amount),
+        current_progress_amount=float(goal.current_progress_amount),
+        status=goal.status,
+        category=category.name if category else None,
+        merchant=goal.merchant,
+        window=goal.window,
+    )

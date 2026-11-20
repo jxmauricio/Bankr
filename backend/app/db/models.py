@@ -34,6 +34,11 @@ class User(Base):
     # where "this month" / "last week" start and end -- a UTC server
     # otherwise puts a 9pm Pacific purchase on the 1st into the wrong month.
     timezone: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Onboarding answers, rendered as financial_profile.md and prepended to
+    # every chat turn. Null until they finish (questions or a free-text story).
+    financial_profile: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    financial_profile_md: Mapped[str | None] = mapped_column(Text, nullable=True)
+    onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     linked_accounts: Mapped[list["LinkedAccount"]] = relationship(back_populates="user")
@@ -260,6 +265,9 @@ class Goal(Base):
         ForeignKey("categories.id", ondelete="SET NULL"), nullable=True
     )
     category_slice: Mapped[str | None] = mapped_column(String, nullable=True)
+    # track_spending of a vendor: "Starbucks". Mutually exclusive with the
+    # category fields above.
+    merchant: Mapped[str | None] = mapped_column(String, nullable=True)
     window: Mapped[str | None] = mapped_column(String, nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="goals")
@@ -433,6 +441,9 @@ class RecurringSeries(Base):
     next_expected_date: Mapped[date] = mapped_column(Date)
     occurrences: Mapped[int] = mapped_column(default=0)
     status: Mapped[str] = mapped_column(String, default="suggested")  # suggested | confirmed | dismissed
+    # Budget lists recurring charges as a jumpstart. False keeps the series
+    # (still a bill/subscription) but drops it from the Budget tab.
+    in_budget: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
@@ -646,3 +657,22 @@ class McpProposal(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class CashFlowIncome(Base):
+    """Pay the user expects: a detected paycheck they adjusted, or a source
+    the bank never saw (side work, support, a partner's contribution)."""
+
+    __tablename__ = "cash_flow_incomes"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String)
+    amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    cadence: Mapped[str] = mapped_column(String, default="monthly")  # weekly | biweekly | monthly | yearly
+    included: Mapped[bool] = mapped_column(Boolean, default=True)
+    series_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("recurring_series.id", ondelete="SET NULL"), nullable=True
+    )
+    payer: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

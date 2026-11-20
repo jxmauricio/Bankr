@@ -9,7 +9,7 @@ import { formatMoney } from "@/lib/format";
 import { useResource } from "@/lib/useResource";
 import { radius, space } from "@/theme/tokens";
 import { makeStyles, useColors } from "@/theme/theme";
-import { Button, Card, ErrorState, groupPosition, Icon, Initial, ListRow, Loading, PageHeader, SectionHeader, Text } from "@/ui";
+import { Button, Card, ErrorState, groupPosition, Icon, ListRow, Loading, MerchantMark, PageHeader, SectionHeader, Text } from "@/ui";
 
 /**
  * One week's recap: what came in and went out, what it did to each goal,
@@ -366,7 +366,7 @@ function Lines({ title, lines, credit = false }: { title: string; lines: RecapLi
           key={`${line.merchant}-${line.date}-${i}`}
           title={line.merchant}
           subtitle={[line.category, line.date ? weekdayDate(line.date) : null].filter(Boolean).join(" · ")}
-          leading={<Initial name={line.merchant} size={36} />}
+          leading={<MerchantMark name={line.merchant} size={36} />}
           trailing={
             <Text variant="money" tone={credit ? "positive" : "default"}>
               {credit ? `+${formatMoney(line.amount)}` : formatMoney(line.amount)}

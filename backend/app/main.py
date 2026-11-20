@@ -12,6 +12,7 @@ from app.api.briefing import router as briefing_router
 from app.api.budgets import router as budgets_router
 from app.api.categories import router as categories_router
 from app.api.devices import router as devices_router
+from app.api.financial_profile import router as financial_profile_router
 from app.api.goals import router as goals_router
 from app.api.insights import router as insights_router
 from app.api.memory import router as memory_router
@@ -61,6 +62,7 @@ app.include_router(auth_router)
 app.include_router(accounts_router)
 app.include_router(dashboard_router)
 app.include_router(goals_router)
+app.include_router(financial_profile_router)
 app.include_router(transactions_router)
 app.include_router(categories_router)
 app.include_router(rules_router)

@@ -92,6 +92,38 @@ export interface Profile {
 
 export const fetchProfile = (token: string) => request<Profile>("/auth/me", { token });
 
+export interface FinancialProfileStatus {
+  completed: boolean;
+  markdown: string | null;
+}
+
+export type OnboardingOccupation = "salaried" | "contractor" | "student";
+export type OnboardingKnowledge = "nothing" | "somewhat" | "expert";
+export type OnboardingLifestyle = "strict" | "balanced" | "ball";
+export type OnboardingHousing = "rent" | "mortgage" | "none";
+
+export interface OnboardingAnswers {
+  age: number;
+  occupation: OnboardingOccupation;
+  monthly_income: number;
+  cash: number;
+  emergency_fund: number;
+  housing: OnboardingHousing;
+  housing_payment: number;
+  debts: { name: string; owed: number; paid_off: number }[];
+  investments: { name: string; amount: number }[];
+  goals: { name: string; target?: number | null; saved?: number | null }[];
+  knowledge: OnboardingKnowledge;
+  lifestyle: OnboardingLifestyle;
+}
+
+export const fetchFinancialProfile = (token: string) => request<FinancialProfileStatus>("/financial-profile", { token });
+
+export const saveFinancialProfile = (
+  token: string,
+  body: { path: "questions"; answers: OnboardingAnswers } | { path: "story"; story: string }
+) => request<FinancialProfileStatus>("/financial-profile", { method: "PUT", token, body });
+
 // --- Linked accounts ---
 
 export interface LinkTokenResponse {
@@ -146,6 +178,7 @@ export interface GoalResponse {
   current_progress_amount: number;
   status: string;
   category?: string | null;
+  merchant?: string | null;
   window?: string | null;
 }
 
@@ -157,9 +190,22 @@ export const createGoal = (
     target_amount: number;
     target_date?: string | null;
     category?: string | null;
+    merchant?: string | null;
     window?: string | null;
   }
 ) => request<GoalResponse>("/goals", { method: "POST", token, body: goal });
+
+export const updateGoal = (
+  token: string,
+  goalId: string,
+  goal: {
+    name?: string | null;
+    target_amount: number;
+    category?: string | null;
+    merchant?: string | null;
+    window?: string | null;
+  }
+) => request<GoalResponse>(`/goals/${goalId}`, { method: "PATCH", token, body: goal });
 
 export const deleteGoal = (token: string, goalId: string) =>
   request<void>(`/goals/${goalId}`, { method: "DELETE", token });
@@ -175,6 +221,7 @@ export interface GoalProgress {
   expected_progress_fraction?: number;
   on_pace?: boolean;
   category?: string | null;
+  merchant?: string | null;
   window?: string | null;
   window_label?: string | null;
   window_start?: string | null;
@@ -577,6 +624,7 @@ export interface RecurringSeries {
   monthly_amount: number;
   occurrences: number;
   is_active: boolean;
+  in_budget: boolean;
   price_changed: boolean;
 }
 
@@ -600,8 +648,19 @@ export interface RecurringOverview {
 
 export const fetchRecurring = (token: string) => request<RecurringOverview>("/recurring", { token });
 
-export const updateRecurring = (token: string, id: string, patch: { status?: RecurringStatus; kind?: RecurringKind; name?: string }) =>
-  request<RecurringSeries>(`/recurring/${id}`, { method: "PATCH", token, body: patch });
+export const updateRecurring = (
+  token: string,
+  id: string,
+  patch: {
+    status?: RecurringStatus;
+    kind?: RecurringKind;
+    name?: string;
+    in_budget?: boolean;
+    cadence?: RecurringSeries["cadence"];
+    last_amount?: number;
+    next_expected_date?: string;
+  }
+) => request<RecurringSeries>(`/recurring/${id}`, { method: "PATCH", token, body: patch });
 
 export type BudgetLineStatus = "ok" | "warning" | "over";
 
@@ -828,6 +887,88 @@ export interface CashFlowBreakdown {
 
 export const fetchCashFlow = (token: string, window: string) =>
   request<CashFlowBreakdown>("/dashboard/cash-flow", { token, query: { window } });
+
+export type IncomeCadence = "weekly" | "biweekly" | "monthly" | "yearly";
+
+export interface MoneyLeftIncome {
+  id: string | null;
+  origin: "detected" | "custom";
+  series_id: string | null;
+  payer: string | null;
+  name: string;
+  amount: number;
+  cadence: IncomeCadence;
+  occurrences: number;
+  dates: string[];
+  monthly_amount: number;
+  window_amount: number;
+  included: boolean;
+  note: string;
+}
+
+export interface RecurringBudgetVendor {
+  series_id: string;
+  name: string;
+  merchant: string;
+  expected: number;
+  spent: number;
+  limit: number;
+  cadence: string;
+  kind: RecurringKind;
+  status: RecurringStatus;
+  spend_group: string | null;
+  goal_id: string | null;
+}
+
+export interface RecurringBudgetGroup {
+  key: string;
+  name: string;
+  open_as: string | null;
+  expected: number;
+  spent: number;
+  limit: number;
+  goal_id: string | null;
+  vendors: RecurringBudgetVendor[];
+}
+
+export interface MoneyLeftPlan {
+  window: string;
+  start: string;
+  end: string;
+  label: string;
+  incomes: MoneyLeftIncome[];
+  income_total: number;
+  spent: number;
+  budgeted: number;
+  unbudgeted_spent: number;
+  recurring_groups: RecurringBudgetGroup[];
+  upcoming: { name: string; kind: string; date: string; amount: number }[];
+  upcoming_total: number;
+  savings: { id: string; name: string; monthly_amount: number; window_amount: number }[];
+  savings_total: number;
+  left: number;
+  as_of: string | null;
+}
+
+export const fetchMoneyLeft = (token: string, window: string) =>
+  request<MoneyLeftPlan>("/dashboard/money-left", { token, query: { window } });
+
+export const upsertMoneyLeftIncome = (
+  token: string,
+  body: {
+    id?: string | null;
+    series_id?: string | null;
+    payer?: string | null;
+    name: string;
+    amount: number;
+    cadence?: IncomeCadence;
+    included?: boolean;
+  },
+  window = "this_month",
+) => request<MoneyLeftPlan>("/dashboard/money-left/incomes", { method: "PUT", token, body, query: { window } });
+
+export const deleteMoneyLeftIncome = (token: string, id: string, window = "this_month") =>
+  request<MoneyLeftPlan>(`/dashboard/money-left/incomes/${id}`, { method: "DELETE", token, query: { window } });
 
 export interface SpendingPaceMonth {
   start: string;

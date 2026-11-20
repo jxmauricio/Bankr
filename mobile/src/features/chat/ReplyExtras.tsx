@@ -220,14 +220,14 @@ export function OpenInCashFlow() {
   return (
     <Pressable onPress={openCashFlow} style={({ pressed }) => [styles.accentChip, pressed && styles.pressed]}>
       <Text variant="label" tone="accent">
-        Open in Cash flow →
+        See spending →
       </Text>
     </Pressable>
   );
 }
 
 export function openCashFlow() {
-  router.navigate("/cash-flow");
+  router.navigate("/visuals");
 }
 
 const useStyles = makeStyles((colors) =>

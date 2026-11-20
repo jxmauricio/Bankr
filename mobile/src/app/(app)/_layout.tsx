@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import {
   ApiError,
+  fetchFinancialProfile,
   fetchGoalProgress,
   fetchNetWorth,
   resyncAccounts,
@@ -14,6 +15,7 @@ import { loadCategories } from "@/lib/useCategories";
 import { MoneyProvider } from "@/features/money/MoneyContext";
 import { BankLogosProvider } from "@/features/bank/BankLogos";
 import { LinkBankScreen } from "@/features/bank/LinkBankScreen";
+import { Onboarding } from "@/features/onboarding/Onboarding";
 import { NotificationsProvider } from "@/features/notifications/NotificationsContext";
 import { consumePendingOpen, subscribePushOpen } from "@/features/notifications/usePush";
 import { PeriodProvider } from "@/features/period/PeriodContext";
@@ -30,12 +32,12 @@ const RESYNC_ON_RETURN_MS = 60 * 1000;
 type Gate =
   | { step: "loading" }
   | { step: "load-failed" }
+  | { step: "onboard" }
   | { step: "link-bank" }
   | { step: "home"; netWorth: NetWorthHistory; goals: GoalProgressResponse };
 
 /**
- * Signed-in gate: no balances means no bank yet; otherwise the tabs, even
- * with no goals (those can be added from Home or chat).
+ * Signed-in gate: onboarding, then a bank if none is linked, then the tabs.
  */
 export default function SignedInLayout() {
   const colors = useColors();
@@ -51,11 +53,12 @@ export default function SignedInLayout() {
     if (!token) return;
     let cancelled = false;
     // Categories too: chart colors, before any chart renders.
-    Promise.all([fetchNetWorth(token), fetchGoalProgress(token), loadCategories(token)])
+    Promise.all([fetchNetWorth(token), fetchGoalProgress(token), loadCategories(token), fetchFinancialProfile(token)])
       .then(
-        ([netWorth, goals]) => {
+        ([netWorth, goals, , profile]) => {
           if (cancelled) return;
-          if (netWorth.current === null) setGate({ step: "link-bank" });
+          if (!profile.completed) setGate({ step: "onboard" });
+          else if (netWorth.current === null) setGate({ step: "link-bank" });
           else setGate({ step: "home", netWorth, goals });
         },
         (err: unknown) => {
@@ -196,6 +199,8 @@ export default function SignedInLayout() {
       return <Loading />;
     case "load-failed":
       return <ErrorState message="Couldn't reach Centsio." onRetry={retry} />;
+    case "onboard":
+      return <Onboarding token={token} onDone={retry} onExit={signOut} />;
     case "link-bank":
       // Linking runs the backend's first sync, so re-reading the gate lands on home.
       return (
@@ -219,6 +224,10 @@ export default function SignedInLayout() {
                     <Stack.Screen name="recap/[week]" />
                     <Stack.Screen name="money" options={sheet([0.6, 1], colors.bg)} />
                     <Stack.Screen name="goal-new" options={sheet([0.92, 1], colors.bg)} />
+                    <Stack.Screen name="track-new" options={sheet([0.92, 1], colors.bg)} />
+                    <Stack.Screen name="money-left" options={sheet([0.92, 1], colors.bg)} />
+                    <Stack.Screen name="recurring-edit" options={sheet([0.92, 1], colors.bg)} />
+                    <Stack.Screen name="visuals" />
                     <Stack.Screen name="history" options={sheet([0.6, 1], colors.bg)} />
                     <Stack.Screen name="source" options={sheet([0.75, 1], colors.bg)} />
                     <Stack.Screen name="filter-date" options={sheet([0.92], colors.bg)} />

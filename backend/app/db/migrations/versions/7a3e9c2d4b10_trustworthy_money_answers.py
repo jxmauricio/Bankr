@@ -34,10 +34,14 @@ def upgrade() -> None:
     op.add_column('transactions', sa.Column('pending_transaction_id', sa.String(), nullable=True))
 
     # Imported here, not at module top, so `alembic history` etc. don't
-    # need the app importable.
-    from app.services.category_backfill import recategorize_all_transactions
+    # need the app importable. Skip on a fresh database: seed_default_categories
+    # now needs category_groups, which this revision doesn't create yet, and
+    # there are no transactions to remap anyway.
+    bind = op.get_bind()
+    if sa.inspect(bind).has_table("category_groups"):
+        from app.services.category_backfill import recategorize_all_transactions
 
-    recategorize_all_transactions(Session(bind=op.get_bind()))
+        recategorize_all_transactions(Session(bind=bind))
 
 
 def downgrade() -> None:

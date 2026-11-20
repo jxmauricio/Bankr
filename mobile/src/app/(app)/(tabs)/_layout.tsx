@@ -15,7 +15,7 @@ import { makeStyles, useColors, useScheme } from "@/theme/theme";
 import { Icon, IconButton, Text, type IconName } from "@/ui";
 
 /**
- * Five views: Home, Cash flow, Chat, Transactions, Profile.
+ * Five views: Home, Budget, Chat, Transactions, Profile.
  * Light/dark and one action up top; a floating Liquid Glass tab bar along
  * the bottom. Swiping slides to the next tab.
  */
@@ -26,7 +26,7 @@ export default function TabsLayout() {
   return (
     <Tabs style={styles.root}>
       <SafeAreaView edges={["top"]} style={styles.header}>
-        <TopBar onChat={focused === 2} />
+        <TopBar tab={TABS[focused].name} />
       </SafeAreaView>
       <View style={styles.stage}>
         <SwipeBetweenTabs focused={focused} />
@@ -44,7 +44,7 @@ export default function TabsLayout() {
 
 const TABS = [
   { name: "index", href: "/", label: "Home", icon: "home" },
-  { name: "cash-flow", href: "/cash-flow", label: "Cash flow", icon: "flow" },
+  { name: "budget", href: "/budget", label: "Budget", icon: "budget" },
   { name: "chat", href: "/chat", label: "Chat", icon: "chat" },
   { name: "transactions", href: "/transactions", label: "Transactions", icon: "list" },
   { name: "profile", href: "/profile", label: "Profile", icon: "person" },
@@ -160,17 +160,18 @@ function Page({ index, loaded, render }: { index: number; loaded: boolean; rende
  * Light/dark on the left; notifications, then chat history on the Chat tab
  * or sync from the bank elsewhere, on the right. Profile lives in the tab bar.
  */
-function TopBar({ onChat }: { onChat: boolean }) {
+function TopBar({ tab }: { tab: (typeof TABS)[number]["name"] }) {
   const styles = useStyles();
   const { syncFromBank, isSyncing } = useMoney();
   const { unreadCount } = useNotifications();
+  const title = tab === "budget" ? "Budget" : tab === "transactions" ? "Transactions" : "Centsio";
   return (
     <View style={styles.bar}>
       <View style={styles.side}>
         <ThemeToggle />
       </View>
       <Text variant="brand" accessibilityRole="header">
-        Centsio
+        {title}
       </Text>
       <View style={styles.side}>
         <View>
@@ -182,7 +183,7 @@ function TopBar({ onChat }: { onChat: boolean }) {
           />
           {unreadCount > 0 && <View style={styles.dot} pointerEvents="none" />}
         </View>
-        {onChat ? (
+        {tab === "chat" ? (
           // A new chat starts from the history sheet's "New chat" row.
           <IconButton icon="chat" label="Chat history" variant="plain" onPress={() => router.push("/history")} />
         ) : (
@@ -240,11 +241,8 @@ function TabIcon({
       style={({ pressed }) => [styles.tab, pressed && !isFocused && styles.pressed]}
     >
       <View style={[styles.tabIcon, well]}>
-        <Icon name={icon} color={iconColor} size={18} />
+        <Icon name={icon} color={iconColor} size={20} />
       </View>
-      <Text variant="tab" tone={emphasized ? "accent" : isFocused ? "default" : "faint"} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
-        {label}
-      </Text>
     </Pressable>
   );
 }
@@ -296,8 +294,8 @@ const useStyles = makeStyles((colors) =>
       shadowOffset: { width: 0, height: 6 },
       elevation: 8,
     },
-    tab: { flex: 1, minHeight: 52, alignItems: "center", justifyContent: "center", gap: 4 },
-    tabIcon: { height: 26, width: 44, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+    tab: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center" },
+    tabIcon: { height: 32, width: 44, borderRadius: 16, alignItems: "center", justifyContent: "center" },
     tabIconOn: { backgroundColor: colors.raised },
     tabIconChat: { backgroundColor: colors.accentWash },
     tabIconChatOn: { backgroundColor: colors.accent },

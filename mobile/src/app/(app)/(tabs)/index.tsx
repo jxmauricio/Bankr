@@ -2,6 +2,7 @@ import { RefreshControl, ScrollView, StyleSheet } from "react-native";
 import { CreditCardGallery } from "@/features/money/CreditCardGallery";
 import { GoalsStrip } from "@/features/money/GoalsStrip";
 import { InvestmentsStrip } from "@/features/money/InvestmentsStrip";
+import { SpendingStrip } from "@/features/money/SpendingStrip";
 import { useMoney } from "@/features/money/MoneyContext";
 import { NetWorthCard } from "@/features/money/NetWorthCard";
 import { RecapCard } from "@/features/recap/RecapCard";
@@ -11,8 +12,7 @@ import { makeStyles, useColors } from "@/theme/theme";
 import { Screen } from "@/ui";
 
 /**
- * Home: this week's recap, net worth, accounts, then goals. Chat, transactions
- * and the other boards each have their own tab.
+ * Home: this week's recap, net worth, spending, accounts, then goals.
  */
 export default function HomeScreen() {
   const styles = useStyles();
@@ -28,6 +28,7 @@ export default function HomeScreen() {
       >
         <RecapCard />
         <NetWorthCard />
+        <SpendingStrip />
         <InvestmentsStrip />
         <CreditCardGallery />
         <GoalsStrip />

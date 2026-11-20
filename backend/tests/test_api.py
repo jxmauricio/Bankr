@@ -172,10 +172,42 @@ def test_create_spending_tracker_then_read_progress(client, monkeypatch):
     assert progress["goals"][0]["current_progress_amount"] == 45.0
     assert progress["goals"][0]["window_label"] == "This month"
 
+    edited = client.patch(
+        f"/goals/{body['id']}",
+        json={"type": "track_spending", "category": "eating out", "window": "this_week", "target_amount": 80, "name": "Eating out"},
+    )
+    assert edited.status_code == 200
+    assert edited.json()["window"] == "this_week"
+    assert edited.json()["target_amount"] == 80.0
+
 
 def test_create_spending_tracker_rejects_missing_category(client):
     response = client.post("/goals", json={"type": "track_spending", "window": "this_month"})
     assert response.status_code == 422
+
+
+def test_create_merchant_tracker_then_read_progress(client, monkeypatch):
+    from datetime import datetime, timezone
+
+    from app.services import money_query
+
+    monkeypatch.setattr(money_query, "_now", lambda: datetime(2026, 8, 20, 16, tzinfo=timezone.utc))
+    _with_fake_aggregator(client)
+    client.post("/linked-accounts", json={"public_token": "public-fake-token"})
+
+    create_response = client.post(
+        "/goals",
+        json={"type": "track_spending", "merchant": "Ramen Spot", "window": "this_month"},
+    )
+    assert create_response.status_code == 200
+    body = create_response.json()
+    assert body["merchant"] == "Ramen Spot"
+    assert body["category"] is None
+    assert body["current_progress_amount"] == 45.0
+
+    progress = client.get("/dashboard/goal-progress").json()["goals"][0]
+    assert progress["merchant"] == "Ramen Spot"
+    assert progress["current_progress_amount"] == 45.0
 
 
 def test_spending_drilldown_matches_a_chat_source_query(client, monkeypatch):

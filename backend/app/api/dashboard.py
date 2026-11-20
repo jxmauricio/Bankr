@@ -2,6 +2,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.agent.tools import get_goal_progress
@@ -17,6 +18,7 @@ from app.services.dashboard_service import (
 from app.services import money_query as mq
 from app.services.recurring_service import series_charges
 from app.services.money_query import QueryError
+from app.services.cash_flow_plan import delete_income, money_left_plan, upsert_income
 from app.services.spending_health import spending_health
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -130,6 +132,69 @@ def cash_flow(
     except QueryError as e:
         raise _query_error(e) from e
     return {**mq.cash_flow_breakdown(db, user.id, w), "as_of": mq.data_freshness(db, user.id)}
+
+
+class UpsertIncomeRequest(BaseModel):
+    id: UUID | None = None
+    series_id: UUID | None = None
+    payer: str | None = None
+    name: str
+    amount: float
+    cadence: str = "monthly"
+    included: bool = True
+
+
+@router.get("/money-left")
+def money_left(
+    window: str = "this_month",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Expected income for the window, including paychecks still ahead.
+    `left` is that pay minus tracker budgets minus spending that isn't in
+    any of those budgets — what Budget shows as money left."""
+    try:
+        return money_left_plan(db, user.id, window)
+    except QueryError as e:
+        raise _query_error(e) from e
+
+
+@router.put("/money-left/incomes")
+def put_income(
+    body: UpsertIncomeRequest,
+    window: str = "this_month",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        upsert_income(
+            db,
+            user.id,
+            income_id=body.id,
+            series_id=body.series_id,
+            payer=body.payer,
+            name=body.name,
+            amount=body.amount,
+            cadence=body.cadence,
+            included=body.included,
+        )
+    except QueryError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from e
+    return money_left_plan(db, user.id, window)
+
+
+@router.delete("/money-left/incomes/{income_id}")
+def remove_income(
+    income_id: UUID,
+    window: str = "this_month",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        delete_income(db, user.id, income_id)
+    except QueryError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from e
+    return money_left_plan(db, user.id, window)
 
 
 @router.get("/spending-pace")

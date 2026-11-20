@@ -13,6 +13,8 @@ export interface Filters {
   date: DateFilter;
   query: string;
   categories: string[];
+  /** Vendor names from a budget group; a row matches if its merchant hits any. */
+  merchants: string[];
   accountIds: string[];
   direction: Direction;
   quick: QuickId[];
@@ -22,6 +24,7 @@ export const DEFAULT_FILTERS: Filters = {
   date: { kind: "preset", window: "this_month" },
   query: "",
   categories: [],
+  merchants: [],
   accountIds: [],
   direction: "all",
   quick: [],
@@ -34,6 +37,7 @@ export function isFiltered(f: Filters): boolean {
     f.date.window !== "this_month" ||
     f.query.trim() !== "" ||
     f.categories.length > 0 ||
+    f.merchants.length > 0 ||
     f.accountIds.length > 0 ||
     f.direction !== "all" ||
     f.quick.length > 0
@@ -62,7 +66,11 @@ export const DATE_PRESETS: { window: string; label: string }[] = [
 ];
 
 // Windows other screens can hand over (Cash flow's "Last year") but the sheet doesn't list.
-const OTHER_WINDOW_LABELS: Record<string, string> = { last_year: "Last year" };
+const OTHER_WINDOW_LABELS: Record<string, string> = {
+  last_year: "Last year",
+  this_week: "This week",
+  last_7_days: "Last 7 days",
+};
 
 /** The days a named window covers, matching backend money_query.resolve_window. */
 export function windowRange(window: string, today = new Date()): { start: string; end: string } {
@@ -118,12 +126,23 @@ export const QUICK_FILTERS: { id: QuickId; label: string; test: (t: TransactionR
   { id: "uncategorized", label: "Needs review", test: (t) => !t.is_split && t.category_source === "fallback" },
 ];
 
+/** A row's merchant hits any of the names (budget groups pass several vendors). */
+export function merchantMatches(t: TransactionRow, merchants: string[]): boolean {
+  if (merchants.length === 0) return true;
+  const m = merchantOf(t).toLowerCase();
+  return merchants.some((name) => {
+    const n = name.toLowerCase();
+    return n.length > 0 && (m.includes(n) || n.includes(m));
+  });
+}
+
 export function applyFilters(rows: TransactionRow[], f: Filters): TransactionRow[] {
   const q = f.query.trim().toLowerCase();
   const quick = QUICK_FILTERS.filter((x) => f.quick.includes(x.id));
   return rows.filter(
     (t) =>
-      (f.categories.length === 0 || topCategories(t).some((c) => f.categories.includes(c))) &&
+      (f.categories.length === 0 || topCategories(t).some((c) => f.categories.includes(c)) || (t.category != null && f.categories.includes(t.category))) &&
+      merchantMatches(t, f.merchants) &&
       (f.accountIds.length === 0 || f.accountIds.includes(t.account.id)) &&
       (f.direction === "all" || (f.direction === "in" ? t.amount > 0 : t.amount < 0)) &&
       quick.every((x) => x.test(t)) &&

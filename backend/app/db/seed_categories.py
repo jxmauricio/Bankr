@@ -125,9 +125,10 @@ _EMOJI = {key: emoji for key, _, _, _, emoji in DEFAULT_CATEGORIES}
 
 # Built-in group or category -> color slot, most-seen spending first so those
 # get distinct hues. Fixed (not cycled per render) so a category's color is
-# the same on every screen and every visit: "color follows the entity". The
-# palette is the validated dark-mode categorical set (8 hues, checked
-# against the app's #10131C surface). A user's own are grey.
+# the same on every screen and every visit: "color follows the entity".
+# Sixteen hues so every group gets its own, and adjacent pie slices (Housing
+# teal vs Travel indigo vs Other taupe) don't collapse into greens. A
+# user's own categories are grey.
 _COLOR_ORDER = [
     # Groups first, so the donut's slices are told apart.
     "food_and_dining",
@@ -147,7 +148,24 @@ _COLOR_ORDER = [
     "business",
     *(key for key, *_ in DEFAULT_CATEGORIES),
 ]
-CATEGORY_PALETTE = ("#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767")
+CATEGORY_PALETTE = (
+    "#3987e5",  # blue    food
+    "#d95926",  # orange  auto
+    "#199e70",  # teal    housing
+    "#c98500",  # gold    shopping
+    "#d55181",  # pink    bills
+    "#5b6ee1",  # indigo  travel
+    "#9085e9",  # purple  health
+    "#e66767",  # coral   financial
+    "#2aa876",  # green   income
+    "#6b7c99",  # slate   transfers
+    "#c86bc8",  # orchid  gifts
+    "#e39b00",  # amber   children
+    "#3d9ad1",  # sky     education
+    "#8a817c",  # taupe   other
+    "#b85c38",  # rust    business
+    "#4a90a4",  # steel
+)
 UNCOLORED = "#565D72"
 _COLORS = {}
 for _i, _key in enumerate(_COLOR_ORDER):

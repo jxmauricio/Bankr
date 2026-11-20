@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, StyleSheet, TextInput, View } from "react-native";
 import { AssistantText } from "@/features/chat/AssistantText";
 import { ChatChart } from "@/features/chat/ChatChart";
@@ -33,17 +33,23 @@ export default function ChatScreen() {
   const [draft, setDraft] = useState("");
   const [awayFromBottom, setAwayFromBottom] = useState(false);
   const list = useRef<FlatList<ChatItem>>(null);
-  const listHeight = useRef(0);
-  const contentHeight = useRef(0);
   const nearBottom = useRef(true);
   const body = useRef<View>(null);
   const keyboardInset = useKeyboardInset(body);
   const tabInset = useFloatingTabInset();
+  // Newest first so an inverted list opens on the latest message, not the middle.
+  const thread = useMemo(() => [...chat.items].reverse(), [chat.items]);
+  const threadStart = chat.items[0]?.id ?? "empty";
+
+  useEffect(() => {
+    nearBottom.current = true;
+    setAwayFromBottom(false);
+  }, [threadStart]);
 
   const jumpToLatest = useCallback(() => {
     nearBottom.current = true;
     setAwayFromBottom(false);
-    list.current?.scrollToOffset({ offset: Math.max(0, contentHeight.current - listHeight.current), animated: true });
+    list.current?.scrollToOffset({ offset: 0, animated: true });
   }, []);
 
   const { conversation, ask } = useLocalSearchParams<{ conversation?: string; ask?: string }>();
@@ -74,55 +80,59 @@ export default function ChatScreen() {
         <View style={styles.fill}>
           <FlatList
             ref={list}
-            data={chat.items}
+            inverted
+            data={thread}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.messages}
             keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
             scrollEventThrottle={16}
-            onLayout={(e) => (listHeight.current = e.nativeEvent.layout.height)}
             onScroll={(e) => {
-              const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-              const gap = contentSize.height - layoutMeasurement.height - contentOffset.y;
-              const near = gap <= AWAY_PX;
+              const near = e.nativeEvent.contentOffset.y <= AWAY_PX;
               nearBottom.current = near;
-              setAwayFromBottom(!near && chat.items.length > 0);
+              setAwayFromBottom(!near && thread.length > 0);
             }}
-            onContentSizeChange={(_, height) => {
-              contentHeight.current = height;
-              if (chat.items.length === 0 || !nearBottom.current) return;
-              list.current?.scrollToOffset({ offset: Math.max(0, height - listHeight.current), animated: true });
+            onContentSizeChange={() => {
+              if (thread.length === 0 || !nearBottom.current) return;
+              list.current?.scrollToOffset({ offset: 0, animated: false });
             }}
             renderItem={({ item, index }) => (
-              <Message item={item} isLast={index === chat.items.length - 1} onChoose={submit} disabled={chat.isSending} />
+              <Message item={item} isLast={index === 0} onChoose={submit} disabled={chat.isSending} />
             )}
-            ListHeaderComponent={chat.items.length === 0 ? <ChatEmpty onPick={submit} /> : null}
-            ListFooterComponent={
-              <>
-                {chat.isSending && (
-                  <View style={styles.assistant}>
-                    {chat.replySoFar ? (
-                      <AssistantText text={chat.replySoFar} />
-                    ) : (
-                      <Text tone="soft">{chat.statusLabel || "Thinking…"}</Text>
-                    )}
-                  </View>
-                )}
-                {chat.failed && (
-                  <View style={styles.failed}>
-                    <Text variant="caption" tone="negative">
-                      {chat.failed.stopped ? "Stopped." : "Centsio couldn't answer that."}
-                    </Text>
-                    <Chip label="Ask again" onPress={() => chat.resolveFailed("retry")} />
-                    <Chip
-                      label="Edit"
-                      onPress={() => {
-                        const text = chat.resolveFailed("edit");
-                        if (text) setDraft(text);
-                      }}
-                    />
-                  </View>
-                )}
-              </>
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <ChatEmpty onPick={submit} />
+              </View>
+            }
+            ListHeaderComponent={
+              chat.isSending || chat.failed ? (
+                <>
+                  {chat.isSending && (
+                    <View style={styles.assistant}>
+                      {chat.replySoFar ? (
+                        <AssistantText text={chat.replySoFar} />
+                      ) : (
+                        <Text tone="soft">{chat.statusLabel || "Thinking…"}</Text>
+                      )}
+                    </View>
+                  )}
+                  {chat.failed && (
+                    <View style={styles.failed}>
+                      <Text variant="caption" tone="negative">
+                        {chat.failed.stopped ? "Stopped." : "Centsio couldn't answer that."}
+                      </Text>
+                      <Chip label="Ask again" onPress={() => chat.resolveFailed("retry")} />
+                      <Chip
+                        label="Edit"
+                        onPress={() => {
+                          const text = chat.resolveFailed("edit");
+                          if (text) setDraft(text);
+                        }}
+                      />
+                    </View>
+                  )}
+                </>
+              ) : null
             }
           />
           {awayFromBottom && (
@@ -241,7 +251,8 @@ function ChatEmpty({ onPick }: { onPick: (text: string) => void }) {
 const useStyles = makeStyles((colors) =>
   StyleSheet.create({
     fill: { flex: 1 },
-    messages: { paddingHorizontal: space.lg, paddingVertical: space.xl, gap: space.lg, flexGrow: 1 },
+    messages: { paddingHorizontal: space.lg, paddingVertical: space.xl, gap: space.lg },
+    emptyWrap: { transform: [{ scaleY: -1 }] },
     userBubble: {
       alignSelf: "flex-end",
       maxWidth: "80%",
