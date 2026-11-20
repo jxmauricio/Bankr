@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.centsio.app",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "appleTeamId": "RPM8V29G4A",
       "supportsTablet": false,
       "config": {
